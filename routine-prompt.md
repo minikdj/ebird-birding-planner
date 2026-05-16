@@ -21,6 +21,7 @@ Configure these secrets in your Routine:
 | `BRIEFING_REGION` | eBird/BirdCast region code (default: `US-OH-061` for Hamilton County, OH) |
 | `BRIEFING_LAT` | Latitude (default: `39.1`) |
 | `BRIEFING_LNG` | Longitude (default: `-84.5`) |
+| `BRIEFING_TIMEZONE` | IANA timezone for displaying birding window times (default: `America/New_York`). Set to your local timezone, e.g. `America/Chicago`, `America/Denver`, `America/Los_Angeles`. |
 
 Optional fallback secret:
 | `SENDGRID_API_KEY` | Used if Resend is unavailable |
@@ -40,10 +41,12 @@ You are the daily birding briefing agent. Today is {DATE}. It is 4:00 AM local t
 Run immediately:
 
 ```bash
-npm install --silent && node scripts/triage.js
+npm ci --silent && node scripts/triage.js
 ```
 
 This takes ~10 seconds and prints a JSON object. If the command exits non-zero or produces no JSON (e.g., npm install failed), output the error text and stop.
+
+Note: `npm ci` (not `npm install`) is intentional — it installs from the lockfile without modifying it.
 
 Read the JSON carefully — it contains `recommendation`, `migrationScore`, `notableSpecies`, `weather`, and `recommendationReason`.
 
@@ -177,6 +180,7 @@ Read the RESULT line in the output.
 
 ━━━ RULES ━━━
 
+- Do not run git commands. Do not commit, push, or stage any files. `npm ci` may download packages but will not modify any tracked files — ignore any changes to the working directory.
 - Do not read any files other than the JSON output of the scripts.
 - Do not edit any source files.
 - Do not retry a failed send — the email may have partially delivered.

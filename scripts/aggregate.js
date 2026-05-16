@@ -26,9 +26,18 @@ const POOR_WINDS = new Set(['N', 'NW', 'NNW', 'NE']);
 // ---------------------------------------------------------------------------
 
 
+// Use configured timezone (or default to Eastern) so times display correctly
+// regardless of the server's local timezone (cloud runners are typically UTC).
+const DISPLAY_TZ = process.env.BRIEFING_TIMEZONE || 'America/New_York';
+
 function formatTime(date) {
   if (!date || isNaN(date.getTime())) return null;
-  return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+  return date.toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+    timeZone: DISPLAY_TZ,
+  });
 }
 
 /**

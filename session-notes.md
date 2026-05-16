@@ -190,6 +190,46 @@ Key improvements over original prompt:
 - Hardcoded Cincinnati removed — location from Routine secrets
 - SendGrid fallback fixed (triggers on API errors, not just network throws)
 - Schedule: 09:00 UTC (DST-safe — 4 AM ET winter / 5 AM ET summer)
+- `npm ci` instead of `npm install` — does not modify package-lock.json
+- RULES: explicit "do not run git commands" — prevents Routine from committing/pushing
+- `BRIEFING_TIMEZONE` secret added — fixes UTC vs local time display in birding window
+
+---
+
+## Live Test Results — 2026-05-16
+
+First live Routine run. Email delivered successfully via Resend to minikdj11@gmail.com.
+Subject: `[Birding] HIGH migration · Connecticut Warbler at Armleder · May 16`
+
+**What worked well:**
+- Email content quality was excellent: 3.6M birds aloft, Connecticut Warbler as lede
+- Season context (45% below average) prominently featured with "burst not trend" framing
+- Neotropic Cormorant at Gilmore Ponds called out as exceptional
+- Monday May 18 identified as best day, Tuesday fallout opportunity predicted
+- Dynamic agent-written email clearly superior to fixed template
+
+**Bugs found and fixed:**
+
+### Bug 1 — Routine hung on git push (FIXED)
+After sending the email, the agent autonomously committed `package-lock.json` (changed
+by `npm install`) and tried to push to GitHub. Got 403 errors, retried 4+ times with
+exponential backoff, hanging the Routine.
+
+Fix 1: Changed `npm install --silent` → `npm ci --silent` in Step 1. `npm ci` installs
+from the lockfile without modifying it, so package-lock.json stays clean.
+
+Fix 2: Added explicit rule to RULES section: "Do not run git commands. Do not commit,
+push, or stage any files."
+
+### Bug 2 — Birding window times off by 4 hours (FIXED)
+Email showed: "Civil Twilight: 9:55 AM, Sunrise: 10:25 AM" — exactly 4h late.
+Cloud runner is UTC; suncalc returns correct Date objects but `formatTime` called
+`toLocaleTimeString` without a `timeZone` arg, so it rendered in server local time (UTC).
+Cincinnati is EDT (UTC-4), so all times appeared 4 hours late.
+
+Fix: Added `DISPLAY_TZ = process.env.BRIEFING_TIMEZONE || 'America/New_York'` constant
+in aggregate.js and passed it as `timeZone` to every `toLocaleTimeString` call in `formatTime`.
+Added `BRIEFING_TIMEZONE` to the Routine secrets table in routine-prompt.md.
 
 ---
 
