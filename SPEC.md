@@ -12,7 +12,7 @@
 1. [Project Goal](#1-project-goal)
 2. [Infrastructure Decision](#2-infrastructure-decision)
 3. [Routine Agent Design](#3-routine-agent-design)
-4. [Existing MCP Server](#4-existing-mcp-server)
+4. [MCP Server](#4-mcp-server)
 5. [New Tools — Phase 2](#5-new-tools--phase-2)
 6. [Enrichments to Existing Tools](#6-enrichments-to-existing-tools)
 7. [Email Design](#7-email-design)
@@ -61,7 +61,7 @@ to arrive — and make a judgment call.
 
 ### How Routines work for this project
 
-1. A Routine is configured to run daily at 5:45 AM ET during migration season
+1. A Routine is configured to run daily at 4:00 AM ET during migration season
 2. The agent wakes up, calls BirdCast + NWS as a fast triage check (~10s)
 3. Based on that triage, it decides:
    - **Send full briefing** → calls all data sources, renders email, sends via Resend
@@ -171,42 +171,50 @@ When the agent decides QUIET PERIOD:
 
 ---
 
-## 4. Existing MCP Server
+## 4. MCP Server
 
-**Status: [DONE]** — all six tools are implemented and working.
+**Status: [DONE]** — all 11 tools are implemented and working.
 
 ### Location
 
-`ebird-birding-planner/src/index.js` — single-file MCP server, plain JavaScript
-(ESM), Node.js. No build step. Runs via `node src/index.js`.
+- `src/index.js` — MCP server entry point + all tool handlers (~1215 lines)
+- `src/tools.js` — tool schema definitions extracted for readability (~213 lines)
 
-### Existing tools
+No build step. Runs via `node src/index.js`.
+
+### All tools
 
 | Tool | Handler | Data source | Notes |
 |------|---------|-------------|-------|
-| `plan_birding_trip` | `handlePlanBirdingTrip` | eBird + BirdCast | Ranks hotspots by score = species×2 + notable×5 |
-| `migration_forecast` | `handleMigrationForecast` | BirdCast | Season-gated. Returns live data + season totals |
-| `hotspot_details` | `handleHotspotDetails` | eBird | 7-day + 14-day species counts |
-| `compare_hotspots` | `handleCompareHotspots` | eBird | Shared vs unique species across hotspots |
+| `plan_birding_trip` | `handlePlanBirdingTrip` | eBird + BirdCast + NWS + suncalc | Ranks hotspots by score = species×2 + notable×5; includes weather + birding window |
+| `migration_forecast` | `handleMigrationForecast` | BirdCast + NWS | Season-gated. Live data + season totals + resolved weather interpretation |
+| `hotspot_details` | `handleHotspotDetails` | eBird | 7-day + 14-day species counts; `.catch(() => [])` guards on all eBird calls |
+| `compare_hotspots` | `handleCompareHotspots` | eBird + iNaturalist | Shared vs unique species; iNat photo-verification for notable unique species; capped at 10 results |
 | `species_finder` | `handleSpeciesFinder` | eBird | Deduplicates by location, sorts by recency |
-| `best_day_to_bird` | `handleBestDayToBird` | BirdCast + eBird | Scores days by migration intensity |
+| `best_day_to_bird` | `handleBestDayToBird` | BirdCast + eBird | Scores days by migration intensity; local-time date arithmetic (toYMD) |
+| `birding_weather` | `handleBirdingWeather` | NWS | Overnight + morning forecast, migration interpretation, sunrise via suncalc |
+| `verify_sighting` | `handleVerifySighting` | iNaturalist | Photo-verified research-grade observations within radius |
+| `birding_window` | `handleBirdingWindow` | suncalc | Civil twilight, sunrise, activity cutoff (clamped ≥ 6:00 AM); temp-adjusted |
+| `species_frequency` | `handleSpeciesFrequency` | BirdCast bar chart | Per-week probability, peak week, phenology status |
+| `plan_vacation_birding` | `handlePlanVacationBirding` | eBird + BirdCast + iNat + NWS | Trip planner with target species diff, life list integration, community-ranked hotspots |
 
 ### Key implementation details
 
-- **In-memory cache** (`Cache` class in `utils.js`): taxonomy 1 week, BirdCast
-  24h, hotspots 1 week
-- **eBird rate limiter**: 90 req/min enforced in `EBirdClient` via sliding window
-- **BirdCast API key**: hardcoded as `BirdCastClient.API_KEY = 'BIRDCAST_API_KEY_PLACEHOLDER'`
-  (this is a public/shared key — verify it's still valid before shipping)
-- **Favorite hotspots**: Mount Airy Forest, Shawnee Lookout, Otto Armleder,
-  Middle Creek Park, Sharon Woods — defined in `utils.js`, `locId` resolved
-  dynamically at runtime
-- **Cincinnati-area detection**: `isCincinnatiArea()` uses haversine distance
-  ≤50km from 39.1°N, 84.5°W, plus county code matching
+- **Module split**: tool schemas in `src/tools.js`, all handlers + wiring in `src/index.js`
+- **In-memory cache** (`Cache` class in `utils.js`): used by NWSClient, INaturalistClient; BirdCast 24h, taxonomy 1 week, hotspots 1 week
+- **eBird rate limiter**: 90 req/min enforced in `EBirdClient` via promise-queue gate; gate resolves before HTTP call so concurrent requests are in flight correctly
+- **BirdCast API key**: read from `process.env.BIRDCAST_API_KEY` (passed via constructor)
+- **InputError class**: validation errors thrown as `InputError` propagate message to MCP caller; unexpected errors return generic message
+- **Favorite hotspots**: Mount Airy Forest, Shawnee Lookout, Otto Armleder, Middle Creek Park, Sharon Woods — defined in `utils.js`, `locId` resolved dynamically at runtime
+- **Cincinnati-area detection**: `isCincinnatiArea()` uses haversine distance ≤50km from 39.1°N, 84.5°W plus county code set (no `startsWith("US-OH")` false matches)
+- **Life list**: loaded once from `EBIRD_LIFE_LIST_CSV` CSV export, cached in `_lifeListCache` module variable; header row parsed dynamically to find "Common Name" column
 
-### Dependency
+### Dependencies
 
-`@modelcontextprotocol/sdk ^1.12.1` — only production dependency.
+| Package | Version | Purpose |
+|---------|---------|---------|
+| `@modelcontextprotocol/sdk` | `1.29.0` (pinned exact) | MCP server framework |
+| `suncalc` | latest | Sunrise/sunset/twilight computation |
 
 ---
 
@@ -221,13 +229,17 @@ code from `src/`. This keeps all API logic in one place and avoids duplication.
 ```
 ebird-birding-planner/
 ├── src/
+│   ├── index.js              ← MCP server (Claude Desktop)
+│   ├── tools.js              ← tool schema definitions (imported by index.js)
 │   ├── ebird-client.js       ← shared by MCP server AND scripts
 │   ├── birdcast-client.js    ← shared by MCP server AND scripts
 │   ├── nws-client.js         ← shared by MCP server AND scripts
-│   └── index.js              ← MCP server (Claude Desktop, unchanged)
+│   ├── inaturalist-client.js ← shared by MCP server AND scripts
+│   └── utils.js              ← Cache, resolveLocation, toYMD, CITY_LOOKUP, …
 └── scripts/
     ├── triage.js             ← fast check for Routine STEP 1
-    └── briefing.js           ← full data gather + email for Routine STEP 3
+    ├── briefing.js           ← full data gather + email for Routine STEP 3
+    └── test.js               ← smoke test suite (6 tests)
 ```
 
 ### `scripts/triage.js`
@@ -244,11 +256,18 @@ it. No email sending. Designed to be cheap and quick.
 
 Full data gather, email rendering, and send. Accepts a `--quiet` flag to send
 the short quiet-period email instead of the full briefing. Imports all clients
-from `src/`, gathers all data sources in parallel, renders the HTML email
-(including charts via `chartjs-node-canvas`), and sends via Resend.
+from `src/`, gathers all data sources in parallel, renders the HTML email, and
+sends via Resend. HTML is sanitised throughout with `escHtml()` before
+interpolation into email templates.
 
 Both scripts read secrets from environment variables (populated by the Routine's
 secret configuration at runtime).
+
+### `scripts/test.js`
+
+6-test smoke suite. Verifies that each client module can successfully make a
+real API call with the credentials in environment. Run with `node scripts/test.js`.
+Currently all 6/6 passing.
 
 ---
 
@@ -256,9 +275,10 @@ secret configuration at runtime).
 
 **Status: [DONE]**
 
-All new tools go into `src/index.js` alongside existing handlers, following the
-same pattern (define in `tools[]` array, implement as `handleXxx` function, add
-case to the switch). New external clients go in their own files under `src/`.
+All new tools follow the same pattern: schema defined in `src/tools.js` (the
+`tools[]` export), handler implemented as `handleXxx` in `src/index.js`, and a
+case added to the main switch. New external clients go in their own files under
+`src/` and are imported by both `src/index.js` and `scripts/`.
 
 ---
 
@@ -593,10 +613,10 @@ Fallback chain (tried in order if Resend unavailable):
 └─────────────────────────────────┘
 ```
 
-Charts rendered server-side using `chartjs-node-canvas`.
-**New dependency**: `npm install chartjs-node-canvas chart.js`
-**Confirmed feasible**: Routines run full Claude Code cloud sessions with bash
-tool access; Node.js subprocesses work, so `chartjs-node-canvas` is supported.
+Charts are a **future enhancement** — not currently implemented. `chart.js` and
+`chartjs-node-canvas` were removed from `package.json` since they were never
+imported and require native `canvas` compilation via `node-gyp`. If re-added,
+they should be `optionalDependencies`.
 
 #### Quiet period email
 
@@ -614,12 +634,11 @@ Last notable: Cerulean Warbler at Shawnee Lookout on May 11.
 
 ### Rendering
 
-The agent constructs the HTML string directly in its response. For the full
-briefing, it uses the MCP tools to gather data and then assembles the email.
-
-For charts: `scripts/briefing.js` renders Chart.js to PNG via
-`chartjs-node-canvas` and embeds the result as base64 inline in the email.
-This is confirmed feasible — Routines can run Node.js subprocesses via bash.
+The Routine runs `node scripts/briefing.js` (or `--quiet`). The script gathers
+all data, renders a table-based HTML string with inline CSS, and POSTs to the
+Resend API. All dynamic values are passed through `escHtml()` before template
+interpolation. The MCP server tools are NOT called by the Routine — it imports
+the client modules directly.
 
 ---
 
@@ -627,7 +646,7 @@ This is confirmed feasible — Routines can run Node.js subprocesses via bash.
 
 | API | Auth | Rate limit | Cache TTL used |
 |-----|------|-----------|----------------|
-| BirdCast | Hardcoded key `BIRDCAST_API_KEY_PLACEHOLDER` | Generous (undocumented) | 24h |
+| BirdCast | `BIRDCAST_API_KEY` env var (passed to `BirdCastClient` constructor) | Generous (undocumented) | 24h |
 | eBird v2 | `EBIRD_API_KEY` env var | 90 req/min | Taxonomy: 1wk; hotspots: 1wk |
 | NWS Weather | None (User-Agent header required) | ~1 req/sec soft limit | 1h |
 | iNaturalist | None | 60 req/min | 6h |
@@ -644,9 +663,10 @@ Without this header NWS returns 403.
 
 ### BirdCast API key note
 
-The key `BIRDCAST_API_KEY_PLACEHOLDER` appears to be a shared/public dashboard key. Confirm
-it's valid and acceptable for programmatic use. If BirdCast requires a proper
-API key, get one at https://birdcast.info.
+The BirdCast key used in production is configured via `BIRDCAST_API_KEY` in the
+Claude Desktop config and in Routine secrets. Whether this key is a formal API
+key or a shared dashboard key is tracked in Open Question 3. If BirdCast requires
+a proper API key, get one at https://birdcast.info.
 
 ---
 
@@ -654,11 +674,28 @@ API key, get one at https://birdcast.info.
 
 ### For local MCP server development
 
+For scripts (`scripts/test.js`, `scripts/triage.js`, `scripts/briefing.js`):
 File: `ebird-birding-planner/.env` (gitignored)
 
 ```
 EBIRD_API_KEY=your_key_here
+BIRDCAST_API_KEY=your_key_here
 ```
+
+For Claude Desktop, environment variables are configured in
+`~/Library/Application Support/Claude/claude_desktop_config.json` under the
+server's `env` block:
+
+```json
+"env": {
+  "EBIRD_API_KEY": "...",
+  "BIRDCAST_API_KEY": "...",
+  "EBIRD_LIFE_LIST_CSV": "/path/to/MyEBirdData.csv"
+}
+```
+
+`EBIRD_LIFE_LIST_CSV` is optional — omit it to disable personal life list
+integration in `plan_vacation_birding`.
 
 Get a free eBird API key: https://ebird.org/api/keygen
 
@@ -670,6 +707,7 @@ them from environment at runtime:
 | Secret name | Purpose |
 |-------------|---------|
 | `EBIRD_API_KEY` | eBird API access |
+| `BIRDCAST_API_KEY` | BirdCast migration API access |
 | `RESEND_API_KEY` | Email sending |
 | `BRIEFING_EMAIL_TO` | Recipient address |
 | `BRIEFING_REGION` | eBird/BirdCast region code (default `US-OH-061`) |
@@ -719,39 +757,35 @@ PRs for review before merging.
 
 ## 11. Testing Plan
 
-**Status: [IN PROGRESS]**
+**Status: [IN PROGRESS]** — smoke tests done; Routine + email rendering tests pending.
 
-### MCP server tools (existing)
+### Automated smoke tests — [DONE]
 
-Testable via Claude Desktop: open a conversation and ask the server questions.
-No automated test suite yet.
+`scripts/test.js` — 6 tests, all passing. Run with `node scripts/test.js`.
 
-### New tools (Phase 2)
+| Test | What it checks |
+|------|---------------|
+| NWSClient.getBirdingWeather() | Real NWS API call with Cincinnati coords |
+| EBirdClient.getNearbyHotspots() | Real eBird API call |
+| BirdCastClient.getExpectedSpecies() | Real BirdCast API call with ignoreSeasonCheck |
+| INaturalistClient.getVerifiedSightings() | Real iNaturalist API call |
+| loadLifeList() from CSV file | Parses EBIRD_LIFE_LIST_CSV, verifies count > 0 |
+| scripts/triage.js execution | Subprocess; verifies JSON output with required keys |
 
-For each new tool, write a minimal smoke test:
-```bash
-node -e "
-  import('./src/nws-client.js').then(({ NWSClient }) => {
-    const c = new NWSClient();
-    c.getBirdingWeather(39.1, -84.5, '2026-05-15').then(console.log);
-  });
-"
-```
+### MCP server tools
 
-Test offline/failure path: verify that `{ weatherUnavailable: true }` is
-returned when NWS is unreachable (mock with a bad URL in test env).
+Tested interactively via Claude Desktop. All 11 tools exercised manually.
 
-### Routine agent
+### Routine agent — [PLANNED]
 
 1. Trigger the Routine manually via Claude Desktop
 2. Verify correct email arrives in inbox
 3. Verify quiet-period logic: manually call with low-migration data and confirm
    the agent sends the quiet email and reschedules
 
-### Email rendering
+### Email rendering — [PLANNED]
 
 Send test emails to both Gmail and Apple Mail. Check:
-- Images load (base64 inline PNGs)
 - Layout doesn't break on mobile
 - Subject line fits preview pane
 - Unsubscribe text present in footer
@@ -760,7 +794,7 @@ Send test emails to both Gmail and Apple Mail. Check:
 
 ## 12. Code Review Findings
 
-**Status: [IN PROGRESS]** — Full re-review run 2026-05-16 (architecture + security + code quality). All CRIT, HIGH, and MEDIUM findings from both passes are now fixed. Remaining open items tracked below.
+**Status: [DONE]** — Two full review passes completed (2026-05-15 and 2026-05-16). All CRIT, HIGH, and MEDIUM findings are fixed. All LOW findings are fixed. One MEDIUM (R2-A) was investigated and found to be a non-issue. The section below is the permanent audit record.
 
 ### CRIT — Fix immediately
 
@@ -816,7 +850,7 @@ From architecture, security, and code quality reviews of the full repo.
 | R2-8 | LOW | `index.js` | `loadLifeList` reads from disk on every `plan_vacation_birding` call — now cached in `_lifeListCache` module-level variable |
 | R2-9 | LOW | `package.json` | `chart.js` and `chartjs-node-canvas` listed as deps but never imported — removed. MCP SDK pinned to exact version `1.29.0` |
 
-#### Open / tracked
+#### Investigated / resolved
 
 | ID | Severity | File | Finding |
 |----|----------|------|---------|
@@ -855,9 +889,7 @@ The tool clearly distinguishes historical frequency data from recent live sighti
 
 ### New tool: `plan_vacation_birding`
 
-**Status: [DONE]**
-
-Add to `src/index.js` alongside the existing 10 tools.
+**Status: [DONE]** — implemented in `src/index.js` as the 11th tool.
 
 #### Input schema
 ```js
@@ -961,7 +993,7 @@ resolved.
 |---|----------|--------|--------|
 | 1 | Does an Anthropic Routine have access to MCP tools registered in Claude Desktop, or does it run in a clean context? | **Resolved** | Routines run as full Claude Code cloud sessions. Local MCP servers (added via Claude Desktop or `claude mcp add`) are not accessible — they run on the user's Mac. The Routine clones the GitHub repo and runs Node scripts via bash instead. |
 | 2 | Can a Routine execute Node.js subprocesses (e.g. to render charts via chartjs-node-canvas)? | **Resolved** | Yes. Routines have bash tool access and can run Node.js subprocesses. Charts via `chartjs-node-canvas` are feasible. |
-| 3 | Is the BirdCast API key `BIRDCAST_API_KEY_PLACEHOLDER` a valid key for programmatic use, or is it a scrape of the dashboard? | **Open** | — |
+| 3 | Is the BirdCast API key a valid key for programmatic use, or is it a scrape of the dashboard? | **Open** | Key now stored in `BIRDCAST_API_KEY` env var (not hardcoded). Confirmed working in practice; formal programmatic-use status unverified. Check https://birdcast.info if usage increases. |
 | 4 | What is the Routine's compute/memory limit? A full briefing with 14 API calls may take 30–60 seconds. | **Resolved** | Routines are full Claude Code cloud sessions with no special time limit beyond normal tool use. Standard session limits apply. |
 | 5 | Resend free tier: does it support sending from a custom domain, or only `@resend.dev` test addresses? | **Open** | Resend requires a verified domain for custom From addresses; `@resend.dev` works for testing |
 | 6 | Should the quiet-period reschedule be implemented as updating the Routine's cron schedule, or as the agent simply not calling the email tools and relying on a state flag stored somewhere? | **Open** | Leaning toward cron update; simpler than external state |
