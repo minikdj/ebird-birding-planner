@@ -76,18 +76,25 @@ to arrive — and make a judgment call.
 
 ### Constraint: Routines run on Anthropic's cloud
 
-- Cannot access local files or local MCP server process
+- Cannot access local files or local MCP server process — the local MCP server
+  runs on the user's Mac and is unreachable from the cloud runner
+- Cannot access locally-registered MCP servers (those added via Claude Desktop
+  or `claude mcp add`) — local servers are not reachable from the cloud
 - Cannot read a local `.env` file — API keys must be stored as Routine secrets
-- The MCP server tools are called by the agent natively (the agent IS Claude,
-  so it has the MCP tools registered in its context via Claude Desktop config)
-- **Actually**: for Routines specifically, the agent calls the external APIs
-  directly in its reasoning, OR we configure the Routine to use the registered
-  MCP server tools. Confirm which mode is supported when setting up.
+- **CAN** run shell commands and Node.js subprocesses via the bash tool
+- **CAN** access MCP connectors registered at claude.ai (cloud integrations like
+  Slack, Notion, etc.) — but this project's MCP server is local, so it's not
+  available via that route either
+- Routines clone the project's GitHub repo and can run scripts from it
+- No persistent state between Routine runs — each run starts fresh
 
-> **Open question**: Does a Routine have access to MCP tools registered in
-> Claude Desktop, or does it run in a clean context? If clean, the agent must
-> call eBird/BirdCast/NWS APIs directly in its prompt, without going through
-> the MCP server. See [§12 Open Questions](#12-open-questions).
+> **Resolved**: The Routine runs as a full Claude Code cloud session. It cannot
+> call the local MCP server tools directly. Instead it clones the GitHub repo
+> and uses the bash tool to run Node.js scripts (`scripts/triage.js`,
+> `scripts/briefing.js`) that import `EBirdClient`, `BirdCastClient`, and other
+> API clients directly. Claude reasons about the script output to decide which
+> action to take. The MCP server (`src/index.js`) continues to exist unchanged
+> for Claude Desktop interactive use — the Routine uses a parallel path.
 
 ---
 
@@ -101,12 +108,17 @@ US-OH-061, 39.1°N 84.5°W).
 
 Today is {DATE}. Time is 5:45 AM ET.
 
+You are running as a Claude Code cloud session. The project repo has been cloned
+to the working directory. Use the bash tool to run Node scripts.
+
 STEP 1 — TRIAGE (do this first, takes ~10 seconds):
-  - Call migration_forecast for last night's BirdCast data
-  - Call birding_weather for overnight wind direction/speed and tonight's forecast
+  Run: node scripts/triage.js
+  This script fetches BirdCast migration data and NWS weather for last night
+  and tonight, then prints a JSON summary to stdout.
+  Reason about the JSON output to proceed.
 
 STEP 2 — DECIDE:
-  Based on the triage, choose one of three actions:
+  Based on the triage output, choose one of three actions:
 
   A) FULL BRIEFING — send if ANY of these are true:
      - Last night's migration was HIGH intensity (>500K birds over Hamilton County)
@@ -123,14 +135,14 @@ STEP 2 — DECIDE:
   C) SILENT SKIP — exit without sending if:
      - You are within a quiet period (last action was QUIET PERIOD < 5 days ago)
      - AND conditions have not changed meaningfully
-     Note: You have no persistent memory between runs, so use the most recent
-     briefing date (from the email subject line if available, or reason from
-     the data: if migration has been consistently low for >5 days, assume you
-     are in a quiet period).
+     Note: You have no persistent memory between runs, so reason from the data:
+     if migration has been consistently low for >5 days, assume quiet period.
 
 STEP 3 — EXECUTE:
-  For FULL BRIEFING: call all data sources and render the email (see email spec).
-  For QUIET PERIOD: render a short email and update the schedule to +4 days.
+  For FULL BRIEFING: run node scripts/briefing.js — this script gathers full
+    data from all sources, renders the HTML email, and sends it via Resend.
+  For QUIET PERIOD: run node scripts/briefing.js --quiet — sends short note,
+    then call update_scheduled_task to reschedule to +4 days.
   For SILENT SKIP: log "Skipping — quiet period active" and exit.
 ```
 
@@ -193,6 +205,48 @@ When the agent decides QUIET PERIOD:
 ### Dependency
 
 `@modelcontextprotocol/sdk ^1.12.1` — only production dependency.
+
+---
+
+## 4B. Script Architecture for Routines
+
+**Status: [PLANNED]**
+
+Because Routines cannot reach the local MCP server, a parallel execution path
+uses standalone scripts under `scripts/` that import the same underlying client
+code from `src/`. This keeps all API logic in one place and avoids duplication.
+
+```
+ebird-birding-planner/
+├── src/
+│   ├── ebird-client.js       ← shared by MCP server AND scripts
+│   ├── birdcast-client.js    ← shared by MCP server AND scripts
+│   ├── nws-client.js         ← shared by MCP server AND scripts
+│   └── index.js              ← MCP server (Claude Desktop, unchanged)
+└── scripts/
+    ├── triage.js             ← fast check for Routine STEP 1
+    └── briefing.js           ← full data gather + email for Routine STEP 3
+```
+
+### `scripts/triage.js`
+
+Fast triage check that the Routine runs first (~10 seconds). Imports
+`EBirdClient` and `BirdCastClient` directly. Fetches:
+- BirdCast migration intensity for last night
+- NWS overnight wind direction/speed and tonight's forecast
+
+Exits with a JSON object printed to stdout so the Routine agent can reason about
+it. No email sending. Designed to be cheap and quick.
+
+### `scripts/briefing.js`
+
+Full data gather, email rendering, and send. Accepts a `--quiet` flag to send
+the short quiet-period email instead of the full briefing. Imports all clients
+from `src/`, gathers all data sources in parallel, renders the HTML email
+(including charts via `chartjs-node-canvas`), and sends via Resend.
+
+Both scripts read secrets from environment variables (populated by the Routine's
+secret configuration at runtime).
 
 ---
 
@@ -533,6 +587,8 @@ Fallback chain (tried in order if Resend unavailable):
 
 Charts rendered server-side using `chartjs-node-canvas`.
 **New dependency**: `npm install chartjs-node-canvas chart.js`
+**Confirmed feasible**: Routines run full Claude Code cloud sessions with bash
+tool access; Node.js subprocesses work, so `chartjs-node-canvas` is supported.
 
 #### Quiet period email
 
@@ -553,13 +609,9 @@ Last notable: Cerulean Warbler at Shawnee Lookout on May 11.
 The agent constructs the HTML string directly in its response. For the full
 briefing, it uses the MCP tools to gather data and then assembles the email.
 
-For charts: the agent calls a helper script/tool that renders Chart.js to PNG
-via `chartjs-node-canvas` and returns base64. This runs locally (or in the
-Routine's execution context — to be confirmed).
-
-> **Open question**: Can a Routine execute `node` subprocesses or install npm
-> packages? If not, charts may need to be omitted or generated via a
-> chart-as-a-service URL. See §12.
+For charts: `scripts/briefing.js` renders Chart.js to PNG via
+`chartjs-node-canvas` and embeds the result as base64 inline in the email.
+This is confirmed feasible — Routines can run Node.js subprocesses via bash.
 
 ---
 
@@ -705,13 +757,13 @@ resolved.
 
 | # | Question | Status | Answer |
 |---|----------|--------|--------|
-| 1 | Does an Anthropic Routine have access to MCP tools registered in Claude Desktop, or does it run in a clean context? | **Open** | — |
-| 2 | Can a Routine execute Node.js subprocesses (e.g. to render charts via chartjs-node-canvas)? | **Open** | — |
+| 1 | Does an Anthropic Routine have access to MCP tools registered in Claude Desktop, or does it run in a clean context? | **Resolved** | Routines run as full Claude Code cloud sessions. Local MCP servers (added via Claude Desktop or `claude mcp add`) are not accessible — they run on the user's Mac. The Routine clones the GitHub repo and runs Node scripts via bash instead. |
+| 2 | Can a Routine execute Node.js subprocesses (e.g. to render charts via chartjs-node-canvas)? | **Resolved** | Yes. Routines have bash tool access and can run Node.js subprocesses. Charts via `chartjs-node-canvas` are feasible. |
 | 3 | Is the BirdCast API key `BIRDCAST_API_KEY_PLACEHOLDER` a valid key for programmatic use, or is it a scrape of the dashboard? | **Open** | — |
-| 4 | What is the Routine's compute/memory limit? A full briefing with 14 API calls may take 30–60 seconds. | **Open** | — |
+| 4 | What is the Routine's compute/memory limit? A full briefing with 14 API calls may take 30–60 seconds. | **Resolved** | Routines are full Claude Code cloud sessions with no special time limit beyond normal tool use. Standard session limits apply. |
 | 5 | Resend free tier: does it support sending from a custom domain, or only `@resend.dev` test addresses? | **Open** | Resend requires a verified domain for custom From addresses; `@resend.dev` works for testing |
 | 6 | Should the quiet-period reschedule be implemented as updating the Routine's cron schedule, or as the agent simply not calling the email tools and relying on a state flag stored somewhere? | **Open** | Leaning toward cron update; simpler than external state |
-| 7 | Does the Routine need to stay within migration season bounds automatically, or will we configure separate Routines for spring and fall? | **Open** | — |
+| 7 | Does the Routine need to stay within migration season bounds automatically, or will we configure separate Routines for spring and fall? | **Resolved** | One Routine runs year-round. The agent prompt includes season dates and the agent exits cleanly outside migration season (checks the date inline and skips itself). No separate Routines needed. |
 
 ---
 
@@ -720,3 +772,4 @@ resolved.
 | Date | Change |
 |------|--------|
 | 2026-05-15 | Initial spec created. Infrastructure decision: Anthropic Routines. All Phase 2 tools and enrichments documented. |
+| 2026-05-15 | Updated architecture: Routines run Node scripts via bash, not MCP tools directly. Resolved open questions 1, 2, 4, 7. Added Section 4B (Script Architecture for Routines). Confirmed chartjs-node-canvas feasible. |
