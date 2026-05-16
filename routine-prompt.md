@@ -36,7 +36,7 @@ If today's date is outside migration season, log "Outside migration season — s
 Run the triage script and read its output:
 
 ```bash
-cd /Users/djm/claude/ebird-birding-planner && npm install --silent && node scripts/triage.js
+npm install --silent && node scripts/triage.js
 ```
 
 The script outputs a JSON object with a `recommendation` field: `FULL_BRIEFING`, `QUIET_PERIOD`, or `SILENT_SKIP`.
@@ -55,13 +55,13 @@ Use your judgment based on the triage data. The recommendation is a starting poi
 **FULL_BRIEFING:**
 
 ```bash
-cd /Users/djm/claude/ebird-birding-planner && node scripts/briefing.js
+node scripts/briefing.js
 ```
 
 **QUIET_PERIOD:**
 
 ```bash
-cd /Users/djm/claude/ebird-birding-planner && node scripts/briefing.js --quiet
+node scripts/briefing.js --quiet
 ```
 
 Then update this Routine's schedule to run again in 4 days (use `update_scheduled_task`).
