@@ -253,7 +253,7 @@ secret configuration at runtime).
 
 ## 5. New Tools — Phase 2
 
-**Status: [PLANNED]**
+**Status: [DONE]**
 
 All new tools go into `src/index.js` alongside existing handlers, following the
 same pattern (define in `tools[]` array, implement as `handleXxx` function, add
@@ -261,7 +261,7 @@ case to the switch). New external clients go in their own files under `src/`.
 
 ---
 
-### 5A. `birding_weather` [PLANNED]
+### 5A. `birding_weather` [DONE]
 
 **Source**: NWS Weather API (`api.weather.gov`) — no API key required.
 
@@ -330,7 +330,7 @@ NWS: no hard limit but throttles at >1 req/sec. Add 200ms delay between the
 
 ---
 
-### 5B. `species_frequency` [PLANNED]
+### 5B. `species_frequency` [DONE]
 
 **Source**: eBird API v2 — requires `EBIRD_API_KEY` (already available).
 
@@ -387,7 +387,7 @@ that frequency data is unavailable and only recent eBird sightings are provided.
 
 ---
 
-### 5C. `verify_sighting` [PLANNED]
+### 5C. `verify_sighting` [DONE]
 
 **Source**: iNaturalist API (`api.inaturalist.org/v1`) — no API key required
 for read-only.
@@ -443,7 +443,7 @@ don't change that fast).
 
 ---
 
-### 5D. `birding_window` [PLANNED]
+### 5D. `birding_window` [DONE]
 
 **Source**: `suncalc` npm package (pure computation, no API call).
 
@@ -488,7 +488,7 @@ Activity cutoff: base is 10:30 AM; subtract 15 min for every 5°F above 75°F
 
 ## 6. Enrichments to Existing Tools
 
-**Status: [PLANNED]**
+**Status: [DONE]**
 
 These are modifications to existing handlers in `src/index.js`.
 
@@ -547,7 +547,7 @@ Cap at 3 verify calls per compare request (iNaturalist rate limit + latency).
 
 ## 7. Email Design
 
-**Status: [PLANNED]**
+**Status: [DONE]**
 
 ### Sending infrastructure
 
@@ -687,7 +687,7 @@ them from environment at runtime:
 
 ## 10. Repo & Version Control Setup
 
-**Status: [PLANNED]**
+**Status: [DONE]**
 
 ### What to version control
 
@@ -824,3 +824,4 @@ resolved.
 | 2026-05-15 | Updated architecture: Routines run Node scripts via bash, not MCP tools directly. Resolved open questions 1, 2, 4, 7. Added Section 4B (Script Architecture for Routines). Confirmed chartjs-node-canvas feasible. |
 | 2026-05-15 | Added Section 12: code review findings (security + architecture). CRIT and MEDIUM fixes applied. |
 | 2026-05-16 | User feedback: fix hotspot ranking (filter zero-activity spots), add 5-day forward outlook section to briefing email. |
+| 2026-05-16 | Updated SPEC status markers — all Phase 2 tools, enrichments, email, and repo setup marked [DONE]. |
