@@ -578,7 +578,13 @@ Fallback chain (tried in order if Resend unavailable):
 ├─────────────────────────────────┤
 │  Migration Traffic card          │  BirdCast data
 │  Weather card                    │  NWS overnight + morning
-│  Top 3 Hotspots                  │  With species counts + notable
+│  Top 3 Hotspots — ranked by     │  With species counts + notable
+│  RECENT species count (7-day),   │  + iNat verification badges
+│  not all-time; filter out spots  │
+│  with 0 recent species           │
+│  5-Day Outlook                   │  Migration intensity forecast +
+│                                  │  overnight wind for next 5 days;
+│                                  │  highlight best day
 │  Rare/Notable Alerts             │  + iNat verification badges
 ├─────────────────────────────────┤
 │  7-day migration bar chart       │  PNG, base64 inline
@@ -789,6 +795,7 @@ Send test emails to both Gmail and Apple Mail. Check:
 | L6 | `index.js:138` | `getHotspotSpeciesCounts` catch block swallows errors silently — log to stderr |
 | L7 | `index.js:741` | `best_day_to_bird` ranking ignores fetched eBird stats — fetches but doesn't score |
 | L8 | `utils.js:185` | "This weekend" returns one day in `resolveDate` but two in `resolveDateRange` — inconsistent |
+| L9 | `scripts/briefing.js` | Top hotspots taken from first 3 by all-time species count — includes restricted/inactive spots with 0 recent species | Fetch top 20, sort by 7-day recent species count, take top 3 with count > 0 |
 
 ---
 
@@ -816,3 +823,4 @@ resolved.
 | 2026-05-15 | Initial spec created. Infrastructure decision: Anthropic Routines. All Phase 2 tools and enrichments documented. |
 | 2026-05-15 | Updated architecture: Routines run Node scripts via bash, not MCP tools directly. Resolved open questions 1, 2, 4, 7. Added Section 4B (Script Architecture for Routines). Confirmed chartjs-node-canvas feasible. |
 | 2026-05-15 | Added Section 12: code review findings (security + architecture). CRIT and MEDIUM fixes applied. |
+| 2026-05-16 | User feedback: fix hotspot ranking (filter zero-activity spots), add 5-day forward outlook section to briefing email. |

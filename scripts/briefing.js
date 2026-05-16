@@ -9,6 +9,40 @@ import { NWSClient } from '../src/nws-client.js';
 import { EBirdClient } from '../src/ebird-client.js';
 import { DEFAULTS, formatNumber } from '../src/utils.js';
 
+async function buildOutlook(birdcast, nws, config) {
+  const days = [];
+  for (let i = 1; i <= 5; i++) {
+    const d = new Date();
+    d.setDate(d.getDate() + i);
+    const dateStr = d.toISOString().split('T')[0];
+    const dayName = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+
+    const [live, weather] = await Promise.all([
+      birdcast.getLiveMigration(config.region, dateStr).catch(() => null),
+      nws.getBirdingWeather(config.lat, config.lng, dateStr).catch(() => null),
+    ]);
+
+    const birds = live?.cumulativeBirds ?? 0;
+    const isHigh = live?.isHigh ?? false;
+    const wind = weather?.overnight?.windDirection ?? '?';
+    const windSpeed = weather?.overnight?.windSpeedMph ?? 0;
+    const precip = weather?.overnight?.precipProbability ?? 0;
+
+    // Score: high migration + favorable south winds + low precip = best day
+    const favorable = ['S', 'SW', 'SSW', 'SE'].includes(wind) && precip < 30;
+    const poor = ['N', 'NW', 'NNW', 'NE'].includes(wind) || precip > 60;
+    let outlook;
+    if (isHigh || (birds > 300000 && favorable)) outlook = '★ Excellent';
+    else if (birds > 100000 && favorable) outlook = '▲ Good';
+    else if (birds > 50000 && !poor) outlook = '~ Moderate';
+    else if (poor) outlook = '▽ Poor';
+    else outlook = '– Quiet';
+
+    days.push({ dayName, dateStr, birds, isHigh, wind, windSpeed, precip, outlook });
+  }
+  return days;
+}
+
 async function main() {
   const config = {
     ebirdKey: process.env.EBIRD_API_KEY,
@@ -54,16 +88,25 @@ async function main() {
       ebird.getNearbyHotspots(config.lat, config.lng, 50).catch(() => null),
     ]);
 
-    const topHotspots = Array.isArray(nearbyHotspots) ? nearbyHotspots.slice(0, 3) : [];
-    const hotspotData = await Promise.all(
-      topHotspots.map(async (h) => {
+    const candidateHotspots = Array.isArray(nearbyHotspots)
+      ? nearbyHotspots.sort((a, b) => (b.numSpeciesAllTime ?? 0) - (a.numSpeciesAllTime ?? 0)).slice(0, 20)
+      : [];
+
+    const hotspotData = (await Promise.all(
+      candidateHotspots.map(async (h) => {
         const obs = await ebird.getRecentObservations(h.locId, 7).catch(() => []);
         const speciesCount = new Set((obs || []).map((o) => o.speciesCode)).size;
         return { name: h.locName, locId: h.locId, speciesCount };
       })
-    );
+    ))
+      .sort((a, b) => b.speciesCount - a.speciesCount)
+      .filter((h, i) => h.speciesCount > 0 || i < 3)
+      .slice(0, 3);
 
-    data = { live, season, expectedSpecies, weather, notableObs, hotspots: hotspotData };
+    // Fetch 5-day forward outlook
+    const outlook = await buildOutlook(birdcast, nws, config);
+
+    data = { live, season, expectedSpecies, weather, notableObs, hotspots: hotspotData, outlook };
   }
 
   const intensity = data.live?.isHigh ? 'HIGH' : 'Moderate';
@@ -119,7 +162,7 @@ async function main() {
 }
 
 function buildFullHtml(data, today, config) {
-  const { live, weather, notableObs, hotspots } = data;
+  const { live, weather, notableObs, hotspots, outlook } = data;
 
   const formattedBirds = live?.cumulativeBirds != null
     ? formatNumber(live.cumulativeBirds)
@@ -209,6 +252,22 @@ function buildFullHtml(data, today, config) {
       </table>
     </td></tr>
     ${notableSection}
+    ${(() => {
+      const outlookRows = (outlook || []).map(d =>
+        `<tr>
+          <td style="padding:6px 0;font-size:14px;width:140px;">${escHtml(d.dayName)}</td>
+          <td style="padding:6px 0;font-size:14px;width:100px;color:#555;">${d.wind} ${d.windSpeed}mph</td>
+          <td style="padding:6px 0;font-size:14px;">${escHtml(d.outlook)}</td>
+        </tr>`
+      ).join('');
+      return outlook?.length ? `
+    <tr><td style="padding:12px 20px 0;">
+      <table width="100%" style="background:#fff;border-radius:6px;padding:16px;" cellpadding="0" cellspacing="0">
+        <tr><td colspan="3"><strong style="font-size:13px;text-transform:uppercase;color:#555;letter-spacing:1px;">5-Day Outlook</strong></td></tr>
+        ${outlookRows}
+      </table>
+    </td></tr>` : '';
+    })()}
     <tr><td style="padding:20px;font-size:11px;color:#888;text-align:center;">
       Powered by BirdCast, eBird, and NWS &middot; Data as of ${today}
     </td></tr>
