@@ -61,7 +61,7 @@ export class INaturalistClient {
 
   async #get(url) {
     try {
-      const response = await fetch(url);
+      const response = await fetch(url, { signal: AbortSignal.timeout(10_000) });
       if (!response.ok) {
         process.stderr.write(
           `INaturalistClient: HTTP ${response.status} for ${url}\n`

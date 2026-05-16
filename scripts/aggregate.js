@@ -12,14 +12,7 @@ import suncalc from 'suncalc';
 import { BirdCastClient, degreesToCardinal } from '../src/birdcast-client.js';
 import { NWSClient } from '../src/nws-client.js';
 import { EBirdClient } from '../src/ebird-client.js';
-import { DEFAULTS, formatNumber, toYMD, computeActivityCutoff } from '../src/utils.js';
-
-// ---------------------------------------------------------------------------
-// Shared constants — wind direction sets used for outlook rating + flags
-// ---------------------------------------------------------------------------
-
-const FAVORABLE_WINDS = new Set(['S', 'SW', 'SSW', 'SE']);
-const POOR_WINDS = new Set(['N', 'NW', 'NNW', 'NE']);
+import { DEFAULTS, formatNumber, toYMD, computeActivityCutoff, FAVORABLE_WINDS, POOR_WINDS } from '../src/utils.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -229,7 +222,12 @@ async function buildOutlook(birdcast, nws, config, today) {
   // Sequential with 300ms stagger to avoid NWS rate limiting
   const outlookResults = [];
   for (const i of [1, 2, 3, 4, 5]) {
-    outlookResults.push(await buildDay(i));
+    try {
+      outlookResults.push(await buildDay(i));
+    } catch (err) {
+      process.stderr.write(`buildOutlook day ${i} failed: ${err.message}\n`);
+      outlookResults.push(null);
+    }
     await new Promise(r => setTimeout(r, 300));
   }
   return outlookResults;
@@ -372,6 +370,14 @@ async function main() {
   // Output
   // ---------------------------------------------------------------------------
 
+  // SCHEMA CONTRACT: Field names in this output object are referenced by path in
+  // routine-prompt.md (Step 3 field list). If you rename or restructure fields,
+  // update the prompt documentation to match. Key paths the agent reads:
+  //   migration.lastNight, migration.season, migration.topExpectedSpecies,
+  //   migration.narrativeSummary, weather.today.overnight, weather.today.morning,
+  //   weather.today.rainImpactNote, weather.today.migrationInterpretation,
+  //   weather.today.weatherUnavailable, weather.outlook[], birdingWindow,
+  //   hotspots[], notableObservations[], flags
   const output = {
     date: today,
     region: config.region,

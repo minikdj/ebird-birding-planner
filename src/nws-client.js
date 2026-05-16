@@ -1,4 +1,4 @@
-import { Cache } from './utils.js';
+import { Cache, FAVORABLE_WINDS, POOR_WINDS } from './utils.js';
 
 export class NWSClient {
   static BASE_URL = 'https://api.weather.gov';
@@ -196,17 +196,17 @@ export class NWSClient {
     const precip = overnight.precipProbability ?? 0;
     const cloud = overnight.cloudCover ?? '';
 
-    // S or SW winds + clear + low precip → favorable
+    // Favorable winds + clear + low precip → favorable
     if (
-      (windDir === 'S' || windDir === 'SW') &&
+      FAVORABLE_WINDS.has(windDir) &&
       precip < 30 &&
       cloud === 'Clear'
     ) {
       return 'Favorable migration conditions. South winds with clear skies overnight — expect new arrivals at dawn.';
     }
 
-    // N or NW winds → poor
-    if (windDir === 'N' || windDir === 'NW') {
+    // Poor winds → suppress movement
+    if (POOR_WINDS.has(windDir)) {
       return 'Poor migration conditions. North winds suppress movement. Birds likely grounded.';
     }
 
@@ -235,6 +235,7 @@ export class NWSClient {
         headers: {
           'User-Agent': NWSClient.USER_AGENT,
         },
+        signal: AbortSignal.timeout(15_000),
       });
 
       if (!response.ok) {

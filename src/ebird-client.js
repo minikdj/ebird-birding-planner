@@ -55,6 +55,7 @@ export class EBirdClient {
       headers: {
         'X-eBirdApiToken': this.apiKey,
       },
+      signal: AbortSignal.timeout(10_000),
     });
 
     if (!response.ok) {
@@ -63,7 +64,11 @@ export class EBirdClient {
       );
     }
 
-    return response.json();
+    try {
+      return await response.json();
+    } catch (parseErr) {
+      throw new Error(`eBird JSON parse error for ${endpoint}: ${parseErr.message}`);
+    }
   }
 
   getNearbyHotspots(lat, lng, dist = 30) {

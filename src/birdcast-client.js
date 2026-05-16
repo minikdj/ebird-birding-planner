@@ -15,6 +15,7 @@ export class BirdCastClient {
   constructor(apiKey) {
     this.apiKey = apiKey;
     this._lastBirdCastCall = 0;
+    this._birdcastQueue = Promise.resolve();
   }
 
   // -------------------------------------------------------------------------
@@ -58,11 +59,16 @@ export class BirdCastClient {
    * @returns {Promise<object|null>}
    */
   async #get(url) {
+    this._birdcastQueue = this._birdcastQueue.then(() => this.#doGet(url));
+    return this._birdcastQueue;
+  }
+
+  async #doGet(url) {
     try {
       const elapsed = Date.now() - this._lastBirdCastCall;
       if (elapsed < 200) await new Promise(r => setTimeout(r, 200 - elapsed));
       this._lastBirdCastCall = Date.now();
-      const response = await fetch(url);
+      const response = await fetch(url, { signal: AbortSignal.timeout(10_000) });
       if (!response.ok) {
         const safeUrl = url.replace(/([?&]key=)[^&]+/, '$1***');
         process.stderr.write(

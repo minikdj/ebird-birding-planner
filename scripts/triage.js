@@ -6,7 +6,7 @@
 import { BirdCastClient, degreesToCardinal } from '../src/birdcast-client.js';
 import { NWSClient } from '../src/nws-client.js';
 import { EBirdClient } from '../src/ebird-client.js';
-import { DEFAULTS, formatNumber, toYMD, FAVORABLE_WINDS, POOR_WINDS } from '../src/utils.js';
+import { DEFAULTS, formatNumber, toYMD, FAVORABLE_WINDS, POOR_WINDS, RECOMMENDATION } from '../src/utils.js';
 
 async function main() {
   const ebirdKey = (process.env.EBIRD_API_KEY || '').trim();
@@ -19,10 +19,20 @@ async function main() {
 
   const skipBirdCast = (process.env.BRIEFING_SKIP_BIRDCAST || '').trim().toLowerCase() === 'true';
 
-  const lat = parseFloat(process.env.BRIEFING_LAT || String(DEFAULTS.lat));
-  if (!Number.isFinite(lat) || lat < -90 || lat > 90) { process.stderr.write('Warning: BRIEFING_LAT invalid\n'); }
-  const lng = parseFloat(process.env.BRIEFING_LNG || String(DEFAULTS.lng));
-  if (!Number.isFinite(lng) || lng < -180 || lng > 180) { process.stderr.write('Warning: BRIEFING_LNG invalid\n'); }
+  const lat = parseFloat((process.env.BRIEFING_LAT || String(DEFAULTS.lat)).trim());
+  const lng = parseFloat((process.env.BRIEFING_LNG || String(DEFAULTS.lng)).trim());
+  if (process.env.BRIEFING_LAT !== undefined) {
+    if (!Number.isFinite(lat) || lat < -90 || lat > 90) {
+      process.stdout.write(JSON.stringify({ error: 'BRIEFING_LAT is invalid — must be a number between -90 and 90', sendBriefing: false }, null, 2) + '\n');
+      return;
+    }
+  }
+  if (process.env.BRIEFING_LNG !== undefined) {
+    if (!Number.isFinite(lng) || lng < -180 || lng > 180) {
+      process.stdout.write(JSON.stringify({ error: 'BRIEFING_LNG is invalid — must be a number between -180 and 180', sendBriefing: false }, null, 2) + '\n');
+      return;
+    }
+  }
   const region = (process.env.BRIEFING_REGION || DEFAULTS.regionCode).trim();
   if (!/^[A-Z]{2}-[A-Z]{2,3}(-\d{1,3})?$/i.test(region)) {
     process.stdout.write(JSON.stringify({ error: `BRIEFING_REGION "${region}" is not a valid eBird region code (expected format: US-OH or US-OH-061)`, sendBriefing: false }, null, 2) + '\n');
@@ -115,28 +125,33 @@ async function main() {
     // BirdCast skipped (e.g. non-US location): use notable observations to drive the decision.
     // Never SILENT_SKIP — fall back to QUIET_PERIOD so the user always gets a briefing.
     if (notableSpecies.length > 0) {
-      recommendation = 'FULL_BRIEFING';
+      recommendation = RECOMMENDATION.FULL_BRIEFING;
       recommendationReason = `BirdCast skipped; ${notableSpecies.length} notable species found`;
     } else {
-      recommendation = 'QUIET_PERIOD';
+      recommendation = RECOMMENDATION.QUIET_PERIOD;
       recommendationReason = 'BirdCast skipped; no notable species found';
     }
   } else if (migrationScore >= 5 || live?.isHigh === true || notableSpecies.length > 0) {
-    recommendation = 'FULL_BRIEFING';
+    recommendation = RECOMMENDATION.FULL_BRIEFING;
     const reasons = [];
     if (live?.isHigh) reasons.push('High migration intensity (isHigh flag)');
     if (migrationScore >= 5) reasons.push(`Migration score ${migrationScore}/10`);
     if (notableSpecies.length > 0) reasons.push(`${notableSpecies.length} notable species`);
-    if (overnightWind === 'S' || overnightWind === 'SW') reasons.push('favorable weather');
+    if (FAVORABLE_WINDS.has(overnightWind)) reasons.push('favorable weather');
     recommendationReason = reasons.join(' + ');
   } else if (migrationScore >= 2) {
-    recommendation = 'QUIET_PERIOD';
+    recommendation = RECOMMENDATION.QUIET_PERIOD;
     recommendationReason = `Migration score ${migrationScore}/10, no notable species`;
   } else {
-    recommendation = 'SILENT_SKIP';
+    recommendation = RECOMMENDATION.SILENT_SKIP;
     recommendationReason = `Low migration score (${migrationScore}/10)`;
   }
 
+  // SCHEMA CONTRACT: This JSON output is read by the Routine agent (Step 2 of
+  // routine-prompt.md). If you add or rename fields, update the prompt's Step 2
+  // field reference list. Key fields the agent reads:
+  //   recommendation (FULL_BRIEFING | QUIET_PERIOD | SILENT_SKIP), migrationScore,
+  //   notableSpecies[], weather, recommendationReason, birdcastSkipped?
   const output = {
     date: today,
     region,

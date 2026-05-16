@@ -11,7 +11,7 @@ export const tools = [
         location: {
           type: "string",
           description:
-            'Region code (e.g. "US-OH-061"), lat/lng (e.g. "39.1,-84.5"), or city name (e.g. "Cincinnati"). Defaults to Cincinnati.',
+            'Region code (e.g. "US-OH-061"), lat/lng (e.g. "39.1,-84.5"), or city name (e.g. "Cincinnati"). Defaults to your home location.',
         },
         date: {
           type: "string",
@@ -97,7 +97,7 @@ export const tools = [
         },
         location: {
           type: "string",
-          description: "Region code, lat/lng, or city name. Defaults to Cincinnati.",
+          description: "Region code, lat/lng, or city name. Defaults to your home location.",
         },
         radius_km: {
           type: "number",
@@ -116,7 +116,7 @@ export const tools = [
       properties: {
         location: {
           type: "string",
-          description: "Region code, lat/lng, or city name. Defaults to Cincinnati.",
+          description: "Region code, lat/lng, or city name. Defaults to your home location.",
         },
         date_range: {
           type: "string",
@@ -190,7 +190,7 @@ export const tools = [
   {
     name: "plan_vacation_birding",
     description:
-      "Discovery report for birding at a travel destination. Surfaces target species you won't easily find in Cincinnati, ranks hotspots by active birder community, and provides a birding window for the trip. Uses BirdCast historical bar chart frequencies so it works for trips weeks or months in advance — not just this week's live data.",
+      "Discovery report for birding at a travel destination. Surfaces target species you won't easily find at your home location, ranks hotspots by active birder community, and provides a birding window for the trip. Uses BirdCast historical bar chart frequencies so it works for trips weeks or months in advance — not just this week's live data.",
     inputSchema: {
       type: "object",
       properties: {
@@ -204,7 +204,7 @@ export const tools = [
         },
         home_region: {
           type: "string",
-          description: 'Home region code for novelty comparison (default "US-OH-061" = Cincinnati).',
+          description: 'Home region code for novelty comparison (default "US-OH-061").',
         },
       },
       required: ["destination"],

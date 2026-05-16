@@ -154,6 +154,7 @@ async function main() {
               subject,
               content: [{ type: 'text/html', value: htmlBody }],
             }),
+            signal: AbortSignal.timeout(10_000),
           });
 
           if (sgResponse.ok) {
@@ -161,6 +162,7 @@ async function main() {
             sent = true;
           } else {
             process.stderr.write(`send.js: SendGrid failed with HTTP ${sgResponse.status}\n`);
+            await sgResponse.text().catch(() => {}); // consume body to release connection
           }
         } catch (sgErr) {
           process.stderr.write(`send.js: SendGrid threw: ${sgErr.message}\n`);

@@ -1165,6 +1165,24 @@ async function handlePlanVacationBirding(args) {
 }
 
 // ---------------------------------------------------------------------------
+// Tool dispatch map
+// ---------------------------------------------------------------------------
+
+const TOOL_HANDLERS = new Map([
+  ['plan_birding_trip',    handlePlanBirdingTrip],
+  ['migration_forecast',  handleMigrationForecast],
+  ['hotspot_details',     handleHotspotDetails],
+  ['compare_hotspots',    handleCompareHotspots],
+  ['species_finder',      handleSpeciesFinder],
+  ['best_day_to_bird',    handleBestDayToBird],
+  ['birding_weather',     handleBirdingWeather],
+  ['verify_sighting',     handleVerifySighting],
+  ['birding_window',      handleBirdingWindow],
+  ['species_frequency',   handleSpeciesFrequency],
+  ['plan_vacation_birding', handlePlanVacationBirding],
+]);
+
+// ---------------------------------------------------------------------------
 // MCP server setup
 // ---------------------------------------------------------------------------
 
@@ -1179,47 +1197,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
 
   try {
-    let result;
-    switch (name) {
-      case "plan_birding_trip":
-        result = await handlePlanBirdingTrip(args);
-        break;
-      case "migration_forecast":
-        result = await handleMigrationForecast(args);
-        break;
-      case "hotspot_details":
-        result = await handleHotspotDetails(args);
-        break;
-      case "compare_hotspots":
-        result = await handleCompareHotspots(args);
-        break;
-      case "species_finder":
-        result = await handleSpeciesFinder(args);
-        break;
-      case "best_day_to_bird":
-        result = await handleBestDayToBird(args);
-        break;
-      case "birding_weather":
-        result = await handleBirdingWeather(args);
-        break;
-      case "verify_sighting":
-        result = await handleVerifySighting(args);
-        break;
-      case "birding_window":
-        result = await handleBirdingWindow(args);
-        break;
-      case "species_frequency":
-        result = await handleSpeciesFrequency(args);
-        break;
-      case "plan_vacation_birding":
-        result = await handlePlanVacationBirding(args);
-        break;
-      default:
-        return {
-          content: [{ type: "text", text: `Unknown tool: ${name}` }],
-          isError: true,
-        };
+    const handler = TOOL_HANDLERS.get(name);
+    if (!handler) {
+      return {
+        content: [{ type: "text", text: `Unknown tool: ${name}` }],
+        isError: true,
+      };
     }
+    const result = await handler(args);
 
     return {
       content: [{ type: "text", text: JSON.stringify(result, null, 2) }],

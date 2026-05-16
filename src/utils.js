@@ -1,6 +1,16 @@
 // utils.js — utility functions for the eBird birding planner MCP server
 
 // ---------------------------------------------------------------------------
+// Recommendation constants
+// ---------------------------------------------------------------------------
+
+export const RECOMMENDATION = Object.freeze({
+  FULL_BRIEFING: 'FULL_BRIEFING',
+  QUIET_PERIOD:  'QUIET_PERIOD',
+  SILENT_SKIP:   'SILENT_SKIP',
+});
+
+// ---------------------------------------------------------------------------
 // Wind direction sets
 // ---------------------------------------------------------------------------
 
@@ -201,9 +211,9 @@ export function resolveLocation(input) {
 // ---------------------------------------------------------------------------
 
 export function toYMD(d) {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(d.getUTCDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
 }
 
