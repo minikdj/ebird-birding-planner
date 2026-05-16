@@ -15,7 +15,8 @@
     "mcp": "node src/index.js",
     "triage": "node scripts/triage.js",
     "aggregate": "node scripts/aggregate.js",
-    "send": "node scripts/send.js"
+    "send": "node scripts/send.js",
+    "test:unit": "node scripts/test-unit.js"
   },
   "keywords": [
     "ebird",
