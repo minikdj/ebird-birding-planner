@@ -353,9 +353,14 @@ function _formatCount(n) {
  * @param {number|null} degrees
  * @returns {string}
  */
-function _degreesToCardinal(degrees) {
+export function degreesToCardinal(degrees) {
   if (degrees == null) return 'unknown direction';
   const dirs = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
   const index = Math.round(degrees / 45) % 8;
   return dirs[(index + 8) % 8];
+}
+
+// For backward compatibility within this module
+function _degreesToCardinal(degrees) {
+  return degreesToCardinal(degrees);
 }

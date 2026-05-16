@@ -9,12 +9,17 @@ import { NWSClient } from '../src/nws-client.js';
 import { EBirdClient } from '../src/ebird-client.js';
 import { DEFAULTS, formatNumber } from '../src/utils.js';
 
+function toLocalYMD(d) {
+  const y = d.getFullYear(), m = String(d.getMonth()+1).padStart(2,'0'), day = String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${day}`;
+}
+
 async function buildOutlook(birdcast, nws, config) {
   const days = [];
   for (let i = 1; i <= 5; i++) {
     const d = new Date();
     d.setDate(d.getDate() + i);
-    const dateStr = d.toISOString().split('T')[0];
+    const dateStr = toLocalYMD(d);
     const dayName = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
 
     const [live, weather] = await Promise.all([
@@ -67,7 +72,7 @@ async function main() {
   const nws = new NWSClient();
   const ebird = new EBirdClient(config.ebirdKey);
 
-  const today = new Date().toISOString().split('T')[0];
+  const today = toLocalYMD(new Date());
 
   let data;
 

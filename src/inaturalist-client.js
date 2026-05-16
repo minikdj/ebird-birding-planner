@@ -1,3 +1,5 @@
+import { Cache } from './utils.js';
+
 const BASE_URL = 'https://api.inaturalist.org/v1';
 const RATE_LIMIT_DELAY_MS = 1000;
 const CACHE_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
@@ -5,7 +7,7 @@ const CACHE_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
 export class INaturalistClient {
   constructor() {
     this.lastRequestTime = 0;
-    this.cache = new Map(); // key -> { value, expiresAt }
+    this.cache = new Cache();
   }
 
   #validateInputs(speciesName, lat, lng, radiusKm, daysBack) {
@@ -171,12 +173,8 @@ export class INaturalistClient {
     this.#validateInputs(speciesName, lat, lng, radiusKm, daysBack);
 
     const cacheKey = `${speciesName},${lat},${lng},${radiusKm},${daysBack}`;
-    const cached = this.cache.get(cacheKey);
-    if (cached && Date.now() < cached.expiresAt) {
-      return cached.value;
-    }
-    if (cached) {
-      this.cache.delete(cacheKey);
+    if (this.cache.has(cacheKey)) {
+      return this.cache.get(cacheKey);
     }
 
     await this.#enforceRateLimit();
@@ -241,10 +239,7 @@ export class INaturalistClient {
       );
     }
 
-    this.cache.set(cacheKey, {
-      value: result,
-      expiresAt: Date.now() + CACHE_TTL_MS,
-    });
+    this.cache.set(cacheKey, result, CACHE_TTL_MS);
     return result;
   }
 }

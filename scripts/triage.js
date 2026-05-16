@@ -3,10 +3,15 @@
 // Fetches BirdCast + NWS data and prints a JSON decision summary to stdout.
 // Exit 0 always (errors are captured in the JSON).
 
-import { BirdCastClient } from '../src/birdcast-client.js';
+import { BirdCastClient, degreesToCardinal } from '../src/birdcast-client.js';
 import { NWSClient } from '../src/nws-client.js';
 import { EBirdClient } from '../src/ebird-client.js';
 import { DEFAULTS, formatNumber } from '../src/utils.js';
+
+function toLocalYMD(d) {
+  const y = d.getFullYear(), m = String(d.getMonth()+1).padStart(2,'0'), day = String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${day}`;
+}
 
 async function main() {
   const ebirdKey = process.env.EBIRD_API_KEY;
@@ -25,7 +30,7 @@ async function main() {
   const nws = new NWSClient();
   const ebird = new EBirdClient(ebirdKey);
 
-  const today = new Date().toISOString().split('T')[0];
+  const today = toLocalYMD(new Date());
 
   const [live, season, weather, notableObs] = await Promise.all([
     birdcast.getLiveMigration(region, today).catch(() => null),
@@ -70,7 +75,7 @@ async function main() {
     ? live.nightSeries.reduce((best, cur) => (cur.numAloft > (best?.numAloft ?? -1) ? cur : best), null)
     : null;
 
-  const peakDir = peakInterval?.avgDirection != null ? cardinalFromDeg(peakInterval.avgDirection) : null;
+  const peakDir = peakInterval?.avgDirection != null ? degreesToCardinal(peakInterval.avgDirection) : null;
   const peakSpeedMph = peakInterval?.avgSpeed != null ? Math.round(peakInterval.avgSpeed) : null;
 
   let seasonStatus = null;
@@ -143,12 +148,6 @@ async function main() {
   };
 
   process.stdout.write(JSON.stringify(output, null, 2) + '\n');
-}
-
-function cardinalFromDeg(degrees) {
-  const dirs = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
-  const index = Math.round(degrees / 45) % 8;
-  return dirs[(index + 8) % 8];
 }
 
 main().catch((err) => {

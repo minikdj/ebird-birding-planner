@@ -788,7 +788,7 @@ Send test emails to both Gmail and Apple Mail. Check:
 
 | ID | File | Status | Finding |
 |----|------|--------|---------|
-| L1 | `index.js` | Open | File is ~1400 lines — split into `src/tools.js` / `src/handlers.js` / thin `src/index.js` wiring. Unblocks handler unit testing. |
+| L1 | `index.js` | **FIXED** | Extracted tool schemas to `src/tools.js` (~213 lines). `index.js` reduced from ~1400 to ~1215 lines. Full handler extraction deferred (requires dependency injection refactor). |
 | L2 | `birdcast-client.js` | **FIXED** | `_get` → `#get` (true ES private method) |
 | L3 | `index.js` | **FIXED** | `compare_hotspots` capped at 10 items |
 | L4 | `index.js` | **FIXED** | `hotspot_details` name input capped at 200 chars |
@@ -820,12 +820,12 @@ From architecture, security, and code quality reviews of the full repo.
 
 | ID | Severity | File | Finding |
 |----|----------|------|---------|
-| R2-A | MEDIUM | `index.js` | Rate limiter serializes all eBird calls via promise queue — effective throughput is 1 req/RTT not 90/min. Fix: push timestamp at entry, not after delay. Complex refactor — tracked. |
-| R2-B | MEDIUM | `index.js` | `toISOString().slice(0,10)` gives UTC date in `handleBestDayToBird` date loop — at 11 PM ET this is off by one day. Fix: use local-time `toYMD()` from utils (currently unexported). |
-| R2-C | LOW | `index.js` | `NWSClient` and `INaturalistClient` each have their own `Map`-based cache — duplicates the `Cache` class from utils.js, TTL constants defined twice. Unify at future refactor. |
-| R2-D | LOW | Multiple | `InputError` subclass needed so validation errors surface to MCP caller instead of being swallowed by generic error handler. |
-| R2-E | LOW | `index.js` | Life list CSV column index hardcoded (split on commas 1 and 2) — should parse header row to find "Common Name" column index dynamically for robustness. |
-| R2-F | LOW | `scripts/` | `cardinalFromDeg` in triage.js duplicates `_degreesToCardinal` in birdcast-client.js — consolidate when module split (L1) is done. |
+| R2-A | MEDIUM | `index.js` | Rate limiter concern investigated: the gate resolves *before* the HTTP call starts, so concurrent HTTP requests can be in flight. Effective throughput is not 1 req/RTT — the limiter is correct. `getHotspotSpeciesCounts` manual batching is redundant but harmless. No fix needed. |
+| R2-B | MEDIUM | `index.js` | **FIXED** — Exported `toYMD()` from `utils.js`, replaced `toISOString().slice(0,10)` in `handleBestDayToBird`. Added `toLocalYMD()` helper in `scripts/briefing.js` and `scripts/triage.js`. |
+| R2-C | LOW | `index.js` | **FIXED** — `NWSClient` and `INaturalistClient` now import and use `Cache` from `utils.js`. Own `Map`-based caches deleted. |
+| R2-D | LOW | Multiple | **FIXED** — Added `InputError` class in `index.js`; outer MCP handler catches `instanceof InputError` and surfaces `.message` directly to caller. |
+| R2-E | LOW | `index.js` | **FIXED** — `loadLifeList` now parses header row to find "Common Name" column index dynamically instead of hardcoding position. |
+| R2-F | LOW | `scripts/` | **FIXED** — `degreesToCardinal` exported from `birdcast-client.js`. `cardinalFromDeg` in `triage.js` deleted and replaced with import. |
 
 ### Email chart gap [PLANNED]
 
@@ -983,3 +983,4 @@ resolved.
 | 2026-05-16 | Personal life list CSV integration added to plan_vacation_birding (EBIRD_LIFE_LIST_CSV). Section 13 updated to reflect implementation. |
 | 2026-05-16 | Spec cleanup: fixed time references (5:45 AM → 4:00 AM ET), marked Section 4B [DONE], updated Section 12 L9 as fixed, added email chart gap note, updated Section 11 to IN PROGRESS. |
 | 2026-05-16 | Full architecture + security + code quality re-review. Fixed R2-1 through R2-9 (HIGH/MEDIUM bugs: missing .catch(), wrong NWS coords, HTML injection, activityCutoff clamp, life list cache, package.json cleanup). Open items R2-A through R2-F tracked in Section 12. |
+| 2026-05-16 | Fixed all remaining review items: R2-B (toYMD UTC bug), R2-C (Cache unification), R2-D (InputError class), R2-E (CSV header parsing), R2-F (deduped cardinal function), L1 (tools.js module split). R2-A investigated and found correct — no fix needed. 6/6 smoke tests passing. |

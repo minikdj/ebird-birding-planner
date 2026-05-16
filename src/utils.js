@@ -123,7 +123,7 @@ export function resolveLocation(input) {
 // resolveDate helpers
 // ---------------------------------------------------------------------------
 
-function toYMD(d) {
+export function toYMD(d) {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");

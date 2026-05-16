@@ -1,3 +1,5 @@
+import { Cache } from './utils.js';
+
 export class NWSClient {
   static BASE_URL = 'https://api.weather.gov';
   static USER_AGENT = '(birding-planner, minikdj11@gmail.com)';
@@ -5,7 +7,7 @@ export class NWSClient {
   static POINTS_FORECAST_DELAY_MS = 250;
 
   constructor() {
-    this.cache = new Map();
+    this.cache = new Cache();
   }
 
   async getBirdingWeather(lat, lng, dateStr = null) {
@@ -25,9 +27,8 @@ export class NWSClient {
 
     // Check cache
     const cacheKey = `${lat},${lng},${dateStr}`;
-    const cached = this.cache.get(cacheKey);
-    if (cached && Date.now() - cached.timestamp < NWSClient.CACHE_TTL_MS) {
-      return cached.data;
+    if (this.cache.has(cacheKey)) {
+      return this.cache.get(cacheKey);
     }
 
     try {
@@ -105,10 +106,7 @@ export class NWSClient {
       };
 
       // Cache the result
-      this.cache.set(cacheKey, {
-        data: result,
-        timestamp: Date.now(),
-      });
+      this.cache.set(cacheKey, result, NWSClient.CACHE_TTL_MS);
 
       return result;
     } catch (err) {
