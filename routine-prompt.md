@@ -2,7 +2,7 @@
 
 Paste this prompt into claude.ai ▶ Routines ▶ New Routine.
 Schedule: daily at 09:00 UTC (adjust for your timezone — this is 4:00 AM ET / 5:00 AM ET summer, 3:00 AM CT, 2:00 AM MT, 1:00 AM PT).
-Note: 9:00 UTC is DST-safe for migration season — briefing arrives before civil twilight year-round.
+Note: 09:00 UTC works for all Americas timezones — briefing arrives before civil twilight year-round. For other regions (Europe, Asia, Southern Hemisphere), adjust the cron time so the briefing fires ~2–4 hours before your local sunrise.
 Secrets: see Setup section below.
 
 ---
@@ -18,10 +18,11 @@ Configure these secrets in your Routine:
 | `RESEND_API_KEY` | Email delivery — https://resend.com |
 | `BRIEFING_EMAIL_TO` | Recipient address (e.g. `you@gmail.com`) |
 | `BRIEFING_FROM_EMAIL` | Sender address with verified domain (e.g. `Birding Briefing <briefing@yourdomain.com>`). Omit to use the default `@resend.dev` test address, which only delivers to your Resend account owner email. |
-| `BRIEFING_REGION` | eBird/BirdCast region code (default: `US-OH-061` for Hamilton County, OH) |
-| `BRIEFING_LAT` | Latitude (default: `39.1`) |
-| `BRIEFING_LNG` | Longitude (default: `-84.5`) |
-| `BRIEFING_TIMEZONE` | IANA timezone for displaying birding window times (default: `America/New_York`). Set to your local timezone, e.g. `America/Chicago`, `America/Denver`, `America/Los_Angeles`. |
+| `BRIEFING_REGION` | eBird/BirdCast region code for your home location (default: `US-OH-061`). Format: `US-OH` (state) or `US-OH-061` (county). Find yours at ebird.org. |
+| `BRIEFING_LAT` | Latitude of your home birding location (default: `39.1`) |
+| `BRIEFING_LNG` | Longitude of your home birding location (default: `-84.5`) |
+| `BRIEFING_TIMEZONE` | IANA timezone for displaying birding window times (default: `America/New_York`). Set to your local timezone, e.g. `America/Chicago`, `America/Denver`, `America/Los_Angeles`, `America/Costa_Rica`. |
+| `BRIEFING_LOCATION_NAME` | Display name for your home location used in email subjects and body copy (e.g. `Cincinnati, OH` or `Chicago, IL`). Omit to let the agent derive a name from the region data. |
 | `BRIEFING_SKIP_BIRDCAST` | Set to `true` to skip BirdCast (for non-US locations where BirdCast has no data). Triage will use eBird notables only and send a FULL_BRIEFING if notable species found, QUIET_PERIOD otherwise. |
 | `BRIEFING_FAVORITE_HOTSPOTS` | Comma-separated eBird location IDs of your personal favorite hotspots (e.g. `L123456,L234567`). When set, these are always included in trip planning regardless of current 7-day activity. |
 
@@ -36,7 +37,7 @@ Copy everything between the START and END markers and paste into the Routine pro
 
 --- START ---
 
-You are the daily birding briefing agent. Today is {DATE}. It is early morning local time in your configured timezone ({BRIEFING_TIMEZONE}). The project repo is already cloned in the working directory. Your configured region is set via the `BRIEFING_REGION`, `BRIEFING_LAT`, and `BRIEFING_LNG` Routine secrets.
+You are the daily birding briefing agent. Today is {DATE}. It is early morning local time in your configured timezone ({BRIEFING_TIMEZONE}). The project repo is already cloned in the working directory. Your configured home location is set via the `BRIEFING_REGION`, `BRIEFING_LAT`, and `BRIEFING_LNG` Routine secrets. Use `{BRIEFING_LOCATION_NAME}` as the display name for this location in email subjects and body copy (e.g. "Cincinnati, OH" or "Chicago, IL") — if that secret is blank or unset, derive a plain-English location name from the hotspot or region data in the aggregate JSON.
 
 ━━━ STEP 1 — INSTALL & TRIAGE ━━━
 
@@ -228,4 +229,3 @@ send.js         → delivers email via Resend (fallback: SendGrid → disk)
 | `node scripts/aggregate.js` | Full data aggregation | JSON: all migration, weather, hotspot, and notable data |
 | `node scripts/send.js <draft.json>` | Email delivery | `RESULT: EMAIL SENT` or `RESULT: HTML SAVED` |
 | `node scripts/test.js` | Smoke tests | `6/6 tests passed` |
-| `node scripts/briefing.js` | Legacy template briefing | HTML email (kept for reference/fallback) |
