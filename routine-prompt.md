@@ -1,7 +1,7 @@
 # Daily Birding Briefing Routine
 
 Paste this prompt into claude.ai ▶ Routines ▶ New Routine.
-Schedule: daily at 09:00 UTC (4:00 AM ET in winter / 5:00 AM ET in summer).
+Schedule: daily at 09:00 UTC (adjust for your timezone — this is 4:00 AM ET / 5:00 AM ET summer, 3:00 AM CT, 2:00 AM MT, 1:00 AM PT).
 Note: 9:00 UTC is DST-safe for migration season — briefing arrives before civil twilight year-round.
 Secrets: see Setup section below.
 
@@ -22,6 +22,8 @@ Configure these secrets in your Routine:
 | `BRIEFING_LAT` | Latitude (default: `39.1`) |
 | `BRIEFING_LNG` | Longitude (default: `-84.5`) |
 | `BRIEFING_TIMEZONE` | IANA timezone for displaying birding window times (default: `America/New_York`). Set to your local timezone, e.g. `America/Chicago`, `America/Denver`, `America/Los_Angeles`. |
+| `BRIEFING_SKIP_BIRDCAST` | Set to `true` to skip BirdCast (for non-US locations where BirdCast has no data). Triage will use eBird notables only and send a FULL_BRIEFING if notable species found, QUIET_PERIOD otherwise. |
+| `BRIEFING_FAVORITE_HOTSPOTS` | Comma-separated eBird location IDs of your personal favorite hotspots (e.g. `L123456,L234567`). When set, these are always included in trip planning regardless of current 7-day activity. |
 
 Optional fallback secret:
 | `SENDGRID_API_KEY` | Used if Resend is unavailable |
@@ -34,7 +36,7 @@ Copy everything between the START and END markers and paste into the Routine pro
 
 --- START ---
 
-You are the daily birding briefing agent. Today is {DATE}. It is 4:00 AM local time. The project repo is already cloned in the working directory. Your configured region is set via the `BRIEFING_REGION`, `BRIEFING_LAT`, and `BRIEFING_LNG` Routine secrets (defaults: Hamilton County, OH / Cincinnati area).
+You are the daily birding briefing agent. Today is {DATE}. It is early morning local time in your configured timezone ({BRIEFING_TIMEZONE}). The project repo is already cloned in the working directory. Your configured region is set via the `BRIEFING_REGION`, `BRIEFING_LAT`, and `BRIEFING_LNG` Routine secrets.
 
 ━━━ STEP 1 — INSTALL & TRIAGE ━━━
 
@@ -189,7 +191,7 @@ Read the RESULT line in the output.
 - If "HTML SAVED": output "Done. Draft saved but not emailed — check Routine secrets." and stop.
 - If it crashes: output the error and stop. Do not retry (email may have partially delivered).
 
-**If this was a QUIET_PERIOD send:** also reschedule this Routine. Use `list_scheduled_tasks` to find this Routine's task ID, then call `update_scheduled_task` with the task ID to set the next run to {DATE+4} at 09:00 UTC (4:00 AM ET in winter, 5:00 AM ET in summer). If the rescheduling tool call fails, log the error but do not stop — the email was already sent.
+**If this was a QUIET_PERIOD send:** also reschedule this Routine. Use `list_scheduled_tasks` to find this Routine's task ID, then call `update_scheduled_task` with the task ID to set the next run to {DATE+4} at 09:00 UTC (adjust to match your BRIEFING_TIMEZONE and desired wakeup time). If the rescheduling tool call fails, log the error but do not stop — the email was already sent.
 
 ━━━ RULES ━━━
 

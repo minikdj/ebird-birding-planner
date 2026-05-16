@@ -411,30 +411,21 @@ export const DEFAULTS = {
 };
 
 // ---------------------------------------------------------------------------
-// isCincinnatiArea
+// getFavoriteHotspots
 // ---------------------------------------------------------------------------
 
-const CINCY_NEARBY_COUNTIES = new Set([
-  "US-OH-061", // Hamilton
-  "US-OH-015", // Butler
-  "US-OH-025", // Clermont
-  "US-OH-165", // Warren
-  "US-KY-037", // Campbell
-  "US-KY-117", // Kenton
-]);
-
-const CINCY_LAT = 39.1;
-const CINCY_LNG = -84.5;
-
-export function isCincinnatiArea(lat, lng, regionCode) {
-  if (regionCode) {
-    const upper = regionCode.toUpperCase();
-    if (CINCY_NEARBY_COUNTIES.has(upper)) return true;
+/**
+ * Returns the user's favorite hotspots.
+ * If BRIEFING_FAVORITE_HOTSPOTS is set (comma-separated eBird locIds), those are used.
+ * Otherwise falls back to the FAVORITE_HOTSPOTS default list.
+ * @returns {{ locId: string|null, name?: string }[]}
+ */
+export function getFavoriteHotspots() {
+  const envVal = (process.env.BRIEFING_FAVORITE_HOTSPOTS || '').trim();
+  if (envVal) {
+    return envVal.split(',').map((id) => ({ locId: id.trim() })).filter((h) => h.locId);
   }
-  if (lat != null && lng != null) {
-    return haversineKm(lat, lng, CINCY_LAT, CINCY_LNG) <= 50;
-  }
-  return false;
+  return FAVORITE_HOTSPOTS;
 }
 
 // ---------------------------------------------------------------------------

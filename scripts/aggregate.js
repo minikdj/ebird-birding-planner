@@ -12,7 +12,7 @@ import suncalc from 'suncalc';
 import { BirdCastClient, degreesToCardinal } from '../src/birdcast-client.js';
 import { NWSClient } from '../src/nws-client.js';
 import { EBirdClient } from '../src/ebird-client.js';
-import { DEFAULTS, formatNumber, toYMD } from '../src/utils.js';
+import { DEFAULTS, formatNumber, toYMD, computeActivityCutoff } from '../src/utils.js';
 
 // ---------------------------------------------------------------------------
 // Shared constants — wind direction sets used for outlook rating + flags
@@ -38,24 +38,6 @@ function formatTime(date) {
     hour12: true,
     timeZone: DISPLAY_TZ,
   });
-}
-
-/**
- * Activity cutoff estimate based on temperature.
- * Base: 10:30 AM. Subtract 15 min per 5°F above 75°F. Minimum 6:00 AM.
- */
-function computeActivityCutoff(tempF) {
-  let cutoffMinutes = 10 * 60 + 30; // 10:30 AM in minutes since midnight
-  if (tempF != null && tempF > 75) {
-    cutoffMinutes -= Math.floor((tempF - 75) / 5) * 15;
-  }
-  cutoffMinutes = Math.max(cutoffMinutes, 6 * 60); // clamp >= 6:00 AM
-  const h = Math.floor(cutoffMinutes / 60);
-  const m = String(cutoffMinutes % 60).padStart(2, '0');
-  const ampm = h >= 12 ? 'PM' : 'AM';
-  // Handle 12-hour conversion correctly including h===0 (midnight, unreachable with clamp but safe)
-  const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
-  return `${h12}:${m} ${ampm}`;
 }
 
 /**
@@ -91,6 +73,7 @@ function computeRainImpactNote(weather) {
 
 /**
  * Derive a daylight / birding window from suncalc for a given date + coordinates.
+ * Returns formatted times plus the raw sunrise Date for activity cutoff computation.
  */
 function buildBirdingWindow(dateStr, lat, lng) {
   const d = new Date(dateStr + 'T12:00:00Z');
@@ -101,6 +84,7 @@ function buildBirdingWindow(dateStr, lat, lng) {
     goldenHourEnd: formatTime(times.goldenHourEnd), // suncalc: end of morning golden hour
     solarNoon: formatTime(times.solarNoon),
     sunset: formatTime(times.sunset),
+    _sunriseDate: times.sunrise, // raw Date for computeActivityCutoff; stripped from output below
   };
 }
 
@@ -348,7 +332,8 @@ async function main() {
   ]);
 
   // --- Derived / computed values ---
-  const birdingWindow = buildBirdingWindow(today, config.lat, config.lng);
+  const birdingWindowRaw = buildBirdingWindow(today, config.lat, config.lng);
+  const { _sunriseDate, ...birdingWindow } = birdingWindowRaw;
   const rainImpactNote = computeRainImpactNote(weather);
   const lastNight = buildLastNight(live);
   const seasonStatus = buildSeasonStatus(season);
@@ -412,7 +397,9 @@ async function main() {
 
     birdingWindow: {
       ...birdingWindow,
-      activityCutoff: computeActivityCutoff(weather?.morning?.tempF),
+      activityCutoff: _sunriseDate && !isNaN(_sunriseDate.getTime())
+        ? formatTime(computeActivityCutoff(_sunriseDate, weather?.morning?.tempF ?? null))
+        : null,
       note: `Arrive by ${birdingWindow.civilTwilight ?? 'civil twilight'} for peak dawn chorus.`,
     },
 

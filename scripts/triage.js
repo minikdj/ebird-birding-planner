@@ -17,6 +17,8 @@ async function main() {
     return;
   }
 
+  const skipBirdCast = (process.env.BRIEFING_SKIP_BIRDCAST || '').trim().toLowerCase() === 'true';
+
   const lat = parseFloat(process.env.BRIEFING_LAT || String(DEFAULTS.lat));
   if (!Number.isFinite(lat) || lat < -90 || lat > 90) { process.stderr.write('Warning: BRIEFING_LAT invalid\n'); }
   const lng = parseFloat(process.env.BRIEFING_LNG || String(DEFAULTS.lng));
@@ -34,8 +36,8 @@ async function main() {
   const today = toYMD(new Date());
 
   const [live, season, weather, notableObs] = await Promise.all([
-    birdcast.getLiveMigration(region, today).catch(() => null),
-    birdcast.getSeasonHistorical(region, today).catch(() => null),
+    skipBirdCast ? Promise.resolve(null) : birdcast.getLiveMigration(region, today).catch(() => null),
+    skipBirdCast ? Promise.resolve(null) : birdcast.getSeasonHistorical(region, today).catch(() => null),
     nws.getBirdingWeather(lat, lng, today).catch(() => null),
     ebird.getNearbyNotableObservations(lat, lng, 2, 50).catch(() => null),
   ]);
@@ -109,7 +111,17 @@ async function main() {
   let recommendation;
   let recommendationReason;
 
-  if (migrationScore >= 5 || live?.isHigh === true || notableSpecies.length > 0) {
+  if (skipBirdCast) {
+    // BirdCast skipped (e.g. non-US location): use notable observations to drive the decision.
+    // Never SILENT_SKIP — fall back to QUIET_PERIOD so the user always gets a briefing.
+    if (notableSpecies.length > 0) {
+      recommendation = 'FULL_BRIEFING';
+      recommendationReason = `BirdCast skipped; ${notableSpecies.length} notable species found`;
+    } else {
+      recommendation = 'QUIET_PERIOD';
+      recommendationReason = 'BirdCast skipped; no notable species found';
+    }
+  } else if (migrationScore >= 5 || live?.isHigh === true || notableSpecies.length > 0) {
     recommendation = 'FULL_BRIEFING';
     const reasons = [];
     if (live?.isHigh) reasons.push('High migration intensity (isHigh flag)');
@@ -128,6 +140,7 @@ async function main() {
   const output = {
     date: today,
     region,
+    ...(skipBirdCast ? { birdcastSkipped: true } : {}),
     migrationScore,
     lastNight: live ? {
       cumulativeBirds: live.cumulativeBirds ?? null,

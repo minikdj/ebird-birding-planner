@@ -19,7 +19,8 @@ import {
   resolveDateRange,
   FAVORITE_HOTSPOTS,
   DEFAULTS,
-  isCincinnatiArea,
+  getFavoriteHotspots,
+  computeActivityCutoff,
   formatNumber,
   toYMD,
 } from "./utils.js";
@@ -71,6 +72,15 @@ const inflightBirdCast = new Map();
 let _lifeListCache = undefined; // undefined = not yet loaded; null = loaded but absent
 
 // ---------------------------------------------------------------------------
+// Env-aware default coordinates (BRIEFING_LAT/LNG take priority over DEFAULTS)
+// ---------------------------------------------------------------------------
+
+const _envLat = parseFloat(process.env.BRIEFING_LAT || '');
+const _envLng = parseFloat(process.env.BRIEFING_LNG || '');
+const defaultLat = Number.isFinite(_envLat) ? _envLat : DEFAULTS.lat;
+const defaultLng = Number.isFinite(_envLng) ? _envLng : DEFAULTS.lng;
+
+// ---------------------------------------------------------------------------
 // Taxonomy + species resolution
 // ---------------------------------------------------------------------------
 
@@ -104,7 +114,7 @@ async function resolveFavoriteHotspots() {
   if (cache.has(cacheKey)) return cache.get(cacheKey);
 
   try {
-    const hotspots = await ebird.getNearbyHotspots(DEFAULTS.lat, DEFAULTS.lng, 30);
+    const hotspots = await ebird.getNearbyHotspots(defaultLat, defaultLng, 30);
     const resolved = FAVORITE_HOTSPOTS.map((fav) => {
       const match = hotspots.find((h) =>
         h.locName?.toLowerCase().includes(fav.name.toLowerCase())
@@ -125,8 +135,8 @@ async function resolveFavoriteHotspots() {
 
 function loc(input) {
   return resolveLocation(input) ?? {
-    lat: DEFAULTS.lat,
-    lng: DEFAULTS.lng,
+    lat: defaultLat,
+    lng: defaultLng,
     regionCode: DEFAULTS.regionCode,
     name: DEFAULTS.name,
   };
@@ -234,9 +244,10 @@ async function handlePlanBirdingTrip(args) {
 
   const enriched = await getHotspotSpeciesCounts(topHotspots);
 
-  // Check for favorites in Cincinnati area
+  // Include favorite hotspots (env-configured or Cincinnati defaults)
   let favorites = [];
-  if (isCincinnatiArea(lat, lng, regionCode)) {
+  const favHotspots = getFavoriteHotspots();
+  if (favHotspots.length > 0) {
     favorites = await resolveFavoriteHotspots();
     // Merge favorites that aren't already in the list
     for (const fav of favorites) {
@@ -312,8 +323,8 @@ async function handlePlanBirdingTrip(args) {
 }
 
 async function handleBirdingWeather(args) {
-  const lat = args.lat ?? DEFAULTS.lat;
-  const lng = args.lng ?? DEFAULTS.lng;
+  const lat = args.lat ?? defaultLat;
+  const lng = args.lng ?? defaultLng;
   if (!Number.isFinite(Number(lat)) || Number(lat) < -90 || Number(lat) > 90) {
     return { error: 'Invalid latitude: must be a number between -90 and 90' };
   }
@@ -326,8 +337,8 @@ async function handleBirdingWeather(args) {
 
 async function handleVerifySighting(args) {
   if (!args.species) return { error: "species is required." };
-  const lat = args.lat ?? DEFAULTS.lat;
-  const lng = args.lng ?? DEFAULTS.lng;
+  const lat = args.lat ?? defaultLat;
+  const lng = args.lng ?? defaultLng;
   if (!Number.isFinite(Number(lat)) || Number(lat) < -90 || Number(lat) > 90) {
     return { error: 'Invalid latitude: must be a number between -90 and 90' };
   }
@@ -340,8 +351,8 @@ async function handleVerifySighting(args) {
 }
 
 async function handleBirdingWindow(args) {
-  const lat = args.lat ?? DEFAULTS.lat;
-  const lng = args.lng ?? DEFAULTS.lng;
+  const lat = args.lat ?? defaultLat;
+  const lng = args.lng ?? defaultLng;
   const dateInfo = resolveDate(args.date || "today") ?? resolveDate("today");
   const tempF = args.temp_f != null ? coerceNumber(args.temp_f, null) : null;
 
@@ -357,15 +368,9 @@ async function handleBirdingWindow(args) {
   const sunrise = fmtTime(times.sunrise);
   const goldenHourEnd = fmtTime(times.goldenHour);
 
-  // Activity cutoff: base 10:30 AM, subtract 15 min per 5°F above 75°F
-  let cutoffMinutes = 10 * 60 + 30; // 10:30 AM in minutes from midnight
-  if (tempF != null && tempF > 75) {
-    cutoffMinutes -= Math.floor((tempF - 75) / 5) * 15;
-  }
-  cutoffMinutes = Math.max(cutoffMinutes, 6 * 60); // never recommend arriving before 6 AM
-  const cutoffH = Math.floor(cutoffMinutes / 60);
-  const cutoffM = cutoffMinutes % 60;
-  const activityCutoff = `${cutoffH > 12 ? cutoffH - 12 : cutoffH}:${String(cutoffM).padStart(2, "0")} ${cutoffH >= 12 ? "PM" : "AM"}`;
+  // Activity cutoff: use shared computeActivityCutoff (sunrise + 3h base, heat-adjusted)
+  const cutoffDate = computeActivityCutoff(times.sunrise, tempF ?? null);
+  const activityCutoff = fmtTime(cutoffDate);
 
   const tempNote = tempF != null ? ` at forecasted ${Math.round(tempF)}°F` : "";
   const recommendation = `Arrive by ${civilTwilight} (civil twilight). Peak songbird activity ${sunrise}–9:30 AM. Heat suppresses activity after ~${activityCutoff}${tempNote}.`;
@@ -512,9 +517,9 @@ async function handleMigrationForecast(args) {
 
   // Enrich with NWS weather interpretation
   try {
-    const resolvedCoords = resolveLocation(regionCode) ?? { lat: DEFAULTS.lat, lng: DEFAULTS.lng };
-    const weatherLat = resolvedCoords.lat ?? DEFAULTS.lat;
-    const weatherLng = resolvedCoords.lng ?? DEFAULTS.lng;
+    const resolvedCoords = resolveLocation(regionCode) ?? { lat: defaultLat, lng: defaultLng };
+    const weatherLat = resolvedCoords.lat ?? defaultLat;
+    const weatherLng = resolvedCoords.lng ?? defaultLng;
     const weather = await nws.getBirdingWeather(weatherLat, weatherLng, dateInfo.date);
     if (!weather.weatherUnavailable) {
       result.overnightWinds = weather.overnight;
@@ -679,7 +684,7 @@ async function handleCompareHotspots(args) {
   if (Number.isFinite(location.lat) && Number.isFinite(location.lng)) {
     const allUnique = comparison.flatMap((h) => h.uniqueSpecies).slice(0, 3);
     const verifications = await Promise.all(
-      allUnique.map((sp) => inat.getVerifiedSightings(sp, location.lat ?? DEFAULTS.lat, location.lng ?? DEFAULTS.lng, 30, 14).catch(() => null))
+      allUnique.map((sp) => inat.getVerifiedSightings(sp, location.lat ?? defaultLat, location.lng ?? defaultLng, 30, 14).catch(() => null))
     );
     const verifiedMap = {};
     allUnique.forEach((sp, i) => {
@@ -1018,7 +1023,7 @@ async function handlePlanVacationBirding(args) {
 
     if (lifeList) {
       // Life-list mode: primary split is seen vs. not seen
-      // Still filter to species that are rare/absent in Cincinnati to keep the list focused
+      // Still filter to species that are rare/absent at home to keep the list focused
       pool = pool.filter((s) => s.homeProbability < homeThreshold);
 
       // Tighten if too many
@@ -1038,7 +1043,7 @@ async function handlePlanVacationBirding(args) {
       const toEntry = (s) => ({
         name: s.commonName,
         destinationFrequency: Math.round(s.probability * 100) / 100,
-        cincinnatiFrequency: Math.round(s.homeProbability * 100) / 100,
+        homeFrequency: Math.round(s.homeProbability * 100) / 100,
         onYourLifeList: lifeList.has(s.commonName),
       });
 
@@ -1076,22 +1081,22 @@ async function handlePlanVacationBirding(args) {
           .filter((s) => s.probability >= destThreshold)
           .filter((s) => (homeMap.get(s.commonName) ?? 0) < homeThreshold)
           .map((s) => ({ ...s, homeProbability: homeMap.get(s.commonName) ?? 0 }));
-        similarNote = 'This destination has similar species to Cincinnati — thresholds relaxed to show the most distinctive local birds.';
+        similarNote = 'This destination has similar species to your home location — thresholds relaxed to show the most distinctive local birds.';
       }
 
       const toEntry = (s) => ({
         name: s.commonName,
         destinationFrequency: Math.round(s.probability * 100) / 100,
-        cincinnatiFrequency: Math.round(s.homeProbability * 100) / 100,
+        homeFrequency: Math.round(s.homeProbability * 100) / 100,
       });
 
       targetSpecies = {
-        wontFindInCincinnati: pool
+        notFindableAtHome: pool
           .filter((s) => s.homeProbability < 0.02)
           .sort((a, b) => b.probability - a.probability)
           .slice(0, 15)
           .map(toEntry),
-        rareInCincinnati: pool
+        rareAtHome: pool
           .filter((s) => s.homeProbability >= 0.02)
           .sort((a, b) => b.probability - a.probability)
           .slice(0, 15)
@@ -1104,7 +1109,7 @@ async function handlePlanVacationBirding(args) {
   } else {
     targetSpecies = lifeList
       ? { newToYourLifeList: [], seenBeforeButRareHere: [] }
-      : { wontFindInCincinnati: [], rareInCincinnati: [] };
+      : { notFindableAtHome: [], rareAtHome: [] };
     dataNote = regionCode
       ? 'BirdCast frequency data unavailable for this destination or date. Target species comparison omitted.'
       : 'No region code available — target species comparison requires a county-level region code or recognized city.';
@@ -1125,18 +1130,18 @@ async function handlePlanVacationBirding(args) {
   // Build summary
   const primaryCount = lifeList
     ? (targetSpecies.newToYourLifeList?.length ?? 0)
-    : (targetSpecies.wontFindInCincinnati?.length ?? 0);
+    : (targetSpecies.notFindableAtHome?.length ?? 0);
   const secondaryCount = lifeList
     ? (targetSpecies.seenBeforeButRareHere?.length ?? 0)
-    : (targetSpecies.rareInCincinnati?.length ?? 0);
+    : (targetSpecies.rareAtHome?.length ?? 0);
 
   const topSpot = hotspotData[0];
   const parts = [`${destination.name} — ${tripLabel}.`];
   if (primaryCount > 0 || secondaryCount > 0) {
     if (lifeList) {
-      parts.push(`★ ${primaryCount} species not on your life list that are findable here, ▲ ${secondaryCount} you've seen before but are rare in Cincinnati.`);
+      parts.push(`★ ${primaryCount} species not on your life list that are findable here, ▲ ${secondaryCount} you've seen before but are not typically found at your home location.`);
     } else {
-      parts.push(`★ ${primaryCount} species you won't find in Cincinnati, ▲ ${secondaryCount} more that are rare there but common here.`);
+      parts.push(`★ ${primaryCount} species not typically found at your home location, ▲ ${secondaryCount} more that are rare at home but common here.`);
     }
   }
   if (topSpot) {

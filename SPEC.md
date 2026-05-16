@@ -765,18 +765,24 @@ them from environment at runtime:
 | `EBIRD_API_KEY` | eBird API access |
 | `BIRDCAST_API_KEY` | BirdCast migration API access |
 | `RESEND_API_KEY` | Email sending |
+| `SENDGRID_API_KEY` | Fallback email sending (optional) |
 | `BRIEFING_EMAIL_TO` | Recipient address |
+| `BRIEFING_FROM_EMAIL` | Sender address with verified domain |
 | `BRIEFING_REGION` | eBird/BirdCast region code (default `US-OH-061`) |
 | `BRIEFING_LAT` | Latitude (default `39.1`) |
 | `BRIEFING_LNG` | Longitude (default `-84.5`) |
-| `BRIEFING_HOTSPOTS` | Comma-separated favorite locIds |
+| `BRIEFING_TIMEZONE` | IANA timezone string (default `America/New_York`) — controls all displayed times |
+| `BRIEFING_FAVORITE_HOTSPOTS` | Comma-separated eBird location IDs (e.g. `L123456,L234567`). Overrides the default Cincinnati hotspot list. Always included in trip planning. |
+| `BRIEFING_SKIP_BIRDCAST` | Set to `true` for non-US locations where BirdCast has no data. Triage uses eBird notables only; sends FULL_BRIEFING if notables found, QUIET_PERIOD otherwise. |
+| `NWS_CONTACT_EMAIL` | Contact email in NWS User-Agent header (default `birding-briefing@example.com`) |
+| `EBIRD_LIFE_LIST_CSV` | Path to eBird life list CSV export — enables "new for life list" highlights in vacation planning |
 
 ### What does NOT need to be configured (hardcoded defaults)
 
-- Cincinnati coordinates (39.1, -84.5)
-- Hamilton County region code (US-OH-061)
-- Favorite hotspot names (resolved dynamically from eBird)
-- Migration season dates (Mar 15 – Jun 7, Aug 1 – Nov 15)
+- Home coordinates (39.1, -84.5) and region (US-OH-061) — override with BRIEFING_LAT/LNG/REGION
+- Favorite hotspot list — defaults to Cincinnati parks; override with BRIEFING_FAVORITE_HOTSPOTS
+- Migration season dates (Mar 15 – Jun 7, Aug 1 – Nov 15) — BirdCast service constraint, not configurable
+- Activity cutoff thresholds (75°F heat penalty, 3h base window) — defined in utils.js constants
 
 ---
 
@@ -1064,8 +1070,12 @@ Items that are known, tracked, and not yet completed. Ordered roughly by priorit
 | 12 | Inline email charts | Enhancement | Section 7 describes 7-day migration bar chart and warbler frequency trend; removed from `package.json` as `optionalDependencies`. Add back if charts are re-introduced. |
 | 13 | GitHub branch protection on `main` | Security | Require PR review before merge, no force-push, signed commits. Prevents a compromised GitHub account from landing malicious code that runs with live API keys in the next Routine execution. |
 | 14 | Scope Resend/SendGrid API keys | Security | Scope Resend key to a single sending domain so a stolen key can't spam arbitrary addresses under your domain reputation. Set spending alerts on eBird/BirdCast if the providers support it. |
+| 15 | Test `BRIEFING_SKIP_BIRDCAST=true` end-to-end | Testing | Set to true, run triage.js, verify BirdCast is not called and recommendation is based on eBird notables only |
+| 16 | Test `BRIEFING_FAVORITE_HOTSPOTS` env var | Testing | Set comma-separated locIds, run plan_birding_trip, verify configured hotspots appear regardless of activity level |
+| 17 | Test vacation-to-new-region flow | Testing | Change BRIEFING_REGION/LAT/LNG/TIMEZONE to a new location, verify triage + aggregate produce correct region data |
+| 18 | Triage score threshold tuning for non-Ohio regions | Config/Enhancement | Current thresholds (>500k birds = +3, etc.) are calibrated for Ohio nocturnal migration volumes. Pacific coast, Gulf Coast, or sparse-region users may always get FULL_BRIEFING or always SILENT_SKIP. Document tuning guidance or expose `BRIEFING_SCORE_HIGH_BIRDS`, `BRIEFING_FULL_THRESHOLD` env vars. |
 
-**Reference:** `TESTING.md` — full feature inventory, test prompts, expected outputs, and status tracking for all tests above.
+**Reference:** `TESTING.md` — full feature inventory, test prompts, expected outputs, and status tracking for all tests above. — full feature inventory, test prompts, expected outputs, and status tracking for all tests above.
 
 ---
 
@@ -1116,4 +1126,5 @@ resolved.
 | 2026-05-16 | Architectural refactor of Routine email system: added `scripts/aggregate.js` (comprehensive data aggregation → JSON) and `scripts/send.js` (email delivery from draft JSON). Routine agent now writes the email body dynamically using its reasoning instead of filling a fixed template. Rain impact detection added. Section 3 and Section 4B updated. `routine-prompt.md` rewritten with 7-step agent flow. `briefing.js` retained as legacy fallback. |
 | 2026-05-16 | Full architecture + security + code review of new scripts. Fixed: SendGrid fallback unreachable on Resend API errors; disk fallback cwd-relative path; BRIEFING_LAT/LNG NaN propagation; buildOutlook sequential loop → parallel; buildOutlook date derivation from new Date() → today param; duplicate toLocalYMD → import toYMD; inline degreesToCardinal → import; wind constants unified (SSW/SE added); computeActivityCutoff h===0 edge; fallout rain threshold 60%→50%. Prompt: removed hardcoded Cincinnati; fixed schedule to 09:00 UTC (DST-safe); added update_scheduled_task guidance; fixed quiet-period data references; added null-handling guidance. |
 | 2026-05-16 | Three live Routine runs completed successfully. Fixed UTC birding-window bug (formatTime now uses BRIEFING_TIMEZONE env var, default America/New_York). Fixed Routine git-hang (npm install → npm ci; added explicit no-git-commands rule). Added Chase Targets section to Routine prompt — prize birds now get dedicated cards with rarity context, where-to-look, field ID, and time-sensitivity. Section 11 updated to reflect live test results. Created TESTING.md as the living E2E test document. |
+| 2026-05-16 | Evolvability review (Opus). Portability score raised from 6→9/10. De-Cincinnati-ified entire codebase: routine-prompt.md no longer references "4:00 AM ET" or "Cincinnati area"; all Cincinnati-specific output labels in plan_vacation_birding renamed to homeFrequency/notFindableAtHome/rareAtHome with dynamic home location name. isCincinnatiArea() gate replaced with getFavoriteHotspots() that reads BRIEFING_FAVORITE_HOTSPOTS env var (comma-separated locIds) and falls back to default Cincinnati parks. BRIEFING_SKIP_BIRDCAST=true added for non-US travel (triage uses eBird notables only). MCP tool handlers now read BRIEFING_LAT/LNG as default before falling back to DEFAULTS. computeActivityCutoff consolidated from 3 inline duplicates to single utils.js import. Section 9 secrets table updated with all current env vars. |
 | 2026-05-16 | Three parallel code reviews (architecture, security, code quality + data flow) plus a dedicated public-repo Opus security audit. Zero secrets in git history, zero npm vulnerabilities. Implemented all actionable findings: FAVORABLE_WINDS/haversineKm/computeActivityCutoff/weekIndexForDate exported from utils.js; URLSearchParams for BirdCast API key; NWS URL domain assertion; path traversal guard in send.js; lat/lng validation in all MCP handlers; batched eBird calls (5 at a time); staggered NWS calls (300ms); BRIEFING_REGION now rejects (not warns) on invalid format; draft.emailTo/emailFrom overrides removed from send.js (always use env vars); npm ci --ignore-scripts in Routine prompt (supply-chain hardening); HTML-escape rule added to Routine agent RULES; path validation for EBIRD_LIFE_LIST_CSV; legacy scripts/briefing.js deleted. |
