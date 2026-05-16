@@ -813,7 +813,7 @@ PRs for review before merging.
 
 ## 11. Testing Plan
 
-**Status: [IN PROGRESS]** — smoke tests done; Routine + email rendering tests pending.
+**Status: [IN PROGRESS]** — Routine full-briefing path confirmed in 3 live runs. MCP tools, quiet-period path, fallback delivery, and degraded modes still need documented E2E verification. See `TESTING.md` for the full living test plan.
 
 ### Automated smoke tests — [DONE]
 
@@ -828,23 +828,27 @@ PRs for review before merging.
 | loadLifeList() from CSV file | Parses EBIRD_LIFE_LIST_CSV, verifies count > 0 |
 | scripts/triage.js execution | Subprocess; verifies JSON output with required keys |
 
-### MCP server tools
+### Routine agent — [DONE — FULL_BRIEFING path]
 
-Tested interactively via Claude Desktop. All 11 tools exercised manually.
+Three live runs completed 2026-05-16. Confirmed:
+- triage.js → aggregate.js → agent email → send.js pipeline works end-to-end
+- Email delivered via Resend to Gmail ✓
+- Chase Targets section with field ID cards rendered correctly ✓
+- Birding window times display in Eastern time (not UTC) ✓
+- npm ci does not modify package-lock.json; git hang bug eliminated ✓
+- Agent correctly identifies prize birds (Connecticut Warbler, Neotropic Cormorant, Bell's Vireo) ✓
 
-### Routine agent — [PLANNED]
+Still needed:
+- QUIET_PERIOD path with `update_scheduled_task` rescheduling
+- SILENT_SKIP path
+- SendGrid fallback and disk fallback delivery
 
-1. Trigger the Routine manually via Claude Desktop
-2. Verify correct email arrives in inbox
-3. Verify quiet-period logic: manually call with low-migration data and confirm
-   the agent sends the quiet email and reschedules
+### Email rendering — [PARTIAL]
 
-### Email rendering — [PLANNED]
-
-Send test emails to both Gmail and Apple Mail. Check:
-- Layout doesn't break on mobile
-- Subject line fits preview pane
-- Unsubscribe text present in footer
+Confirmed working in Gmail (desktop and received). Still needed:
+- Mobile rendering (Gmail app / Apple Mail on iPhone)
+- Apple Mail desktop rendering
+- Subject line display in preview pane on mobile
 
 ---
 
@@ -1074,3 +1078,4 @@ resolved.
 | 2026-05-16 | Fixed all remaining review items: R2-B (toYMD UTC bug), R2-C (Cache unification), R2-D (InputError class), R2-E (CSV header parsing), R2-F (deduped cardinal function), L1 (tools.js module split). R2-A investigated and found correct — no fix needed. 6/6 smoke tests passing. |
 | 2026-05-16 | Architectural refactor of Routine email system: added `scripts/aggregate.js` (comprehensive data aggregation → JSON) and `scripts/send.js` (email delivery from draft JSON). Routine agent now writes the email body dynamically using its reasoning instead of filling a fixed template. Rain impact detection added. Section 3 and Section 4B updated. `routine-prompt.md` rewritten with 7-step agent flow. `briefing.js` retained as legacy fallback. |
 | 2026-05-16 | Full architecture + security + code review of new scripts. Fixed: SendGrid fallback unreachable on Resend API errors; disk fallback cwd-relative path; BRIEFING_LAT/LNG NaN propagation; buildOutlook sequential loop → parallel; buildOutlook date derivation from new Date() → today param; duplicate toLocalYMD → import toYMD; inline degreesToCardinal → import; wind constants unified (SSW/SE added); computeActivityCutoff h===0 edge; fallout rain threshold 60%→50%. Prompt: removed hardcoded Cincinnati; fixed schedule to 09:00 UTC (DST-safe); added update_scheduled_task guidance; fixed quiet-period data references; added null-handling guidance. |
+| 2026-05-16 | Three live Routine runs completed successfully. Fixed UTC birding-window bug (formatTime now uses BRIEFING_TIMEZONE env var, default America/New_York). Fixed Routine git-hang (npm install → npm ci; added explicit no-git-commands rule). Added Chase Targets section to Routine prompt — prize birds now get dedicated cards with rarity context, where-to-look, field ID, and time-sensitivity. Section 11 updated to reflect live test results. Created TESTING.md as the living E2E test document. |
