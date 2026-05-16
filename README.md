@@ -66,7 +66,7 @@ The briefing runs as a cloud-hosted Anthropic Routine — no machine needs to be
 
 ### How it works
 
-1. Agent runs at 5:45 AM ET daily during migration season
+1. Agent runs at 4:00 AM ET daily during migration season
 2. `scripts/triage.js` fetches BirdCast + NWS data and outputs a JSON recommendation
 3. Agent decides: full briefing / quiet-period note / silent skip
 4. `scripts/briefing.js` builds HTML email and sends via Resend

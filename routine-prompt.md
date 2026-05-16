@@ -22,43 +22,34 @@ Configure these secrets in your Routine:
 
 ## Routine Prompt
 
-Copy everything below this line and paste into the Routine prompt field:
+Copy everything between the START and END markers and paste into the Routine prompt field:
 
-```
-Your ONLY job is to run two shell scripts and send a birding email. Do NOT explore the repo. Do NOT read or modify any files. Do NOT fix anything you notice. Just run the scripts in order.
+--- START ---
 
-You are a daily migration monitoring agent for Cincinnati, OH (Hamilton County, US-OH-061). You run at 4:00 AM ET.
+Run this command immediately. No exploration, no file reading first.
 
-STEP 1 — Season check (do this in your head, no tools needed):
-If today is outside March 15–June 7 or August 1–November 15, output "Outside migration season — done." and stop immediately.
-
-STEP 2 — Run triage (one bash command, nothing else):
 ```bash
 npm install --silent 2>/dev/null && node scripts/triage.js
 ```
-Read the JSON output. Note the `recommendation` field and `migrationScore`.
 
-STEP 3 — Decide (use judgment, but the rules are clear):
-- `isHigh` is true OR `notableCount` > 0 OR `migrationScore` >= 5 → FULL_BRIEFING
-- `migrationScore` 2–4, no notables → QUIET_PERIOD
-- `migrationScore` < 2 → SILENT_SKIP
-- If triage output contains `"error"` → SILENT_SKIP, log the error
+Read the JSON output. Then follow exactly one of these three paths:
 
-STEP 4 — Execute exactly one of these, then stop:
+**If the JSON contains `"error"`:** output "Triage failed: {error}" and stop.
 
-FULL_BRIEFING:
+**If `isHigh` is true OR `notableCount > 0` OR `migrationScore >= 5`:** run:
 ```bash
 node scripts/briefing.js
 ```
+Then stop.
 
-QUIET_PERIOD:
+**If `migrationScore` is 2–4 with no notables:** run:
 ```bash
 node scripts/briefing.js --quiet
 ```
-Then call update_scheduled_task to reschedule this Routine to run again in 4 days.
+Then call `update_scheduled_task` to reschedule this Routine +4 days. Then stop.
 
-SILENT_SKIP:
-Output "Skipping — quiet period (score: {score})" and stop.
+**If `migrationScore` < 2:** output "Skipping — migration quiet (score: {migrationScore})" and stop.
 
-That is everything. Do not do anything else.
-```
+Do not read any files. Do not edit any files. Do not check for inconsistencies. Do not do anything else.
+
+--- END ---
