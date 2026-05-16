@@ -6,24 +6,39 @@ export class EBirdClient {
   constructor(apiKey) {
     this.apiKey = apiKey;
     this.requestTimestamps = [];
+    this._rateLimitQueue = Promise.resolve();
   }
 
-  async #enforceRateLimit() {
-    const now = Date.now();
-    this.requestTimestamps = this.requestTimestamps.filter(
-      (ts) => now - ts < RATE_LIMIT_WINDOW_MS
-    );
+  #validateLocId(locId) {
+    if (!/^L\d+$/.test(locId)) throw new Error(`Invalid location ID: ${locId}`);
+  }
+  #validateRegionCode(code) {
+    if (!/^[A-Z]{2}-[A-Z]{2,3}(-\d{1,3})?$/i.test(code)) throw new Error(`Invalid region code: ${code}`);
+  }
+  #validateDateParts(y, m, d) {
+    if (!Number.isInteger(y) || y < 2000 || y > 2100) throw new Error(`Invalid year: ${y}`);
+    if (!Number.isInteger(m) || m < 1 || m > 12) throw new Error(`Invalid month: ${m}`);
+    if (!Number.isInteger(d) || d < 1 || d > 31) throw new Error(`Invalid day: ${d}`);
+  }
 
-    if (this.requestTimestamps.length >= RATE_LIMIT_MAX) {
-      const oldest = this.requestTimestamps[0];
-      const waitMs = RATE_LIMIT_WINDOW_MS - (now - oldest) + 1;
-      await new Promise((resolve) => setTimeout(resolve, waitMs));
-      this.requestTimestamps = this.requestTimestamps.filter(
-        (ts) => Date.now() - ts < RATE_LIMIT_WINDOW_MS
-      );
-    }
-
-    this.requestTimestamps.push(Date.now());
+  #enforceRateLimit() {
+    this._rateLimitQueue = this._rateLimitQueue.then(() => new Promise(resolve => {
+      const now = Date.now();
+      // sliding window: keep only timestamps within the last minute
+      this.requestTimestamps = (this.requestTimestamps || []).filter(ts => now - ts < RATE_LIMIT_WINDOW_MS);
+      if (this.requestTimestamps.length >= RATE_LIMIT_MAX) {
+        const waitMs = RATE_LIMIT_WINDOW_MS - (now - this.requestTimestamps[0]) + 1;
+        setTimeout(() => {
+          this.requestTimestamps = this.requestTimestamps.filter(ts => Date.now() - ts < RATE_LIMIT_WINDOW_MS);
+          this.requestTimestamps.push(Date.now());
+          resolve();
+        }, waitMs);
+      } else {
+        this.requestTimestamps.push(Date.now());
+        resolve();
+      }
+    }));
+    return this._rateLimitQueue;
   }
 
   async makeRequest(endpoint, params = {}) {
@@ -56,14 +71,17 @@ export class EBirdClient {
   }
 
   getHotspotInfo(locId) {
+    this.#validateLocId(locId);
     return this.makeRequest(`/ref/hotspot/info/${locId}`);
   }
 
   getRecentObservations(locId, back = 7) {
+    this.#validateLocId(locId);
     return this.makeRequest(`/data/obs/${locId}/recent`, { back });
   }
 
   getRecentObservationsInRegion(regionCode, back = 7) {
+    this.#validateRegionCode(regionCode);
     return this.makeRequest(`/data/obs/${regionCode}/recent`, { back });
   }
 
@@ -72,18 +90,24 @@ export class EBirdClient {
   }
 
   getRegionNotableObservations(regionCode, back = 14) {
+    this.#validateRegionCode(regionCode);
     return this.makeRequest(`/data/obs/${regionCode}/recent/notable`, { back });
   }
 
   getNearbySpeciesObservations(lat, lng, speciesCode, back = 14, dist = 50) {
+    if (!/^[a-z0-9]{4,10}$/i.test(speciesCode)) throw new Error(`Invalid species code: ${speciesCode}`);
     return this.makeRequest(`/data/obs/geo/recent/${speciesCode}`, { lat, lng, back, dist });
   }
 
   getChecklistsOnDate(regionCode, y, m, d) {
+    this.#validateRegionCode(regionCode);
+    this.#validateDateParts(Number(y), Number(m), Number(d));
     return this.makeRequest(`/product/lists/${regionCode}/${y}/${m}/${d}`);
   }
 
   getRegionStats(regionCode, y, m, d) {
+    this.#validateRegionCode(regionCode);
+    this.#validateDateParts(Number(y), Number(m), Number(d));
     return this.makeRequest(`/product/stats/${regionCode}/${y}/${m}/${d}`);
   }
 
@@ -92,10 +116,12 @@ export class EBirdClient {
   }
 
   getSpeciesList(regionCode) {
+    this.#validateRegionCode(regionCode);
     return this.makeRequest(`/product/spplist/${regionCode}`);
   }
 
   searchHotspotsByRegion(regionCode) {
+    this.#validateRegionCode(regionCode);
     return this.makeRequest(`/ref/hotspot/${regionCode}`, { fmt: 'json' });
   }
 }

@@ -20,7 +20,8 @@
 9. [Configuration & Secrets](#9-configuration--secrets)
 10. [Repo & Version Control Setup](#10-repo--version-control-setup)
 11. [Testing Plan](#11-testing-plan)
-12. [Open Questions](#12-open-questions)
+12. [Code Review Findings](#12-code-review-findings)
+13. [Open Questions](#13-open-questions)
 
 ---
 
@@ -750,7 +751,48 @@ Send test emails to both Gmail and Apple Mail. Check:
 
 ---
 
-## 12. Open Questions
+## 12. Code Review Findings
+
+**Status: fixes in progress** — reviewed 2026-05-15. All CRIT and HIGH findings fixed in commit after the review. Medium findings fixed in same pass. Low findings tracked below.
+
+### CRIT — Fix immediately
+
+| ID | File | Finding | Fix |
+|----|------|---------|-----|
+| CRIT-1 | `birdcast-client.js:13` | BirdCast API key hardcoded as `static API_KEY` — committed in plain text, appears in every URL, leaks in logs | Move to `process.env.BIRDCAST_API_KEY`; pass via constructor same pattern as `EBirdClient` |
+| CRIT-2 | `ebird-client.js:54–99` | `locId`, `regionCode`, `speciesCode`, `y/m/d` interpolated directly into URL path segments with no format validation — path traversal injection against eBird API | Validate: `locId` → `/^L\d+$/`; `regionCode` → existing `REGION_CODE_RE`; `y/m/d` → integer range checks |
+| CRIT-3 | `ebird-client.js:11–27` | Rate limiter has TOCTOU gap under concurrent `Promise.all` — all 10 callers can read the limit check before any pushes a timestamp, sending a burst | Chain requests through a shared promise queue so only one caller executes the gate at a time |
+
+### MEDIUM — Fix in same pass
+
+| ID | File | Finding | Fix |
+|----|------|---------|-----|
+| M1 | `index.js:813`, `ebird-client.js:47` | Raw `error.message` including endpoint path returned to MCP caller — leaks internal URL structure | Log full error to stderr; return generic message to caller |
+| M2 | `birdcast-client.js:60–68` | BirdCast error logs include full URL with API key | Strip key param before logging: `url.replace(/([?&]key=)[^&]+/, '$1***')` |
+| M3 | `index.js:291,621` | `radius_km` accepted as string — silent NaN if LLM passes `"30"` instead of `30` | Add `coerceNumber(v, fallback)` helper; use throughout |
+| M4 | `index.js:291` | `radius_km` unbounded — caller can trigger 500km scan + fan-out API calls | Clamp to `Math.min(Math.max(1, radius), 100)` |
+| M5 | `utils.js:348` | `isCincinnatiArea` matches all of Ohio via `startsWith("US-OH")` — triggers Cincinnati favorites for Columbus, Cleveland, Dayton | Remove the `startsWith("US-OH")` branch; county set + haversine already handle it |
+| M6 | `index.js:104–120` | `getBirdCastData` has no inflight coalescing — two concurrent tool calls for same region/date both miss cache and fire duplicate requests | Store in-flight promises; return to concurrent waiters |
+| M7 | `index.js:477` | Hotspot ID detection uses `!locId.startsWith("L")` — matches "Lagoon Park" as a location ID | Use `/^L\d+$/.test(locId)` |
+| M8 | `index.js:699` | `best_day_to_bird` calls `birdcast.getLiveMigration` directly, bypassing the 24h cache | Route through `getBirdCastData` |
+| M9 | `index.js:714–718` | `getRegionStats` fetched per past day but `statsNote` never used in ranking — wasted API quota | Include `stats.numSpecies` in day score, or remove the call |
+
+### LOW — Track, don't block Phase 2
+
+| ID | File | Finding |
+|----|------|---------|
+| L1 | `index.js` | File will exceed 1200 lines after Phase 2 — split into schemas / handlers / helpers / server |
+| L2 | `ebird-client.js` | `_get` in BirdCastClient should be `#get` (true private, consistent with EBirdClient's `#enforceRateLimit`) |
+| L3 | `index.js` | `compare_hotspots` accepts unbounded hotspot arrays — cap at 10 |
+| L4 | `index.js:477` | `hotspot_details` name input has no length limit — cap at 200 chars |
+| L5 | `index.js` | Magic numbers in scoring (`×2`, `×5`, `slice(0,15)`) should be named constants |
+| L6 | `index.js:138` | `getHotspotSpeciesCounts` catch block swallows errors silently — log to stderr |
+| L7 | `index.js:741` | `best_day_to_bird` ranking ignores fetched eBird stats — fetches but doesn't score |
+| L8 | `utils.js:185` | "This weekend" returns one day in `resolveDate` but two in `resolveDateRange` — inconsistent |
+
+---
+
+## 13. Open Questions
 
 These need answers before or during implementation. Update this section when
 resolved.
@@ -773,3 +815,4 @@ resolved.
 |------|--------|
 | 2026-05-15 | Initial spec created. Infrastructure decision: Anthropic Routines. All Phase 2 tools and enrichments documented. |
 | 2026-05-15 | Updated architecture: Routines run Node scripts via bash, not MCP tools directly. Resolved open questions 1, 2, 4, 7. Added Section 4B (Script Architecture for Routines). Confirmed chartjs-node-canvas feasible. |
+| 2026-05-15 | Added Section 12: code review findings (security + architecture). CRIT and MEDIUM fixes applied. |

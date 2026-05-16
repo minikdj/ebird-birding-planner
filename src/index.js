@@ -30,14 +30,22 @@ if (!apiKey) {
   process.exit(1);
 }
 
+const birdcastKey = process.env.BIRDCAST_API_KEY;
+if (!birdcastKey) {
+  process.stderr.write("ERROR: BIRDCAST_API_KEY environment variable is required.\n");
+  process.exit(1);
+}
+
 const ebird = new EBirdClient(apiKey);
-const birdcast = new BirdCastClient();
+const birdcast = new BirdCastClient(birdcastKey);
 const cache = new Cache();
 
 const TAXONOMY_CACHE_KEY = "taxonomy";
 const TAXONOMY_TTL = 7 * 24 * 60 * 60 * 1000; // 1 week
 const BIRDCAST_TTL = 24 * 60 * 60 * 1000;      // 1 day
 const HOTSPOT_CACHE_TTL = 7 * 24 * 60 * 60 * 1000;
+
+const inflightBirdCast = new Map();
 
 // ---------------------------------------------------------------------------
 // Taxonomy + species resolution
@@ -107,13 +115,26 @@ async function getBirdCastData(regionCode, dateStr) {
   const seasonKey = `bc-season-${regionCode}-${dateStr}`;
   const speciesKey = `bc-species-${regionCode}-${dateStr}`;
 
-  const live = cache.has(liveKey) ? cache.get(liveKey) : await birdcast.getLiveMigration(regionCode, dateStr);
-  const season = cache.has(seasonKey) ? cache.get(seasonKey) : await birdcast.getSeasonHistorical(regionCode, dateStr);
-  const species = cache.has(speciesKey) ? cache.get(speciesKey) : await birdcast.getExpectedSpecies(regionCode, dateStr);
+  async function fetchWithCoalesce(cacheKey, fetcher) {
+    if (cache.has(cacheKey)) return cache.get(cacheKey);
+    if (inflightBirdCast.has(cacheKey)) return inflightBirdCast.get(cacheKey);
+    const promise = fetcher().then(result => {
+      if (result) cache.set(cacheKey, result, BIRDCAST_TTL);
+      inflightBirdCast.delete(cacheKey);
+      return result;
+    }).catch(err => {
+      inflightBirdCast.delete(cacheKey);
+      throw err;
+    });
+    inflightBirdCast.set(cacheKey, promise);
+    return promise;
+  }
 
-  if (live) cache.set(liveKey, live, BIRDCAST_TTL);
-  if (season) cache.set(seasonKey, season, BIRDCAST_TTL);
-  if (species) cache.set(speciesKey, species, BIRDCAST_TTL);
+  const [live, season, species] = await Promise.all([
+    fetchWithCoalesce(liveKey, () => birdcast.getLiveMigration(regionCode, dateStr)),
+    fetchWithCoalesce(seasonKey, () => birdcast.getSeasonHistorical(regionCode, dateStr)),
+    fetchWithCoalesce(speciesKey, () => birdcast.getExpectedSpecies(regionCode, dateStr)),
+  ]);
 
   const summary = birdcast.summarizeMigration(live, season);
   return { live, season, species, summary };
@@ -143,6 +164,15 @@ async function getHotspotSpeciesCounts(hotspots) {
     results.push(...batchResults);
   }
   return results;
+}
+
+// ---------------------------------------------------------------------------
+// Numeric input helpers
+// ---------------------------------------------------------------------------
+
+function coerceNumber(v, fallback) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : fallback;
 }
 
 // ---------------------------------------------------------------------------
@@ -288,7 +318,7 @@ const tools = [
 async function handlePlanBirdingTrip(args) {
   const location = loc(args.location);
   const dateInfo = resolveDate(args.date || "today") ?? resolveDate("today");
-  const radius = args.radius_km ?? DEFAULTS.radiusKm;
+  const radius = Math.min(Math.max(1, coerceNumber(args.radius_km, DEFAULTS.radiusKm)), 100);
   const { lat, lng, regionCode } = location;
 
   if (!lat || !lng) {
@@ -474,7 +504,7 @@ async function handleHotspotDetails(args) {
   let locId = args.hotspot;
 
   // If not a location ID pattern, search by name
-  if (!locId.startsWith("L")) {
+  if (!/^L\d+$/.test(locId)) {
     const location = loc(args.location);
     if (location.lat && location.lng) {
       const hotspots = await ebird.getNearbyHotspots(location.lat, location.lng, 50);
@@ -617,7 +647,7 @@ async function handleCompareHotspots(args) {
 async function handleSpeciesFinder(args) {
   const speciesName = args.species;
   const location = loc(args.location);
-  const radius = args.radius_km ?? 50;
+  const radius = Math.min(Math.max(1, coerceNumber(args.radius_km, 50)), 100);
 
   const speciesCode = await resolveSpeciesCode(speciesName);
   if (!speciesCode) {
@@ -697,7 +727,8 @@ async function handleBestDayToBird(args) {
       let bcData = null;
 
       if (birdcast.isInMigrationSeason(dateStr)) {
-        bcData = await birdcast.getLiveMigration(regionCode, dateStr);
+        const bcResult = await getBirdCastData(regionCode, dateStr);
+        bcData = bcResult.live;
         if (bcData) {
           const birds = bcData.cumulativeBirds ?? 0;
           migrationScore = bcData.isHigh ? 3 : birds > 100000 ? 2 : birds > 10000 ? 1 : 0;
@@ -714,6 +745,9 @@ async function handleBestDayToBird(args) {
           const stats = await ebird.getRegionStats(regionCode, d.getFullYear(), d.getMonth() + 1, d.getDate());
           if (stats) {
             statsNote = `${stats.numChecklists ?? 0} checklists, ${stats.numSpecies ?? 0} species reported`;
+            if (stats?.numSpecies) {
+              migrationScore += Math.min(Math.floor(stats.numSpecies / 10), 2); // up to +2 bonus
+            }
           }
         } catch { /* future date, no stats */ }
       }
@@ -813,7 +847,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   } catch (error) {
     process.stderr.write(`Error in ${name}: ${error.message}\n${error.stack}\n`);
     return {
-      content: [{ type: "text", text: `Error: ${error.message}` }],
+      content: [{ type: "text", text: "An error occurred fetching birding data. Check server logs for details." }],
       isError: true,
     };
   }

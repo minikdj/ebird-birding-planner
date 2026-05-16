@@ -345,7 +345,6 @@ export function isCincinnatiArea(lat, lng, regionCode) {
   if (regionCode) {
     const upper = regionCode.toUpperCase();
     if (CINCY_NEARBY_COUNTIES.has(upper)) return true;
-    if (upper.startsWith("US-OH-061") || upper.startsWith("US-OH")) return true;
   }
   if (lat != null && lng != null) {
     return haversineKm(lat, lng, CINCY_LAT, CINCY_LNG) <= 50;

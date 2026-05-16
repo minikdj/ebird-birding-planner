@@ -10,8 +10,11 @@
  */
 
 export class BirdCastClient {
-  static API_KEY = 'BIRDCAST_API_KEY_PLACEHOLDER';
   static BASE_URL = 'https://dashboard.birdcast.org/api/v1';
+
+  constructor(apiKey) {
+    this.apiKey = apiKey;
+  }
 
   // -------------------------------------------------------------------------
   // Season guard
@@ -57,14 +60,16 @@ export class BirdCastClient {
     try {
       const response = await fetch(url);
       if (!response.ok) {
+        const safeUrl = url.replace(/([?&]key=)[^&]+/, '$1***');
         process.stderr.write(
-          `BirdCastClient: HTTP ${response.status} for ${url}\n`
+          `BirdCastClient: HTTP ${response.status} for ${safeUrl}\n`
         );
         return null;
       }
       return await response.json();
     } catch (err) {
-      process.stderr.write(`BirdCastClient: fetch error for ${url}: ${err.message}\n`);
+      const safeUrl = url.replace(/([?&]key=)[^&]+/, '$1***');
+      process.stderr.write(`BirdCastClient: fetch error for ${safeUrl}: ${err.message}\n`);
       return null;
     }
   }
@@ -92,7 +97,7 @@ export class BirdCastClient {
     const url =
       `${BirdCastClient.BASE_URL}/is-birdcast-alert-api/livemigration` +
       `/${encodeURIComponent(regionCode)}/${date}` +
-      `?key=${BirdCastClient.API_KEY}&applyThreshold=true`;
+      `?key=${this.apiKey}&applyThreshold=true`;
 
     return this._get(url);
   }
@@ -115,7 +120,7 @@ export class BirdCastClient {
     const url =
       `${BirdCastClient.BASE_URL}/is-birdcast-alert-api/seasonhistorical` +
       `/${encodeURIComponent(regionCode)}/${date}` +
-      `?key=${BirdCastClient.API_KEY}`;
+      `?key=${this.apiKey}`;
 
     return this._get(url);
   }
@@ -143,7 +148,7 @@ export class BirdCastClient {
     const url =
       `${BirdCastClient.BASE_URL}/is-birdcast-alert-api/barchart` +
       `/${encodeURIComponent(regionCode)}/${date}` +
-      `?key=${BirdCastClient.API_KEY}`;
+      `?key=${this.apiKey}`;
 
     const data = await this._get(url);
     if (!data || !Array.isArray(data.dataRows)) {
