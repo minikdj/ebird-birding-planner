@@ -12,18 +12,21 @@
 // Draft JSON format:
 //   {
 //     "subject":   "[Birding] Migration active — HIGH · 2026-05-16",
-//     "htmlBody":  "<html>...</html>",
-//     "emailTo":   "optional — overrides BRIEFING_EMAIL_TO env var",
-//     "emailFrom": "optional — overrides BRIEFING_FROM_EMAIL env var"
+//     "htmlBody":  "<html>...</html>"
 //   }
+//
+// Recipient (emailTo) and sender (emailFrom) are always read from Routine secrets
+// (BRIEFING_EMAIL_TO, BRIEFING_FROM_EMAIL). The draft JSON cannot override them.
 //
 // Exit codes:
 //   0 — email sent or saved to disk fallback (read RESULT: line for actual outcome)
 //   1 — unrecoverable error (missing draft file, missing required fields in draft)
 //
-// Note on trust boundary: draftPath comes from process.argv[2], controlled by the
-// Routine agent. The agent is trusted; no path-traversal guard is applied. The
-// htmlBody is agent-generated and delivered as-is — injection risk is accepted.
+// Note on trust boundary: draftPath comes from process.argv[2] and is validated to
+// be within the repo root. The htmlBody is agent-generated from eBird/BirdCast/NWS
+// API data — the Routine prompt instructs the agent to HTML-escape any externally
+// sourced strings (species names, location names, forecast text) before inserting
+// them into the HTML body.
 
 import { readFile, mkdir, writeFile } from 'fs/promises';
 import { dirname, join, resolve, sep } from 'path';
@@ -90,11 +93,11 @@ async function main() {
   }
 
   const resendKey = process.env.RESEND_API_KEY;
-  const emailTo = draft.emailTo || process.env.BRIEFING_EMAIL_TO;
+  // Always use env vars — draft JSON cannot override recipient or sender.
+  const emailTo = process.env.BRIEFING_EMAIL_TO;
   // @resend.dev only delivers to the Resend account owner — configure a verified
   // domain via BRIEFING_FROM_EMAIL for production use.
-  const emailFrom = draft.emailFrom
-    || process.env.BRIEFING_FROM_EMAIL
+  const emailFrom = process.env.BRIEFING_FROM_EMAIL
     || 'Birding Briefing <briefing@resend.dev>';
 
   const today = toYMD(new Date());

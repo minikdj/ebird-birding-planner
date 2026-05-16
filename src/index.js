@@ -314,8 +314,12 @@ async function handlePlanBirdingTrip(args) {
 async function handleBirdingWeather(args) {
   const lat = args.lat ?? DEFAULTS.lat;
   const lng = args.lng ?? DEFAULTS.lng;
-  if (lat < -90 || lat > 90) return { error: 'lat out of range' };
-  if (lng < -180 || lng > 180) return { error: 'lng out of range' };
+  if (!Number.isFinite(Number(lat)) || Number(lat) < -90 || Number(lat) > 90) {
+    return { error: 'Invalid latitude: must be a number between -90 and 90' };
+  }
+  if (!Number.isFinite(Number(lng)) || Number(lng) < -180 || Number(lng) > 180) {
+    return { error: 'Invalid longitude: must be a number between -180 and 180' };
+  }
   const dateInfo = resolveDate(args.date || "today") ?? resolveDate("today");
   return nws.getBirdingWeather(lat, lng, dateInfo.date);
 }
@@ -324,8 +328,12 @@ async function handleVerifySighting(args) {
   if (!args.species) return { error: "species is required." };
   const lat = args.lat ?? DEFAULTS.lat;
   const lng = args.lng ?? DEFAULTS.lng;
-  if (lat < -90 || lat > 90) return { error: 'lat out of range' };
-  if (lng < -180 || lng > 180) return { error: 'lng out of range' };
+  if (!Number.isFinite(Number(lat)) || Number(lat) < -90 || Number(lat) > 90) {
+    return { error: 'Invalid latitude: must be a number between -90 and 90' };
+  }
+  if (!Number.isFinite(Number(lng)) || Number(lng) < -180 || Number(lng) > 180) {
+    return { error: 'Invalid longitude: must be a number between -180 and 180' };
+  }
   const radius = Math.min(Math.max(1, coerceNumber(args.radius_km, 30)), 200);
   const daysBack = Math.min(Math.max(1, coerceNumber(args.days_back, 14)), 30);
   return inat.getVerifiedSightings(args.species, lat, lng, radius, daysBack);
@@ -893,6 +901,20 @@ async function loadLifeList(csvPath) {
   if (!csvPath) {
     _lifeListCache = null;
     return null;
+  }
+  // Validate path is within the user's home directory to prevent path traversal
+  try {
+    const { resolve: resolvePath } = await import('path');
+    const { homedir } = await import('os');
+    const resolved = resolvePath(csvPath);
+    const home = homedir();
+    if (!resolved.startsWith(home + '/') && resolved !== home) {
+      process.stderr.write(`Life list CSV: path "${csvPath}" must be within home directory\n`);
+      _lifeListCache = null;
+      return null;
+    }
+  } catch {
+    // path/os module failure — unlikely, but don't block
   }
   try {
     const { readFile } = await import('fs/promises');

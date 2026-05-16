@@ -41,12 +41,12 @@ You are the daily birding briefing agent. Today is {DATE}. It is 4:00 AM local t
 Run immediately:
 
 ```bash
-npm ci --silent && node scripts/triage.js
+npm ci --silent --ignore-scripts && node scripts/triage.js
 ```
 
 This takes ~10 seconds and prints a JSON object. If the command exits non-zero or produces no JSON (e.g., npm install failed), output the error text and stop.
 
-Note: `npm ci` (not `npm install`) is intentional — it installs from the lockfile without modifying it.
+Note: `npm ci --ignore-scripts` (not `npm install`) is intentional — it installs from the lockfile without modifying it, and `--ignore-scripts` prevents any postinstall scripts in dependencies from running with your API keys in the environment.
 
 Read the JSON carefully — it contains `recommendation`, `migrationScore`, `notableSpecies`, `weather`, and `recommendationReason`.
 
@@ -199,6 +199,7 @@ Read the RESULT line in the output.
 - Do not retry a failed send — the email may have partially delivered.
 - The triage script is the single source of truth for send/skip decisions. Do not second-guess the `recommendation` field.
 - Your job in Steps 4–5 is to be a thoughtful editor, not a template filler. Use your reasoning to make the email genuinely useful.
+- **HTML safety**: When inserting any string from the aggregate JSON into the HTML email body — species names, location names, hotspot names, forecast text, any external data — HTML-escape it first. Replace `&` → `&amp;`, `<` → `&lt;`, `>` → `&gt;`, `"` → `&quot;`. Build a small helper: `const esc = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');` and wrap every externally-sourced value with `esc(...)` before embedding in HTML attributes or text nodes.
 
 --- END ---
 

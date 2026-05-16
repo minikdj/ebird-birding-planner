@@ -21,8 +21,11 @@ async function main() {
   if (!Number.isFinite(lat) || lat < -90 || lat > 90) { process.stderr.write('Warning: BRIEFING_LAT invalid\n'); }
   const lng = parseFloat(process.env.BRIEFING_LNG || String(DEFAULTS.lng));
   if (!Number.isFinite(lng) || lng < -180 || lng > 180) { process.stderr.write('Warning: BRIEFING_LNG invalid\n'); }
-  const region = process.env.BRIEFING_REGION || DEFAULTS.regionCode;
-  if (!/^[A-Z]{2}(-[A-Z0-9]{2,3}(-\d+)?)?$/i.test(region)) { process.stderr.write('Warning: BRIEFING_REGION may be invalid: ' + region + '\n'); }
+  const region = (process.env.BRIEFING_REGION || DEFAULTS.regionCode).trim();
+  if (!/^[A-Z]{2}-[A-Z]{2,3}(-\d{1,3})?$/i.test(region)) {
+    process.stdout.write(JSON.stringify({ error: `BRIEFING_REGION "${region}" is not a valid eBird region code (expected format: US-OH or US-OH-061)`, sendBriefing: false }, null, 2) + '\n');
+    return;
+  }
 
   const birdcast = new BirdCastClient(birdcastKey);
   const nws = new NWSClient();

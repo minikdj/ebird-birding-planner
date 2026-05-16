@@ -1044,7 +1044,44 @@ The CSV is the "Download My Data" export from ebird.org → My eBird. Column 1 (
 
 ---
 
-## 14. Open Questions
+## 14. Still To Do
+
+Items that are known, tracked, and not yet completed. Ordered roughly by priority.
+
+| # | Item | Category | Notes |
+|---|------|----------|-------|
+| 1 | Run full E2E tests for all 11 MCP tools in Claude Desktop | Testing | See `TESTING.md` Section 3 — each tool has a specific prompt and expected output criteria |
+| 2 | Test QUIET_PERIOD Routine path end-to-end | Testing | Verify short email format, actual data references, and `update_scheduled_task` rescheduling. See `TESTING.md` Test B |
+| 3 | Test SILENT_SKIP Routine path | Testing | Verify aggregate.js is not run and no email is sent. See `TESTING.md` Test C |
+| 4 | Test SendGrid fallback delivery | Testing | Temporarily set invalid RESEND_API_KEY; verify fallback fires. See `TESTING.md` Section 6 |
+| 5 | Test disk fallback delivery | Testing | Run `send.js` with no API keys; verify HTML file saved. See `TESTING.md` Section 4 |
+| 6 | Email rendering on mobile (Gmail app, Apple Mail) | Testing | See `TESTING.md` Section 7 |
+| 7 | Email rendering in Apple Mail desktop | Testing | See `TESTING.md` Section 7 |
+| 8 | Test degraded modes: NWS down, BirdCast outside season, iNat timeout | Testing | See `TESTING.md` Section 6 |
+| 9 | Verify Resend custom domain (`BRIEFING_FROM_EMAIL`) | Config | Requires domain verification in Resend dashboard; currently using `@resend.dev` test address |
+| 10 | Confirm BirdCast API key is approved for programmatic use | Config | Working in practice; formal status with birdcast.info unverified |
+| 11 | Hotspot micro-habitat knowledge base | Enhancement | A `hotspot-notes.json` file with trail-level notes per park (best spots for Connecticut Warbler, etc.) would let the agent give more specific field directions. Include in `aggregate.js` output. |
+| 12 | Inline email charts | Enhancement | Section 7 describes 7-day migration bar chart and warbler frequency trend; removed from `package.json` as `optionalDependencies`. Add back if charts are re-introduced. |
+| 13 | GitHub branch protection on `main` | Security | Require PR review before merge, no force-push, signed commits. Prevents a compromised GitHub account from landing malicious code that runs with live API keys in the next Routine execution. |
+| 14 | Scope Resend/SendGrid API keys | Security | Scope Resend key to a single sending domain so a stolen key can't spam arbitrary addresses under your domain reputation. Set spending alerts on eBird/BirdCast if the providers support it. |
+
+**Reference:** `TESTING.md` — full feature inventory, test prompts, expected outputs, and status tracking for all tests above.
+
+---
+
+## 15. Open Questions
+
+These need answers before or during implementation. Update this section when
+resolved.
+
+| # | Question | Status | Answer |
+|---|----------|--------|--------|
+| 1 | Does an Anthropic Routine have access to MCP tools registered in Claude Desktop, or does it run in a clean context? | **Resolved** | Routines run as full Claude Code cloud sessions. Local MCP servers (added via Claude Desktop or `claude mcp add`) are not accessible — they run on the user's Mac. The Routine clones the GitHub repo and runs Node scripts via bash instead. |
+| 2 | Can a Routine execute Node.js subprocesses (e.g. to render charts via chartjs-node-canvas)? | **Resolved** | Yes. Routines have bash tool access and can run Node.js subprocesses. Charts via `chartjs-node-canvas` are feasible. |
+| 3 | Is the BirdCast API key a valid key for programmatic use, or is it a scrape of the dashboard? | **Open** | Key now stored in `BIRDCAST_API_KEY` env var (not hardcoded). Confirmed working in practice; formal programmatic-use status unverified. Check https://birdcast.info if usage increases. |
+| 4 | What is the Routine's compute/memory limit? A full briefing with 14 API calls may take 30–60 seconds. | **Resolved** | Routines are full Claude Code cloud sessions with no special time limit beyond normal tool use. Standard session limits apply. |
+| 5 | Resend free tier: does it support sending from a custom domain, or only `@resend.dev` test addresses? | **Open** | Resend requires a verified domain for custom From addresses; `@resend.dev` works for testing |
+| 6 | Should the quiet-period reschedule be implemented as updating the Routine's cron schedule, or as the agent simply not calling the email tools and relying on a state flag stored somewhere? | **Open** | Leaning toward cron update; simpler than external state |
 
 These need answers before or during implementation. Update this section when
 resolved.
@@ -1079,3 +1116,4 @@ resolved.
 | 2026-05-16 | Architectural refactor of Routine email system: added `scripts/aggregate.js` (comprehensive data aggregation → JSON) and `scripts/send.js` (email delivery from draft JSON). Routine agent now writes the email body dynamically using its reasoning instead of filling a fixed template. Rain impact detection added. Section 3 and Section 4B updated. `routine-prompt.md` rewritten with 7-step agent flow. `briefing.js` retained as legacy fallback. |
 | 2026-05-16 | Full architecture + security + code review of new scripts. Fixed: SendGrid fallback unreachable on Resend API errors; disk fallback cwd-relative path; BRIEFING_LAT/LNG NaN propagation; buildOutlook sequential loop → parallel; buildOutlook date derivation from new Date() → today param; duplicate toLocalYMD → import toYMD; inline degreesToCardinal → import; wind constants unified (SSW/SE added); computeActivityCutoff h===0 edge; fallout rain threshold 60%→50%. Prompt: removed hardcoded Cincinnati; fixed schedule to 09:00 UTC (DST-safe); added update_scheduled_task guidance; fixed quiet-period data references; added null-handling guidance. |
 | 2026-05-16 | Three live Routine runs completed successfully. Fixed UTC birding-window bug (formatTime now uses BRIEFING_TIMEZONE env var, default America/New_York). Fixed Routine git-hang (npm install → npm ci; added explicit no-git-commands rule). Added Chase Targets section to Routine prompt — prize birds now get dedicated cards with rarity context, where-to-look, field ID, and time-sensitivity. Section 11 updated to reflect live test results. Created TESTING.md as the living E2E test document. |
+| 2026-05-16 | Three parallel code reviews (architecture, security, code quality + data flow) plus a dedicated public-repo Opus security audit. Zero secrets in git history, zero npm vulnerabilities. Implemented all actionable findings: FAVORABLE_WINDS/haversineKm/computeActivityCutoff/weekIndexForDate exported from utils.js; URLSearchParams for BirdCast API key; NWS URL domain assertion; path traversal guard in send.js; lat/lng validation in all MCP handlers; batched eBird calls (5 at a time); staggered NWS calls (300ms); BRIEFING_REGION now rejects (not warns) on invalid format; draft.emailTo/emailFrom overrides removed from send.js (always use env vars); npm ci --ignore-scripts in Routine prompt (supply-chain hardening); HTML-escape rule added to Routine agent RULES; path validation for EBIRD_LIFE_LIST_CSV; legacy scripts/briefing.js deleted. |

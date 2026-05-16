@@ -305,9 +305,10 @@ async function main() {
   }
 
   // Parse and validate region + coordinates — fall back to defaults if invalid
-  const region = process.env.BRIEFING_REGION || DEFAULTS.regionCode;
-  if (!/^[A-Z]{2}(-[A-Z0-9]{2,3}(-\d+)?)?$/i.test(region)) {
-    process.stderr.write('Warning: BRIEFING_REGION may be invalid: ' + region + '\n');
+  const region = (process.env.BRIEFING_REGION || DEFAULTS.regionCode).trim();
+  if (!/^[A-Z]{2}-[A-Z]{2,3}(-\d{1,3})?$/i.test(region)) {
+    process.stdout.write(JSON.stringify({ error: `BRIEFING_REGION "${region}" is not a valid eBird region code (expected format: US-OH or US-OH-061)` }, null, 2) + '\n');
+    return;
   }
 
   const rawLat = parseFloat(process.env.BRIEFING_LAT || '');
