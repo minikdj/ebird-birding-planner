@@ -18,6 +18,7 @@ All 10 tools for interactive birding planning in Claude Desktop:
 | `verify_sighting` | Cross-references eBird reports against iNaturalist photo-verified obs |
 | `birding_window` | Sunrise, civil twilight, and recommended arrival time |
 | `species_frequency` | Historical peak week and current phenology status via BirdCast |
+| `plan_vacation_birding` | Discovery report for a travel destination: target species you won't find in Cincinnati, hotspots ranked by active birder community, and birding window. Uses historical bar chart data — works weeks or months ahead. |
 
 ## Setup
 

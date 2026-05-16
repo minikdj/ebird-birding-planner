@@ -137,8 +137,8 @@ export class BirdCastClient {
    * @param {string} date       - YYYY-MM-DD
    * @returns {Promise<Array<{commonName, sciName, speciesCode, probability}>|null>}
    */
-  async getExpectedSpecies(regionCode, date) {
-    if (!this.isInMigrationSeason(date)) {
+  async getExpectedSpecies(regionCode, date, { ignoreSeasonCheck = false } = {}) {
+    if (!ignoreSeasonCheck && !this.isInMigrationSeason(date)) {
       process.stderr.write(
         `BirdCastClient: getExpectedSpecies called outside migration season (${date})\n`
       );

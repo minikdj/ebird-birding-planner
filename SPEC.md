@@ -21,7 +21,8 @@
 10. [Repo & Version Control Setup](#10-repo--version-control-setup)
 11. [Testing Plan](#11-testing-plan)
 12. [Code Review Findings](#12-code-review-findings)
-13. [Open Questions](#13-open-questions)
+13. [Vacation Discovery Report](#13-vacation-discovery-report)
+14. [Open Questions](#14-open-questions)
 
 ---
 
@@ -799,7 +800,118 @@ Send test emails to both Gmail and Apple Mail. Check:
 
 ---
 
-## 13. Open Questions
+## 13. Vacation Discovery Report
+
+**Status: [DONE]**
+
+### Goal
+
+A new MCP tool for Claude Desktop conversations. When the user is traveling, they ask naturally: "I'm going to Cape May, NJ May 20–25 — what should I look for?" The tool returns a discovery-oriented report: target species, active hotspots, and a birding window for the destination.
+
+This is **not** part of the Routine email system — it's purely an interactive Claude Desktop tool, called on demand before or during a trip.
+
+### Historical data strategy
+
+BirdCast bar chart data (`getExpectedSpecies`) is historical (multi-year eBird records indexed by week of year). It gives accurate species frequencies for any week of the year regardless of current conditions — perfect for trips planned weeks or months ahead. The tool explicitly sets `ignoreSeasonCheck: true` when calling BirdCast so it works outside of migration season too.
+
+The tool clearly distinguishes historical frequency data from recent live sightings (last 14 days of eBird notable observations), and surfaces both in the response.
+
+### New tool: `plan_vacation_birding`
+
+**Status: [DONE]**
+
+Add to `src/index.js` alongside the existing 10 tools.
+
+#### Input schema
+```js
+{
+  destination: string,   // free text: city, "lat,lng", or region code
+  dates: string,         // optional: "May 20-25", "next week", "June 1-7"
+  home_region: string,   // optional: defaults to "US-OH-061" (Cincinnati)
+}
+```
+
+#### Implementation steps
+
+**Step 1 — Resolve destination**
+Use `resolveLocation()` from `utils.js`. If free text doesn't match the lookup table, try resolving via eBird's `/ref/region/list` or fall back to a hotspot search to infer region code from nearby hotspots.
+
+**Step 2 — Fetch destination data in parallel**
+- eBird nearby hotspots: `getNearbyHotspots(lat, lng, 50)` — up to 50km radius
+- eBird recent notable observations: `getNearbyNotableObservations(lat, lng, 14, 50)`
+- BirdCast expected species for destination region + date
+- BirdCast expected species for home region (US-OH-061) + same date — for comparison
+- `birding_window` for destination lat/lng + first date of trip
+
+**Step 3 — Rank hotspots by community activity**
+For the top 15 candidate hotspots by all-time species count, fetch 7-day recent observations. Rank by **recent checklist count** (proxy for active birder community), not all-time species count. Filter out spots with 0 recent checklists. Return top 5.
+
+Why checklist count: a hotspot with 40 checklists this week is where birders are actually going. All-time count favors well-documented historic spots that may no longer be active.
+
+**Step 4 — Compute target species ("new to you" list)**
+
+The goal: surface species that are meaningfully findable at the destination AND meaningfully absent from Cincinnati. Two filters prevent noise:
+
+- **Findability filter**: destination frequency > 15% for the travel dates (realistic chance of seeing it)
+- **Novelty filter**: home region (Cincinnati) frequency < 10% for the same calendar period
+- **Ubiquity exclusion**: remove species on a hardcoded noise list: House Sparrow, European Starling, Rock Pigeon, American Robin, Mourning Dove, Northern Cardinal, American Crow — these pass both filters in most US locations but aren't interesting as targets
+
+Edge case — **"Everything is new"**: If >40 species pass both filters (e.g., traveling to coastal Florida or Texas), tighten the novelty filter to Cincinnati < 5% AND destination > 25%. The goal is 10–20 meaningful targets, not an exhaustive list.
+
+Edge case — **"Nothing is new"** (nearby destination): If <5 species pass the filters (e.g., trip to Columbus, OH), relax destination threshold to >10% and add a note: "This location has similar species to Cincinnati. Notable local spots and recent sightings below."
+
+**Group the output into two tiers:**
+1. `★ Won't find in Cincinnati` — Cincinnati frequency < 2%
+2. `▲ Rare in Cincinnati, common here` — Cincinnati frequency 2–10%
+
+Sort each tier by destination frequency descending.
+
+**Step 5 — Build response**
+
+```js
+{
+  destination: "Cape May, NJ",
+  dates: "May 20–25",
+  birdingWindow: { sunrise: "5:52 AM", recommendation: "Arrive by 5:30 AM..." },
+  topHotspots: [
+    { name: "Cape May Point State Park", locId: "L...", recentChecklists: 87, recentSpecies: 112 },
+    ...
+  ],
+  targetSpecies: {
+    wontFindInCincinnati: [
+      { name: "Saltmarsh Sparrow", destinationFrequency: 0.38, cincinnatiFrequency: 0.00 },
+      ...
+    ],
+    rareInCincinnati: [
+      { name: "Dunlin", destinationFrequency: 0.52, cincinnatiFrequency: 0.06 },
+      ...
+    ],
+  },
+  notableRecentSightings: [...],   // from eBird notable obs
+  summary: "Cape May in late May is one of the best spots on the East Coast for shorebirds and warblers. ★ 8 species you won't find in Cincinnati, ▲ 14 more that are rare there but common here. Top spot: Cape May Point State Park — 87 checklists this week.",
+}
+```
+
+### Data source notes
+
+- BirdCast bar chart data (`getExpectedSpecies`) provides per-week species probability for any US region — this is the frequency source for both destination and Cincinnati comparison
+- iNaturalist `verify_sighting` can optionally be called for the top 3 target species to add photo-verification confidence
+- NWS weather is US-only; for international destinations, weather data will be unavailable (return gracefully)
+- BirdCast covers US only; for international trips, fall back to eBird recent observations only and omit the frequency comparison
+
+### What this does NOT do
+
+- No email / no Routine integration — Claude Desktop conversation only
+- Does not know the user's personal life list — "new to you" means "uncommon in Cincinnati," not literally new to the individual
+- Does not replace `plan_birding_trip` for local trip planning — that tool handles the Cincinnati-area use case
+
+### Future consideration
+
+If the user wants to add personal life list tracking (so "new to you" means literally never seen before), that would require a separate data source (e.g., eBird personal checklist export). Tracked as a future enhancement, not in scope now.
+
+---
+
+## 14. Open Questions
 
 These need answers before or during implementation. Update this section when
 resolved.
@@ -824,4 +936,6 @@ resolved.
 | 2026-05-15 | Updated architecture: Routines run Node scripts via bash, not MCP tools directly. Resolved open questions 1, 2, 4, 7. Added Section 4B (Script Architecture for Routines). Confirmed chartjs-node-canvas feasible. |
 | 2026-05-15 | Added Section 12: code review findings (security + architecture). CRIT and MEDIUM fixes applied. |
 | 2026-05-16 | User feedback: fix hotspot ranking (filter zero-activity spots), add 5-day forward outlook section to briefing email. |
+| 2026-05-16 | Implemented Section 13: plan_vacation_birding MCP tool. Added historical data strategy (BirdCast bar chart with ignoreSeasonCheck), checklist-count hotspot ranking, two-tier target species algorithm, and 20+ known destination entries in CITY_LOOKUP. |
 | 2026-05-16 | Updated SPEC status markers — all Phase 2 tools, enrichments, email, and repo setup marked [DONE]. |
+| 2026-05-16 | Added Section 13: Vacation Discovery Report spec — new MCP tool plan_vacation_birding for Claude Desktop, with target species algorithm and hotspot ranking by community activity. |

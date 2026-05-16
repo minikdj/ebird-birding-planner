@@ -373,6 +373,29 @@ const tools = [
       required: ["species"],
     },
   },
+  {
+    name: "plan_vacation_birding",
+    description:
+      "Discovery report for birding at a travel destination. Surfaces target species you won't easily find in Cincinnati, ranks hotspots by active birder community, and provides a birding window for the trip. Uses BirdCast historical bar chart frequencies so it works for trips weeks or months in advance — not just this week's live data.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        destination: {
+          type: "string",
+          description: 'Destination as city name (e.g. "Cape May, NJ"), region code (e.g. "US-NJ-009"), or "lat,lng". Known cities: Cape May, Acadia, Asheville, New York, Chicago, San Francisco, Austin, Portland.',
+        },
+        dates: {
+          type: "string",
+          description: 'Trip dates: "May 20-25", "next week", "June 1-7", "July 4". Used to pick the right week of historical frequency data.',
+        },
+        home_region: {
+          type: "string",
+          description: 'Home region code for novelty comparison (default "US-OH-061" = Cincinnati).',
+        },
+      },
+      required: ["destination"],
+    },
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -997,6 +1020,174 @@ async function handleBestDayToBird(args) {
 }
 
 // ---------------------------------------------------------------------------
+// plan_vacation_birding
+// ---------------------------------------------------------------------------
+
+const NOISE_SPECIES = new Set([
+  'House Sparrow', 'European Starling', 'Rock Pigeon', 'American Robin',
+  'Mourning Dove', 'Northern Cardinal', 'American Crow',
+]);
+
+async function resolveDestination(raw) {
+  const fromLookup = resolveLocation(raw);
+  if (fromLookup) return fromLookup;
+
+  // Fall back to BirdCast region search
+  const regions = await birdcast.findRegion(raw).catch(() => []);
+  if (!regions.length) return null;
+
+  const regionCode = regions[0].code;
+  const dest = { lat: null, lng: null, regionCode, name: regions[0].name || raw };
+
+  if (regionCode && /^[A-Z]{2}-[A-Z]{2,3}(-\d{1,3})?$/i.test(regionCode)) {
+    const hotspots = await ebird.searchHotspotsByRegion(regionCode).catch(() => []);
+    if (hotspots?.length > 0) {
+      dest.lat = hotspots[0].lat ?? null;
+      dest.lng = hotspots[0].lng ?? null;
+    }
+  }
+  return dest;
+}
+
+async function handlePlanVacationBirding(args) {
+  const homeRegion = args.home_region || DEFAULTS.regionCode;
+  const destination = await resolveDestination(args.destination);
+
+  if (!destination) {
+    return { error: `Cannot resolve "${args.destination}". Try a region code (e.g. "US-NJ-009"), "lat,lng", or a recognized city name.` };
+  }
+  if (!destination.lat || !destination.lng) {
+    return { error: `Cannot determine coordinates for "${args.destination}". Please provide as "lat,lng" or a county-level region code.` };
+  }
+
+  const dateRange = args.dates ? resolveDateRange(args.dates) : null;
+  const tripStartDate = dateRange?.start ?? new Date().toISOString().split('T')[0];
+  const tripLabel = dateRange?.label ?? 'upcoming trip';
+
+  const { lat, lng, regionCode } = destination;
+
+  // Fetch all data in parallel
+  const [nearbyHotspots, notableObs, destSpecies, homeSpecies, birdingWin] = await Promise.all([
+    ebird.getNearbyHotspots(lat, lng, 50).catch(() => []),
+    ebird.getNearbyNotableObservations(lat, lng, 14, 50).catch(() => []),
+    regionCode
+      ? birdcast.getExpectedSpecies(regionCode, tripStartDate, { ignoreSeasonCheck: true }).catch(() => null)
+      : Promise.resolve(null),
+    birdcast.getExpectedSpecies(homeRegion, tripStartDate, { ignoreSeasonCheck: true }).catch(() => null),
+    handleBirdingWindow({ lat, lng, date: tripStartDate }).catch(() => null),
+  ]);
+
+  // Rank top 15 hotspots by all-time count, then re-rank by recent checklist count
+  const candidates = Array.isArray(nearbyHotspots)
+    ? nearbyHotspots.sort((a, b) => (b.numSpeciesAllTime ?? 0) - (a.numSpeciesAllTime ?? 0)).slice(0, 15)
+    : [];
+
+  const hotspotData = (await Promise.all(
+    candidates.map(async (h) => {
+      const obs = await ebird.getRecentObservations(h.locId, 7).catch(() => []);
+      const speciesCount = new Set((obs || []).map((o) => o.speciesCode)).size;
+      const checklistCount = new Set((obs || []).map((o) => o.subId).filter(Boolean)).size;
+      return { name: h.locName, locId: h.locId, recentSpecies: speciesCount, recentChecklists: checklistCount };
+    })
+  ))
+    .sort((a, b) => b.recentChecklists - a.recentChecklists)
+    .filter((h) => h.recentChecklists > 0)
+    .slice(0, 5);
+
+  // Compute target species using BirdCast historical bar chart frequencies
+  let targetSpecies = { wontFindInCincinnati: [], rareInCincinnati: [] };
+  let dataNote;
+
+  if (destSpecies && homeSpecies) {
+    const homeMap = new Map(homeSpecies.map((s) => [s.commonName, s.probability]));
+
+    let destThreshold = 0.15;
+    let homeThreshold = 0.10;
+
+    let pool = destSpecies
+      .filter((s) => s.commonName && !NOISE_SPECIES.has(s.commonName))
+      .filter((s) => s.probability >= destThreshold)
+      .filter((s) => (homeMap.get(s.commonName) ?? 0) < homeThreshold)
+      .map((s) => ({ ...s, homeProbability: homeMap.get(s.commonName) ?? 0 }));
+
+    // Too many results: tighten thresholds
+    if (pool.length > 40) {
+      pool = pool.filter((s) => s.probability > 0.25 && s.homeProbability < 0.05);
+    }
+
+    let similarNote = null;
+    // Too few results: relax thresholds
+    if (pool.length < 5) {
+      destThreshold = 0.10;
+      pool = destSpecies
+        .filter((s) => s.commonName && !NOISE_SPECIES.has(s.commonName))
+        .filter((s) => s.probability >= destThreshold)
+        .filter((s) => (homeMap.get(s.commonName) ?? 0) < homeThreshold)
+        .map((s) => ({ ...s, homeProbability: homeMap.get(s.commonName) ?? 0 }));
+      similarNote = 'This destination has similar species to Cincinnati — thresholds relaxed to show the most distinctive local birds.';
+    }
+
+    const toEntry = (s) => ({
+      name: s.commonName,
+      destinationFrequency: Math.round(s.probability * 100) / 100,
+      cincinnatiFrequency: Math.round(s.homeProbability * 100) / 100,
+    });
+
+    targetSpecies.wontFindInCincinnati = pool
+      .filter((s) => s.homeProbability < 0.02)
+      .sort((a, b) => b.probability - a.probability)
+      .slice(0, 15)
+      .map(toEntry);
+
+    targetSpecies.rareInCincinnati = pool
+      .filter((s) => s.homeProbability >= 0.02)
+      .sort((a, b) => b.probability - a.probability)
+      .slice(0, 15)
+      .map(toEntry);
+
+    dataNote = similarNote
+      ?? `Species frequencies from BirdCast historical bar chart for the week of ${tripStartDate}. This is multi-year eBird data — great for planning trips weeks or months in advance.`;
+  } else {
+    dataNote = regionCode
+      ? 'BirdCast frequency data unavailable for this destination or date. Target species comparison omitted.'
+      : 'No region code available — target species comparison requires a county-level region code or recognized city.';
+  }
+
+  // Notable recent sightings (deduped by species)
+  const notableRecentSightings = Array.isArray(notableObs)
+    ? [...new Map(notableObs.map((o) => [o.speciesCode, o])).values()]
+        .map((o) => ({ name: o.comName, date: o.obsDt, location: o.locName }))
+        .slice(0, 10)
+    : [];
+
+  // Build summary
+  const won = targetSpecies.wontFindInCincinnati.length;
+  const rare = targetSpecies.rareInCincinnati.length;
+  const topSpot = hotspotData[0];
+  const parts = [`${destination.name} — ${tripLabel}.`];
+  if (won > 0 || rare > 0) {
+    parts.push(`★ ${won} species you won't find in Cincinnati, ▲ ${rare} more that are rare there but common here.`);
+  }
+  if (topSpot) {
+    parts.push(`Top spot: ${topSpot.name} — ${topSpot.recentChecklists} checklists and ${topSpot.recentSpecies} species in the last week.`);
+  }
+  if (destSpecies && homeSpecies) {
+    parts.push('Frequency data is historical (multi-year eBird records) — reliable for planning ahead regardless of current conditions.');
+  }
+
+  return {
+    destination: destination.name,
+    dates: tripLabel,
+    birdingWindow: birdingWin,
+    topHotspots: hotspotData,
+    targetSpecies,
+    notableRecentSightings,
+    dataNote,
+    summary: parts.join(' '),
+  };
+}
+
+// ---------------------------------------------------------------------------
 // MCP server setup
 // ---------------------------------------------------------------------------
 
@@ -1042,6 +1233,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         break;
       case "species_frequency":
         result = await handleSpeciesFrequency(args);
+        break;
+      case "plan_vacation_birding":
+        result = await handlePlanVacationBirding(args);
         break;
       default:
         return {
