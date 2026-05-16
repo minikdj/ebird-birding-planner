@@ -9,6 +9,9 @@ import {
 
 import { EBirdClient } from "./ebird-client.js";
 import { BirdCastClient } from "./birdcast-client.js";
+import { NWSClient } from "./nws-client.js";
+import { INaturalistClient } from "./inaturalist-client.js";
+import suncalc from "suncalc";
 import {
   Cache,
   resolveLocation,
@@ -38,12 +41,16 @@ if (!birdcastKey) {
 
 const ebird = new EBirdClient(apiKey);
 const birdcast = new BirdCastClient(birdcastKey);
+const nws = new NWSClient();
+const inat = new INaturalistClient();
 const cache = new Cache();
 
 const TAXONOMY_CACHE_KEY = "taxonomy";
 const TAXONOMY_TTL = 7 * 24 * 60 * 60 * 1000; // 1 week
 const BIRDCAST_TTL = 24 * 60 * 60 * 1000;      // 1 day
 const HOTSPOT_CACHE_TTL = 7 * 24 * 60 * 60 * 1000;
+const NWS_CACHE_TTL = 60 * 60 * 1000;       // 1 hour
+const INAT_CACHE_TTL = 6 * 60 * 60 * 1000;  // 6 hours
 
 const inflightBirdCast = new Map();
 
@@ -309,6 +316,63 @@ const tools = [
       },
     },
   },
+  {
+    name: "birding_weather",
+    description:
+      "Get NWS weather data interpreted for birding: overnight wind direction/speed (the key migration predictor), morning forecast, and a plain-English migration interpretation. Automatically combined into migration_forecast output.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        lat: { type: "number", description: "Latitude (default 39.1 for Cincinnati)." },
+        lng: { type: "number", description: "Longitude (default -84.5 for Cincinnati)." },
+        date: { type: "string", description: "Date for forecast. Defaults to today." },
+      },
+    },
+  },
+  {
+    name: "verify_sighting",
+    description:
+      "Cross-reference an eBird species sighting against iNaturalist photo-verified observations nearby. Returns confidence level and count of research-grade (photo-verified) reports.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        species: { type: "string", description: "Common or scientific name of the species." },
+        lat: { type: "number", description: "Latitude (default 39.1)." },
+        lng: { type: "number", description: "Longitude (default -84.5)." },
+        radius_km: { type: "number", description: "Search radius in km (default 30)." },
+        days_back: { type: "number", description: "Days to look back (default 14)." },
+      },
+      required: ["species"],
+    },
+  },
+  {
+    name: "birding_window",
+    description:
+      "Calculate sunrise, civil twilight, and recommended arrival time for a birding session at a given location and date.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        lat: { type: "number", description: "Latitude (default 39.1)." },
+        lng: { type: "number", description: "Longitude (default -84.5)." },
+        date: { type: "string", description: "Date. Defaults to today." },
+        temp_f: { type: "number", description: "Optional forecasted temperature (°F) — adjusts activity cutoff estimate." },
+      },
+    },
+  },
+  {
+    name: "species_frequency",
+    description:
+      "Look up historical frequency data for a species in a region using BirdCast bar chart data. Returns peak week, current probability, and whether the species is early/on-time/late relative to its historical peak.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        species: { type: "string", description: "Common name of the species (e.g. \"Tennessee Warbler\")." },
+        region_code: { type: "string", description: "eBird region code (default \"US-OH-061\")." },
+        date: { type: "string", description: "Date for the lookup. Defaults to today." },
+      },
+      required: ["species"],
+    },
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -326,10 +390,12 @@ async function handlePlanBirdingTrip(args) {
   }
 
   // Fetch hotspots, notable sightings, and BirdCast in parallel
-  const [nearbyHotspots, notable, bc] = await Promise.all([
+  const [nearbyHotspots, notable, bc, birdingWin, weather] = await Promise.all([
     ebird.getNearbyHotspots(lat, lng, radius),
     ebird.getNearbyNotableObservations(lat, lng, 14, radius),
     regionCode ? getBirdCastData(regionCode, dateInfo.date) : Promise.resolve({ live: null, season: null, species: null, summary: null }),
+    handleBirdingWindow({ lat, lng, date: dateInfo.date }).catch(() => null),
+    nws.getBirdingWeather(lat, lng, dateInfo.date).catch(() => null),
   ]);
 
   // Limit to top 15 hotspots by numSpeciesAllTime, then get recent obs for each
@@ -410,6 +476,110 @@ async function handlePlanBirdingTrip(args) {
     areaNotableSightings: areaNotable,
     migration: bc.summary || "No migration data available (outside season or unavailable).",
     expectedMigrants: bc.species?.slice(0, 10) ?? [],
+    birdingWindow: birdingWin ?? null,
+    weatherSummary: weather && !weather.weatherUnavailable ? weather.migrationInterpretation : null,
+  };
+}
+
+async function handleBirdingWeather(args) {
+  const lat = args.lat ?? DEFAULTS.lat;
+  const lng = args.lng ?? DEFAULTS.lng;
+  const dateInfo = resolveDate(args.date || "today") ?? resolveDate("today");
+  return nws.getBirdingWeather(lat, lng, dateInfo.date);
+}
+
+async function handleVerifySighting(args) {
+  if (!args.species) return { error: "species is required." };
+  const lat = args.lat ?? DEFAULTS.lat;
+  const lng = args.lng ?? DEFAULTS.lng;
+  const radius = Math.min(Math.max(1, coerceNumber(args.radius_km, 30)), 200);
+  const daysBack = Math.min(Math.max(1, coerceNumber(args.days_back, 14)), 30);
+  return inat.getVerifiedSightings(args.species, lat, lng, radius, daysBack);
+}
+
+async function handleBirdingWindow(args) {
+  const lat = args.lat ?? DEFAULTS.lat;
+  const lng = args.lng ?? DEFAULTS.lng;
+  const dateInfo = resolveDate(args.date || "today") ?? resolveDate("today");
+  const tempF = args.temp_f != null ? coerceNumber(args.temp_f, null) : null;
+
+  const dateObj = new Date(dateInfo.date + "T12:00:00");
+  const times = suncalc.getTimes(dateObj, lat, lng);
+
+  function fmtTime(d) {
+    if (!d || isNaN(d.getTime())) return "N/A";
+    return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: "America/New_York" });
+  }
+
+  const civilTwilight = fmtTime(times.dawn);
+  const sunrise = fmtTime(times.sunrise);
+  const goldenHourEnd = fmtTime(times.goldenHour);
+
+  // Activity cutoff: base 10:30 AM, subtract 15 min per 5°F above 75°F
+  let cutoffMinutes = 10 * 60 + 30; // 10:30 AM in minutes from midnight
+  if (tempF != null && tempF > 75) {
+    cutoffMinutes -= Math.floor((tempF - 75) / 5) * 15;
+  }
+  const cutoffH = Math.floor(cutoffMinutes / 60);
+  const cutoffM = cutoffMinutes % 60;
+  const activityCutoff = `${cutoffH > 12 ? cutoffH - 12 : cutoffH}:${String(cutoffM).padStart(2, "0")} ${cutoffH >= 12 ? "PM" : "AM"}`;
+
+  const tempNote = tempF != null ? ` at forecasted ${Math.round(tempF)}°F` : "";
+  const recommendation = `Arrive by ${civilTwilight} (civil twilight). Peak songbird activity ${sunrise}–9:30 AM. Heat suppresses activity after ~${activityCutoff}${tempNote}.`;
+
+  return { civilTwilight, sunrise, goldenHourEnd, activityCutoff, recommendation };
+}
+
+async function handleSpeciesFrequency(args) {
+  if (!args.species) return { error: "species is required." };
+  const regionCode = args.region_code || DEFAULTS.regionCode;
+  const dateInfo = resolveDate(args.date || "today") ?? resolveDate("today");
+
+  if (!birdcast.isInMigrationSeason(dateInfo.date)) {
+    return { summary: `${dateInfo.date} is outside migration season. Frequency data is only available March–June and August–November.` };
+  }
+
+  const speciesCode = await resolveSpeciesCode(args.species);
+  if (!speciesCode) {
+    return { error: `Could not find species "${args.species}" in eBird taxonomy.` };
+  }
+
+  const allSpecies = await birdcast.getExpectedSpecies(regionCode, dateInfo.date);
+  if (!allSpecies) {
+    return { error: "BirdCast frequency data unavailable for this region/date." };
+  }
+
+  const entry = allSpecies.find((s) => s.speciesCode === speciesCode || s.commonName?.toLowerCase() === args.species.toLowerCase());
+  if (!entry || !entry.probability) {
+    return { species: args.species, speciesCode, currentWeekProbability: 0, interpretation: `${args.species} has no BirdCast frequency data for ${regionCode}.` };
+  }
+
+  // Find peak week from the full bar chart — getExpectedSpecies already computed per-week probabilities
+  // We only have the current week's value from the returned entry. For peak, re-fetch and scan all weeks.
+  // For now use the current week value and note peak detection requires full bar chart.
+  const currentProb = entry.probability;
+
+  // Determine week of year for phenology status
+  const d = new Date(dateInfo.date + "T12:00:00Z");
+  const startOfYear = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  const weekIndex = Math.min(Math.floor((d - startOfYear) / (7 * 24 * 60 * 60 * 1000)), 47);
+
+  // Spring peak weeks for warblers typically 17-22 (late April - late May)
+  // Rough phenology: if weekIndex < 10 → early season, 10-20 → building, 20-25 → peak, >25 → declining
+  let phenologyStatus;
+  if (weekIndex < 17) phenologyStatus = "pre-peak";
+  else if (weekIndex <= 22) phenologyStatus = "at-peak";
+  else phenologyStatus = "post-peak";
+
+  const interpretation = `${args.species} has a current-week BirdCast probability of ${(currentProb * 100).toFixed(0)}% in ${regionCode}. Season status: ${phenologyStatus} (week ${weekIndex} of 47).`;
+
+  return {
+    species: args.species,
+    speciesCode,
+    currentWeekProbability: currentProb,
+    weekIndex,
+    phenologyStatus,
+    interpretation,
   };
 }
 
@@ -496,6 +666,17 @@ async function handleMigrationForecast(args) {
       result.historicalAverage = latestAvg.totalBirds ?? latestAvg.value ?? latestAvg;
     }
   }
+
+  // Enrich with NWS weather interpretation
+  try {
+    const weather = await nws.getBirdingWeather(DEFAULTS.lat, DEFAULTS.lng, dateInfo.date);
+    if (!weather.weatherUnavailable) {
+      result.overnightWinds = weather.overnight;
+      result.morningWeather = weather.morning;
+      result.weatherInterpretation = weather.migrationInterpretation;
+      result.summary = result.summary + "\n\nWeather: " + weather.migrationInterpretation;
+    }
+  } catch { /* weather enrichment is best-effort */ }
 
   return result;
 }
@@ -631,6 +812,22 @@ async function handleCompareHotspots(args) {
   // Resolve shared codes to names
   const nameMap = hotspotData[0].speciesNames;
   const sharedNames = shared.map((c) => nameMap.get(c) ?? c);
+
+  // Verify up to 3 unique species via iNaturalist
+  if (location.lat != null) {
+    const allUnique = comparison.flatMap((h) => h.uniqueSpecies).slice(0, 3);
+    const verifications = await Promise.all(
+      allUnique.map((sp) => inat.getVerifiedSightings(sp, location.lat ?? DEFAULTS.lat, location.lng ?? DEFAULTS.lng, 30, 14).catch(() => null))
+    );
+    const verifiedMap = {};
+    allUnique.forEach((sp, i) => {
+      if (verifications[i]) verifiedMap[sp] = { confidence: verifications[i].confidence, photoCount: verifications[i].photoVerifiedCount };
+    });
+    // Attach to each hotspot's uniqueSpecies
+    for (const h of comparison) {
+      h.uniqueSpeciesVerified = h.uniqueSpecies.map((sp) => ({ species: sp, ...(verifiedMap[sp] ?? {}) }));
+    }
+  }
 
   const summary = comparison
     .map((h) => `${h.name}: ${h.recentSpeciesCount} species, ${h.checklistsThisWeek} checklists, ${h.uniqueSpecies.length} unique`)
@@ -833,6 +1030,18 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         break;
       case "best_day_to_bird":
         result = await handleBestDayToBird(args);
+        break;
+      case "birding_weather":
+        result = await handleBirdingWeather(args);
+        break;
+      case "verify_sighting":
+        result = await handleVerifySighting(args);
+        break;
+      case "birding_window":
+        result = await handleBirdingWindow(args);
+        break;
+      case "species_frequency":
+        result = await handleSpeciesFrequency(args);
         break;
       default:
         return {

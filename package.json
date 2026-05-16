@@ -21,6 +21,11 @@
   ],
   "license": "MIT",
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.12.1"
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "chart.js": "^4.5.1",
+    "chartjs-node-canvas": "^5.0.0",
+    "dotenv": "^17.4.2",
+    "resend": "^6.12.3",
+    "suncalc": "^1.9.0"
   }
 }
