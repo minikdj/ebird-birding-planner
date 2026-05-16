@@ -9,21 +9,22 @@
 // Exit 0 always — errors are captured inside the JSON.
 
 import suncalc from 'suncalc';
-import { BirdCastClient } from '../src/birdcast-client.js';
+import { BirdCastClient, degreesToCardinal } from '../src/birdcast-client.js';
 import { NWSClient } from '../src/nws-client.js';
 import { EBirdClient } from '../src/ebird-client.js';
-import { DEFAULTS, formatNumber } from '../src/utils.js';
+import { DEFAULTS, formatNumber, toYMD } from '../src/utils.js';
+
+// ---------------------------------------------------------------------------
+// Shared constants — wind direction sets used for outlook rating + flags
+// ---------------------------------------------------------------------------
+
+const FAVORABLE_WINDS = new Set(['S', 'SW', 'SSW', 'SE']);
+const POOR_WINDS = new Set(['N', 'NW', 'NNW', 'NE']);
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-function toLocalYMD(d) {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-}
 
 function formatTime(date) {
   if (!date || isNaN(date.getTime())) return null;
@@ -43,7 +44,9 @@ function computeActivityCutoff(tempF) {
   const h = Math.floor(cutoffMinutes / 60);
   const m = String(cutoffMinutes % 60).padStart(2, '0');
   const ampm = h >= 12 ? 'PM' : 'AM';
-  return `${h > 12 ? h - 12 : h}:${m} ${ampm}`;
+  // Handle 12-hour conversion correctly including h===0 (midnight, unreachable with clamp but safe)
+  const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
+  return `${h12}:${m} ${ampm}`;
 }
 
 /**
@@ -69,7 +72,7 @@ function computeRainImpactNote(weather) {
       `Activity likely reduced after sunrise.`;
   }
 
-  if (overnightPrecip >= 60 && morningPrecip < 30) {
+  if (overnightPrecip >= 50 && morningPrecip < 30) {
     return `Rain overnight (${overnightPrecip}% chance) may have grounded migrating birds, ` +
       `creating potential fallout conditions at dawn. Check hotspots early.`;
   }
@@ -111,10 +114,7 @@ function buildLastNight(live) {
     isHigh: live.isHigh ?? null,
     seasonName: live.season?.name ?? null,
     peakFlightDirection: peakInterval?.avgDirection != null
-      ? (function (deg) {
-          const dirs = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
-          return dirs[Math.round(deg / 45) % 8];
-        })(peakInterval.avgDirection)
+      ? degreesToCardinal(peakInterval.avgDirection)
       : null,
     peakFlightSpeedMph: peakInterval?.avgSpeed != null ? Math.round(peakInterval.avgSpeed) : null,
     peakMeanAltitudeM: peakInterval?.meanHeight != null ? Math.round(peakInterval.meanHeight) : null,
@@ -178,15 +178,19 @@ function buildSeasonStatus(season) {
 
 /**
  * Build the 5-day forward outlook (days 1–5 from today).
+ * All 5 days are fetched in parallel. Dates are derived from `today` (string)
+ * to avoid new Date() skew near midnight.
  */
 async function buildOutlook(birdcast, nws, config, today) {
-  const days = [];
-  for (let i = 1; i <= 5; i++) {
-    const d = new Date();
-    d.setDate(d.getDate() + i);
-    const dateStr = toLocalYMD(d);
-    const dayLabel = d.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
-    const dayShort = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  // Derive future dates from the `today` string, not from re-calling new Date(),
+  // to avoid off-by-one when the script runs near midnight.
+  const [todayYear, todayMonth, todayDay] = today.split('-').map(Number);
+
+  const buildDay = async (i) => {
+    const d = new Date(Date.UTC(todayYear, todayMonth - 1, todayDay + i));
+    const dateStr = toYMD(d);
+    const dayLabel = d.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric', timeZone: 'UTC' });
+    const dayShort = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' });
 
     const [live, weather] = await Promise.all([
       birdcast.getLiveMigration(config.region, dateStr).catch(() => null),
@@ -204,9 +208,8 @@ async function buildOutlook(birdcast, nws, config, today) {
     const rainImpactNote = computeRainImpactNote(weather);
     const birdingWindow = buildBirdingWindow(dateStr, config.lat, config.lng);
 
-    // Outlook rating
-    const favorable = ['S', 'SW', 'SSW', 'SE'].includes(wind ?? '') && (overnightPrecip ?? 100) < 30;
-    const poor = ['N', 'NW', 'NNW', 'NE'].includes(wind ?? '') || (overnightPrecip ?? 0) > 60;
+    const favorable = FAVORABLE_WINDS.has(wind ?? '') && (overnightPrecip ?? 100) < 30;
+    const poor = POOR_WINDS.has(wind ?? '') || (overnightPrecip ?? 0) > 60;
 
     let outlookRating;
     if (isHigh || (birds > 300_000 && favorable)) outlookRating = 'Excellent';
@@ -215,29 +218,23 @@ async function buildOutlook(birdcast, nws, config, today) {
     else if (poor) outlookRating = 'Poor';
     else outlookRating = 'Quiet';
 
-    days.push({
+    return {
       dateStr,
       dayLabel,
       dayShort,
       migrationBirds: birds,
       formattedBirds: birds > 0 ? formatNumber(birds) : null,
       isHigh,
-      overnight: {
-        windDirection: wind,
-        windSpeedMph: windSpeed,
-        precipProbability: overnightPrecip,
-        cloudCover,
-      },
-      morning: {
-        precipProbability: morningPrecip,
-        tempF: morningTemp,
-      },
+      overnight: { windDirection: wind, windSpeedMph: windSpeed, precipProbability: overnightPrecip, cloudCover },
+      morning: { precipProbability: morningPrecip, tempF: morningTemp },
       rainImpactNote,
       birdingWindow,
       outlookRating,
-    });
-  }
-  return days;
+    };
+  };
+
+  // All 5 days in parallel
+  return Promise.all([1, 2, 3, 4, 5].map(buildDay));
 }
 
 /**
@@ -289,17 +286,26 @@ async function main() {
     return;
   }
 
+  // Parse and validate coordinates — fall back to Cincinnati defaults if invalid
+  const rawLat = parseFloat(process.env.BRIEFING_LAT || '');
+  const rawLng = parseFloat(process.env.BRIEFING_LNG || '');
   const config = {
-    lat: parseFloat(process.env.BRIEFING_LAT || String(DEFAULTS.lat)),
-    lng: parseFloat(process.env.BRIEFING_LNG || String(DEFAULTS.lng)),
+    lat: Number.isFinite(rawLat) && rawLat >= -90 && rawLat <= 90 ? rawLat : DEFAULTS.lat,
+    lng: Number.isFinite(rawLng) && rawLng >= -180 && rawLng <= 180 ? rawLng : DEFAULTS.lng,
     region: process.env.BRIEFING_REGION || DEFAULTS.regionCode,
   };
+  if (!Number.isFinite(rawLat)) {
+    process.stderr.write('aggregate.js: BRIEFING_LAT invalid or unset — using default\n');
+  }
+  if (!Number.isFinite(rawLng)) {
+    process.stderr.write('aggregate.js: BRIEFING_LNG invalid or unset — using default\n');
+  }
 
   const birdcast = new BirdCastClient(birdcastKey);
   const nws = new NWSClient();
   const ebird = new EBirdClient(ebirdKey);
 
-  const today = toLocalYMD(new Date());
+  const today = toYMD(new Date());
 
   // --- Phase 1: Fast parallel fetches ---
   const [live, season, expectedSpecies, weather, notableObs, nearbyHotspots] = await Promise.all([
@@ -395,7 +401,7 @@ async function main() {
       highMigrationNight: lastNight?.isHigh ?? false,
       hasNotables: notableObservations.length > 0,
       morningRainLikely: (weather?.morning?.precipProbability ?? 0) >= 40,
-      favorableOvernightWind: ['S', 'SW', 'SSW', 'SE'].includes(
+      favorableOvernightWind: FAVORABLE_WINDS.has(
         weather?.overnight?.windDirection?.toUpperCase() ?? ''
       ),
     },

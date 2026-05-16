@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Triage script — called by the Anthropic Routine agent at 5:45 AM ET.
+// Triage script — called by the Anthropic Routine agent at 4:00 AM ET.
 // Fetches BirdCast + NWS data and prints a JSON decision summary to stdout.
 // Exit 0 always (errors are captured in the JSON).
 
@@ -65,9 +65,12 @@ async function main() {
   const overnightWind = weather?.overnight?.windDirection?.toUpperCase() ?? '';
   const overnightPrecip = weather?.overnight?.precipProbability ?? null;
 
-  if ((overnightWind === 'S' || overnightWind === 'SW') && overnightPrecip != null && overnightPrecip < 30) {
+  // Match aggregate.js FAVORABLE_WINDS / POOR_WINDS constants
+  const FAVORABLE_WINDS = new Set(['S', 'SW', 'SSW', 'SE']);
+  const POOR_WINDS = new Set(['N', 'NW', 'NNW', 'NE']);
+  if (FAVORABLE_WINDS.has(overnightWind) && overnightPrecip != null && overnightPrecip < 30) {
     migrationScore += 2;
-  } else if ((overnightWind === 'N' || overnightWind === 'NW') && overnightPrecip != null && overnightPrecip > 60) {
+  } else if (POOR_WINDS.has(overnightWind) && overnightPrecip != null && overnightPrecip > 60) {
     migrationScore -= 2;
   }
 
