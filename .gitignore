@@ -1,0 +1,6 @@
+node_modules/
+.env
+stderr.log
+briefing-output/
+*.log
+.DS_Store

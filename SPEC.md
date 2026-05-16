@@ -1,0 +1,722 @@
+# Birding Planner — Project Spec
+
+> This is the living reference document for all planned and completed work on the
+> eBird birding planner MCP server and daily briefing system. Update it as
+> decisions change. Sections marked **[DONE]** are implemented; **[PLANNED]**
+> are not yet started; **[IN PROGRESS]** are actively being built.
+
+---
+
+## Table of Contents
+
+1. [Project Goal](#1-project-goal)
+2. [Infrastructure Decision](#2-infrastructure-decision)
+3. [Routine Agent Design](#3-routine-agent-design)
+4. [Existing MCP Server](#4-existing-mcp-server)
+5. [New Tools — Phase 2](#5-new-tools--phase-2)
+6. [Enrichments to Existing Tools](#6-enrichments-to-existing-tools)
+7. [Email Design](#7-email-design)
+8. [API Reference & Rate Limits](#8-api-reference--rate-limits)
+9. [Configuration & Secrets](#9-configuration--secrets)
+10. [Repo & Version Control Setup](#10-repo--version-control-setup)
+11. [Testing Plan](#11-testing-plan)
+12. [Open Questions](#12-open-questions)
+
+---
+
+## 1. Project Goal
+
+Build a smart daily birding briefing system that:
+
+- Runs automatically every morning at 5:45 AM ET during migration season
+- Uses Claude as an intelligent agent (not a dumb cron script) to decide whether
+  the briefing is worth sending
+- Sends a rich HTML email when migration is active or notable species are present
+- Goes quiet for several days — and reschedules itself — when nothing is happening
+- Pulls from BirdCast radar, eBird observations, NWS weather, iNaturalist
+  photo-verification, and computed sunrise/sunset times
+
+The key insight driving the architecture: a rules-based script would require
+hard-coding thresholds for "interesting enough." The agent can reason about
+context — e.g. a slow week but a rare fallout species, or a weather front about
+to arrive — and make a judgment call.
+
+---
+
+## 2. Infrastructure Decision
+
+**Chosen: Anthropic Routines** (cloud-hosted scheduled agent)
+
+### Why Routines over the alternatives
+
+| Option | Verdict | Reason |
+|--------|---------|--------|
+| System cron + Node.js script | Rejected | MacBook sleeps at night; bare cron silently misses jobs. Would need `launchd` plist with `WakeToRun=true`. Script logic can't reason. |
+| macOS `launchd` | Viable fallback | Works on always-on machines. No AI reasoning. Would need separate state file to implement "skip for N days" logic. |
+| GitHub Actions | Viable fallback | Cloud-hosted, free. Fixed schedule only — can't self-reschedule. No reasoning. Good if Routines don't work out. |
+| Claude Desktop scheduled task | Rejected | Requires Desktop app to be running at 5:45 AM. Unreliable for overnight runs. |
+| **Anthropic Routines** | **Chosen** | Cloud-hosted (machine off). Agent reasons at runtime. Can self-reschedule via `update_scheduled_task`. Included in Pro subscription. |
+
+### How Routines work for this project
+
+1. A Routine is configured to run daily at 5:45 AM ET during migration season
+2. The agent wakes up, calls BirdCast + NWS as a fast triage check (~10s)
+3. Based on that triage, it decides:
+   - **Send full briefing** → calls all data sources, renders email, sends via Resend
+   - **Send short "quiet period" note** → sends once, then reschedules to N days out
+   - **Silent skip** → exits without sending (used when already in a quiet period)
+4. The Routine's schedule is updated dynamically when the agent decides to sleep
+
+### Routine configuration
+
+- **Schedule**: daily at 5:45 AM ET (cron: `45 9 * * *` UTC)
+- **Season gating**: the agent prompt includes season dates; agent exits cleanly
+  outside season (Mar 15 – Jun 7 spring, Aug 1 – Nov 15 fall)
+- **Self-reschedule tool**: `mcp__scheduled-tasks__update_scheduled_task`
+
+### Constraint: Routines run on Anthropic's cloud
+
+- Cannot access local files or local MCP server process
+- Cannot read a local `.env` file — API keys must be stored as Routine secrets
+- The MCP server tools are called by the agent natively (the agent IS Claude,
+  so it has the MCP tools registered in its context via Claude Desktop config)
+- **Actually**: for Routines specifically, the agent calls the external APIs
+  directly in its reasoning, OR we configure the Routine to use the registered
+  MCP server tools. Confirm which mode is supported when setting up.
+
+> **Open question**: Does a Routine have access to MCP tools registered in
+> Claude Desktop, or does it run in a clean context? If clean, the agent must
+> call eBird/BirdCast/NWS APIs directly in its prompt, without going through
+> the MCP server. See [§12 Open Questions](#12-open-questions).
+
+---
+
+## 3. Routine Agent Design
+
+### Triage prompt (runs first, fast)
+
+```
+You are a migration monitoring agent for Cincinnati, OH (Hamilton County,
+US-OH-061, 39.1°N 84.5°W).
+
+Today is {DATE}. Time is 5:45 AM ET.
+
+STEP 1 — TRIAGE (do this first, takes ~10 seconds):
+  - Call migration_forecast for last night's BirdCast data
+  - Call birding_weather for overnight wind direction/speed and tonight's forecast
+
+STEP 2 — DECIDE:
+  Based on the triage, choose one of three actions:
+
+  A) FULL BRIEFING — send if ANY of these are true:
+     - Last night's migration was HIGH intensity (>500K birds over Hamilton County)
+     - Any rare/unusual species reported in the last 48h within 50km
+     - Tonight's conditions favor heavy migration (south winds >10mph, clear skies)
+     - It's been more than 5 days since the last briefing (send a catch-up)
+
+  B) QUIET PERIOD — send a short note if:
+     - Migration has been LOW for 3+ consecutive nights
+     - Next 4-day forecast shows unfavorable conditions (north winds, persistent rain)
+     - You have NOT sent a quiet-period note in the last 5 days
+     Then: reschedule this Routine to run again in 4 days.
+
+  C) SILENT SKIP — exit without sending if:
+     - You are within a quiet period (last action was QUIET PERIOD < 5 days ago)
+     - AND conditions have not changed meaningfully
+     Note: You have no persistent memory between runs, so use the most recent
+     briefing date (from the email subject line if available, or reason from
+     the data: if migration has been consistently low for >5 days, assume you
+     are in a quiet period).
+
+STEP 3 — EXECUTE:
+  For FULL BRIEFING: call all data sources and render the email (see email spec).
+  For QUIET PERIOD: render a short email and update the schedule to +4 days.
+  For SILENT SKIP: log "Skipping — quiet period active" and exit.
+```
+
+### Scoring rubric the agent uses
+
+| Signal | Weight | Notes |
+|--------|--------|-------|
+| BirdCast cumulative birds (last night) | High | >500K = almost always send |
+| BirdCast `isHigh` flag | High | Overrides other signals |
+| Notable species in 50km (eBird) | High | Any review-species = always send |
+| Tonight's wind direction (NWS) | Medium | S/SW winds = favorable; N/NW = poor |
+| Consecutive low nights | Medium | 3+ nights of <50K = quiet period |
+| Days since last briefing | Medium | >5 days = send catch-up regardless |
+| Pressure trend | Low | Falling = front coming, rising = fallout window |
+
+### Rescheduling logic
+
+When the agent decides QUIET PERIOD:
+1. Note today's date
+2. Estimate when conditions improve (next front, end of unfavorable pattern)
+3. Default to +4 days if uncertain
+4. Call `update_scheduled_task` to set next run to that date
+5. Revert to daily schedule on the resumed run
+
+---
+
+## 4. Existing MCP Server
+
+**Status: [DONE]** — all six tools are implemented and working.
+
+### Location
+
+`ebird-birding-planner/src/index.js` — single-file MCP server, plain JavaScript
+(ESM), Node.js. No build step. Runs via `node src/index.js`.
+
+### Existing tools
+
+| Tool | Handler | Data source | Notes |
+|------|---------|-------------|-------|
+| `plan_birding_trip` | `handlePlanBirdingTrip` | eBird + BirdCast | Ranks hotspots by score = species×2 + notable×5 |
+| `migration_forecast` | `handleMigrationForecast` | BirdCast | Season-gated. Returns live data + season totals |
+| `hotspot_details` | `handleHotspotDetails` | eBird | 7-day + 14-day species counts |
+| `compare_hotspots` | `handleCompareHotspots` | eBird | Shared vs unique species across hotspots |
+| `species_finder` | `handleSpeciesFinder` | eBird | Deduplicates by location, sorts by recency |
+| `best_day_to_bird` | `handleBestDayToBird` | BirdCast + eBird | Scores days by migration intensity |
+
+### Key implementation details
+
+- **In-memory cache** (`Cache` class in `utils.js`): taxonomy 1 week, BirdCast
+  24h, hotspots 1 week
+- **eBird rate limiter**: 90 req/min enforced in `EBirdClient` via sliding window
+- **BirdCast API key**: hardcoded as `BirdCastClient.API_KEY = 'BIRDCAST_API_KEY_PLACEHOLDER'`
+  (this is a public/shared key — verify it's still valid before shipping)
+- **Favorite hotspots**: Mount Airy Forest, Shawnee Lookout, Otto Armleder,
+  Middle Creek Park, Sharon Woods — defined in `utils.js`, `locId` resolved
+  dynamically at runtime
+- **Cincinnati-area detection**: `isCincinnatiArea()` uses haversine distance
+  ≤50km from 39.1°N, 84.5°W, plus county code matching
+
+### Dependency
+
+`@modelcontextprotocol/sdk ^1.12.1` — only production dependency.
+
+---
+
+## 5. New Tools — Phase 2
+
+**Status: [PLANNED]**
+
+All new tools go into `src/index.js` alongside existing handlers, following the
+same pattern (define in `tools[]` array, implement as `handleXxx` function, add
+case to the switch). New external clients go in their own files under `src/`.
+
+---
+
+### 5A. `birding_weather` [PLANNED]
+
+**Source**: NWS Weather API (`api.weather.gov`) — no API key required.
+
+**New file**: `src/nws-client.js`
+
+#### Input schema
+```js
+{
+  lat: number,   // default 39.1
+  lng: number,   // default -84.5
+  date: string,  // optional, default "today"
+}
+```
+
+#### Implementation steps
+1. `GET https://api.weather.gov/points/{lat},{lng}` with
+   `User-Agent: (birding-planner, minikdj11@gmail.com)` header
+2. Follow `properties.forecastHourly` URL from response
+3. Filter hourly periods to overnight window (8 PM – 6 AM) and morning window
+   (6 AM – 10 AM)
+4. Extract: wind direction, wind speed, precipitation probability, short forecast
+   description, temperature, dewpoint
+5. Barometric pressure: NWS hourly doesn't include pressure directly — either
+   skip or use a secondary endpoint. **Decision**: skip pressure for v1, add as
+   enhancement if a clean endpoint is found.
+6. Compute a plain-English migration interpretation:
+
+```
+South winds 12mph, clear overnight → "Favorable migration conditions.
+  Expect new arrivals at dawn."
+North winds + rain → "Birds grounded. Poor new migration but potential
+  fallout from prior nights."
+Variable/light winds → "Mixed conditions. Moderate migration possible."
+```
+
+#### Output
+```js
+{
+  overnight: {
+    windDirection: "S",
+    windSpeedMph: 12,
+    precipProbability: 10,
+    cloudCover: "Clear",       // from shortForecast text
+  },
+  morning: {
+    windDirection: "SW",
+    windSpeedMph: 8,
+    tempF: 58,
+    feelsLikeF: 55,
+    precipProbability: 5,
+  },
+  sunriseTime: "6:18 AM",       // computed via suncalc (see 5D)
+  migrationInterpretation: "South winds 12mph overnight with clear skies — favorable migration. Expect new arrivals at dawn.",
+  weatherUnavailable: false,    // set true if NWS call fails; other fields may be null
+}
+```
+
+#### Error handling
+If NWS is down or returns non-200: return `{ weatherUnavailable: true }`. The
+caller (e.g. `migration_forecast`) should include this gracefully: "weather data
+unavailable for tonight's interpretation."
+
+#### Rate limits
+NWS: no hard limit but throttles at >1 req/sec. Add 200ms delay between the
+`/points` call and the forecast URL follow-up. Cache forecast data for 1 hour.
+
+---
+
+### 5B. `species_frequency` [PLANNED]
+
+**Source**: eBird API v2 — requires `EBIRD_API_KEY` (already available).
+
+**New file**: none needed — add to `EBirdClient` in `src/ebird-client.js`.
+
+#### Goal
+Answer: "Is this species on time, early, or late compared to historical norms?
+What's its peak week?"
+
+#### Implementation notes
+The eBird bar chart frequency endpoint is:
+```
+GET /v2/product/spplist/{regionCode}
+```
+This returns a species list but not frequency. The actual frequency/bar-chart
+data is not available via the v2 API in a clean JSON endpoint — it's embedded in
+the web UI. **Approach for v1**: use BirdCast's bar chart endpoint (already
+implemented as `getExpectedSpecies`) which returns per-week probability per
+species. This is close enough for the "peak week" and "on time vs late"
+calculation.
+
+**Revised tool**: `species_frequency` takes a species name, resolves it to a
+BirdCast species code via `getExpectedSpecies`, and returns:
+- Current week's probability
+- Peak week (index 0–47) and peak probability
+- Whether the species is pre-peak, at-peak, or post-peak
+- Percentage of peak probability currently (e.g. "at 68% of historical peak")
+
+**Fallback**: if BirdCast has no bar chart data for the species, return a note
+that frequency data is unavailable and only recent eBird sightings are provided.
+
+#### Input schema
+```js
+{
+  species: string,         // common name, e.g. "Tennessee Warbler"
+  region_code: string,     // default "US-OH-061"
+  date: string,            // optional, default today
+}
+```
+
+#### Output
+```js
+{
+  species: "Tennessee Warbler",
+  speciesCode: "tenwar",
+  currentWeekProbability: 0.28,
+  peakWeekIndex: 19,           // week of year (0-based), ~mid May
+  peakProbability: 0.34,
+  percentOfPeak: 82,
+  phenologyStatus: "at-peak",  // "pre-peak" | "at-peak" | "post-peak"
+  interpretation: "Tennessee Warbler is at 82% of its historical peak frequency for Hamilton County. Peak is week 19 (mid-May). You're in week 20 — expect slight decline over next 1–2 weeks.",
+}
+```
+
+---
+
+### 5C. `verify_sighting` [PLANNED]
+
+**Source**: iNaturalist API (`api.inaturalist.org/v1`) — no API key required
+for read-only.
+
+**New file**: `src/inaturalist-client.js`
+
+#### Goal
+Cross-reference an eBird sighting (often audio-only for warblers) against
+iNaturalist photo-verified observations. Answers: "Is there actually photo
+evidence this species is present?"
+
+#### Endpoint
+```
+GET https://api.inaturalist.org/v1/observations
+  ?taxon_name={species}
+  &lat={lat}
+  &lng={lng}
+  &radius={radius_km}
+  &d1={start_date}
+  &d2={end_date}
+  &quality_grade=research
+  &photos=true
+  &per_page=10
+```
+
+#### Input schema
+```js
+{
+  species: string,      // common or scientific name
+  lat: number,          // default 39.1
+  lng: number,          // default -84.5
+  radius_km: number,    // default 30
+  days_back: number,    // default 14
+}
+```
+
+#### Output
+```js
+{
+  species: "Connecticut Warbler",
+  photoVerifiedCount: 3,
+  mostRecentDate: "2026-05-12",
+  nearestObservationKm: 8.4,
+  hotspotOverlap: true,    // true if any iNat obs is within 5km of a known eBird hotspot
+  confidence: "high",      // "high" (>=3 research-grade), "moderate" (1-2), "low" (0)
+  interpretation: "3 photo-verified Connecticut Warbler reports within 30km in the last 14 days — high confidence this species is present.",
+}
+```
+
+#### Rate limits
+iNaturalist: 60 requests/minute. Cache results for 6 hours (species sightings
+don't change that fast).
+
+---
+
+### 5D. `birding_window` [PLANNED]
+
+**Source**: `suncalc` npm package (pure computation, no API call).
+
+**New dependency**: `npm install suncalc`
+
+#### Goal
+Return sunrise, civil twilight, and a recommended arrival time for a given
+location and date. Integrate into `plan_birding_trip` output.
+
+#### Input schema
+```js
+{
+  lat: number,    // default 39.1
+  lng: number,    // default -84.5
+  date: string,   // default "today"
+  temp_f: number, // optional — from birding_weather; affects activity cutoff
+}
+```
+
+#### Computation
+Using `suncalc.getTimes(date, lat, lng)`:
+- `dawn` → civil twilight start (birds start singing)
+- `sunrise` → sunrise
+- `goldenHour` → end of golden hour
+- `solarNoon` → peak heat begins
+
+Activity cutoff: base is 10:30 AM; subtract 15 min for every 5°F above 75°F
+(heat suppresses songbird activity).
+
+#### Output
+```js
+{
+  civilTwilight: "5:58 AM",
+  sunrise: "6:18 AM",
+  goldenHourEnd: "6:47 AM",
+  activityCutoff: "10:30 AM",   // adjusted for temperature if provided
+  recommendation: "Arrive by 5:58 AM (civil twilight). Peak songbird activity 6:18–9:30 AM. Heat activity suppression begins ~10:30 AM at forecasted 82°F.",
+}
+```
+
+---
+
+## 6. Enrichments to Existing Tools
+
+**Status: [PLANNED]**
+
+These are modifications to existing handlers in `src/index.js`.
+
+### `migration_forecast` — add weather interpretation
+
+After fetching BirdCast data, call `birding_weather` internally. Append to the
+result:
+```js
+result.weatherInterpretation = weather.migrationInterpretation;
+result.overnightWinds = { direction: weather.overnight.windDirection, speedMph: weather.overnight.windSpeedMph };
+result.weatherUnavailable = weather.weatherUnavailable;
+```
+
+Combined output should answer both: "did birds fly last night?" AND "will they
+fly tonight?"
+
+### `plan_birding_trip` — add sunrise + weather
+
+Call `birding_window` and `birding_weather` in parallel with the existing
+hotspot/BirdCast fetches. Add to output:
+```js
+result.birdingWindow = { ... };   // from birding_window
+result.weather = { ... };         // morning summary from birding_weather
+```
+
+Update `buildTripSummary` to include "Arrive by {civilTwilight} — sunrise at
+{sunrise}."
+
+### `best_day_to_bird` — factor weather into scoring
+
+Currently scores days by `migrationScore` (BirdCast intensity). Add a
+`weatherBonus` to each day's score:
+- South/SW winds the night before: +2
+- Clear overnight: +1
+- Rain or north winds: -2
+- No data: 0
+
+Fetch `birding_weather` for each day in the range (or the prior evening).
+**Rate limit note**: this is up to 14 NWS calls for a 14-day range — space 200ms
+apart. Only do this if `date_range` spans ≤7 days to avoid excessive NWS calls.
+
+### `compare_hotspots` — add iNaturalist verification for notable species
+
+After building the comparison, identify species that appear in only one hotspot
+(i.e., notable/unique). For each unique species in the comparison, call
+`verify_sighting`. Add to each hotspot's result:
+```js
+uniqueSpeciesVerified: [
+  { species: "Connecticut Warbler", confidence: "high", photoCount: 3 },
+]
+```
+
+Cap at 3 verify calls per compare request (iNaturalist rate limit + latency).
+
+---
+
+## 7. Email Design
+
+**Status: [PLANNED]**
+
+### Sending infrastructure
+
+Email sent via **Resend** (resend.com). Simple REST API, generous free tier
+(3,000 emails/month), excellent deliverability. Read API key from Routine secret
+`RESEND_API_KEY`.
+
+Fallback chain (tried in order if Resend unavailable):
+1. SendGrid (`SENDGRID_API_KEY`)
+2. Nodemailer + Gmail (`GMAIL_USER`, `GMAIL_APP_PASSWORD`)
+3. Save HTML to `./briefing-output/briefing-YYYY-MM-DD.html` and log
+
+### Email types
+
+#### Full briefing email
+
+**Subject**: `[Birding] Migration active — {intensity} night, {top notable species}`
+
+**Structure** (table-based HTML, inline CSS only, mobile-friendly):
+
+```
+┌─────────────────────────────────┐
+│  3-bullet executive summary      │  Plain text, fits email preview pane
+│  • Last night: X birds (HIGH)   │
+│  • Tonight: south winds, clear  │
+│  • Hot spot: Otto Armleder      │
+│    → Connecticut Warbler (photo) │
+├─────────────────────────────────┤
+│  Migration Traffic card          │  BirdCast data
+│  Weather card                    │  NWS overnight + morning
+│  Top 3 Hotspots                  │  With species counts + notable
+│  Rare/Notable Alerts             │  + iNat verification badges
+├─────────────────────────────────┤
+│  7-day migration bar chart       │  PNG, base64 inline
+│  Warbler frequency trend line    │  PNG, base64 inline
+└─────────────────────────────────┘
+```
+
+Charts rendered server-side using `chartjs-node-canvas`.
+**New dependency**: `npm install chartjs-node-canvas chart.js`
+
+#### Quiet period email
+
+**Subject**: `[Birding] Migration quiet — checking back {date}`
+
+**Structure**: 3-4 sentences only. No charts. Example:
+```
+Migration has been light for the past 4 nights (average 28,000 birds/night).
+North winds and rain in the forecast through Thursday make heavy movement
+unlikely before the weekend. I'll check back Saturday morning — if a front
+moves through Friday night, conditions could be excellent Sunday.
+
+Last notable: Cerulean Warbler at Shawnee Lookout on May 11.
+```
+
+### Rendering
+
+The agent constructs the HTML string directly in its response. For the full
+briefing, it uses the MCP tools to gather data and then assembles the email.
+
+For charts: the agent calls a helper script/tool that renders Chart.js to PNG
+via `chartjs-node-canvas` and returns base64. This runs locally (or in the
+Routine's execution context — to be confirmed).
+
+> **Open question**: Can a Routine execute `node` subprocesses or install npm
+> packages? If not, charts may need to be omitted or generated via a
+> chart-as-a-service URL. See §12.
+
+---
+
+## 8. API Reference & Rate Limits
+
+| API | Auth | Rate limit | Cache TTL used |
+|-----|------|-----------|----------------|
+| BirdCast | Hardcoded key `BIRDCAST_API_KEY_PLACEHOLDER` | Generous (undocumented) | 24h |
+| eBird v2 | `EBIRD_API_KEY` env var | 90 req/min | Taxonomy: 1wk; hotspots: 1wk |
+| NWS Weather | None (User-Agent header required) | ~1 req/sec soft limit | 1h |
+| iNaturalist | None | 60 req/min | 6h |
+| `suncalc` | N/A (npm package) | N/A | N/A |
+| Resend | `RESEND_API_KEY` | 10 req/sec | N/A |
+
+### NWS User-Agent
+
+All NWS requests must include:
+```
+User-Agent: (birding-planner, minikdj11@gmail.com)
+```
+Without this header NWS returns 403.
+
+### BirdCast API key note
+
+The key `BIRDCAST_API_KEY_PLACEHOLDER` appears to be a shared/public dashboard key. Confirm
+it's valid and acceptable for programmatic use. If BirdCast requires a proper
+API key, get one at https://birdcast.info.
+
+---
+
+## 9. Configuration & Secrets
+
+### For local MCP server development
+
+File: `ebird-birding-planner/.env` (gitignored)
+
+```
+EBIRD_API_KEY=your_key_here
+```
+
+Get a free eBird API key: https://ebird.org/api/keygen
+
+### For the Anthropic Routine
+
+Secrets stored in the Routine configuration (not in any file). The agent reads
+them from environment at runtime:
+
+| Secret name | Purpose |
+|-------------|---------|
+| `EBIRD_API_KEY` | eBird API access |
+| `RESEND_API_KEY` | Email sending |
+| `BRIEFING_EMAIL_TO` | Recipient address |
+| `BRIEFING_REGION` | eBird/BirdCast region code (default `US-OH-061`) |
+| `BRIEFING_LAT` | Latitude (default `39.1`) |
+| `BRIEFING_LNG` | Longitude (default `-84.5`) |
+| `BRIEFING_HOTSPOTS` | Comma-separated favorite locIds |
+
+### What does NOT need to be configured (hardcoded defaults)
+
+- Cincinnati coordinates (39.1, -84.5)
+- Hamilton County region code (US-OH-061)
+- Favorite hotspot names (resolved dynamically from eBird)
+- Migration season dates (Mar 15 – Jun 7, Aug 1 – Nov 15)
+
+---
+
+## 10. Repo & Version Control Setup
+
+**Status: [PLANNED]**
+
+### What to version control
+
+The `ebird-birding-planner/` directory is the project root for version control.
+The parent `/Users/djm/claude/` directory contains unrelated projects (Notion
+reading list) and should NOT be in the same repo.
+
+### Steps
+
+1. `cd ebird-birding-planner && git init`
+2. Create `.gitignore`:
+   ```
+   node_modules/
+   .env
+   stderr.log
+   briefing-output/
+   ```
+3. Initial commit with existing source
+4. Create GitHub repo (public or private — user's choice)
+5. Push: `git remote add origin <url> && git push -u origin main`
+
+### Branch strategy
+
+Simple: `main` is always deployable. Feature branches for each Phase 2 tool.
+PRs for review before merging.
+
+---
+
+## 11. Testing Plan
+
+**Status: [PLANNED]**
+
+### MCP server tools (existing)
+
+Testable via Claude Desktop: open a conversation and ask the server questions.
+No automated test suite yet.
+
+### New tools (Phase 2)
+
+For each new tool, write a minimal smoke test:
+```bash
+node -e "
+  import('./src/nws-client.js').then(({ NWSClient }) => {
+    const c = new NWSClient();
+    c.getBirdingWeather(39.1, -84.5, '2026-05-15').then(console.log);
+  });
+"
+```
+
+Test offline/failure path: verify that `{ weatherUnavailable: true }` is
+returned when NWS is unreachable (mock with a bad URL in test env).
+
+### Routine agent
+
+1. Trigger the Routine manually via Claude Desktop
+2. Verify correct email arrives in inbox
+3. Verify quiet-period logic: manually call with low-migration data and confirm
+   the agent sends the quiet email and reschedules
+
+### Email rendering
+
+Send test emails to both Gmail and Apple Mail. Check:
+- Images load (base64 inline PNGs)
+- Layout doesn't break on mobile
+- Subject line fits preview pane
+- Unsubscribe text present in footer
+
+---
+
+## 12. Open Questions
+
+These need answers before or during implementation. Update this section when
+resolved.
+
+| # | Question | Status | Answer |
+|---|----------|--------|--------|
+| 1 | Does an Anthropic Routine have access to MCP tools registered in Claude Desktop, or does it run in a clean context? | **Open** | — |
+| 2 | Can a Routine execute Node.js subprocesses (e.g. to render charts via chartjs-node-canvas)? | **Open** | — |
+| 3 | Is the BirdCast API key `BIRDCAST_API_KEY_PLACEHOLDER` a valid key for programmatic use, or is it a scrape of the dashboard? | **Open** | — |
+| 4 | What is the Routine's compute/memory limit? A full briefing with 14 API calls may take 30–60 seconds. | **Open** | — |
+| 5 | Resend free tier: does it support sending from a custom domain, or only `@resend.dev` test addresses? | **Open** | Resend requires a verified domain for custom From addresses; `@resend.dev` works for testing |
+| 6 | Should the quiet-period reschedule be implemented as updating the Routine's cron schedule, or as the agent simply not calling the email tools and relying on a state flag stored somewhere? | **Open** | Leaning toward cron update; simpler than external state |
+| 7 | Does the Routine need to stay within migration season bounds automatically, or will we configure separate Routines for spring and fall? | **Open** | — |
+
+---
+
+## Change Log
+
+| Date | Change |
+|------|--------|
+| 2026-05-15 | Initial spec created. Infrastructure decision: Anthropic Routines. All Phase 2 tools and enrichments documented. |

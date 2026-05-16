@@ -1,0 +1,26 @@
+{
+  "name": "ebird-birding-planner",
+  "version": "1.0.0",
+  "description": "MCP server for birding trip planning using eBird and BirdCast data",
+  "main": "src/index.js",
+  "bin": {
+    "ebird-birding-planner": "src/index.js"
+  },
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "mcp": "node src/index.js"
+  },
+  "keywords": [
+    "ebird",
+    "birdcast",
+    "mcp",
+    "birding",
+    "migration",
+    "model-context-protocol"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.1"
+  }
+}
