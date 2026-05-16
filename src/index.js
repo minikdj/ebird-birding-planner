@@ -1049,6 +1049,35 @@ async function resolveDestination(raw) {
   return dest;
 }
 
+async function loadLifeList(csvPath) {
+  if (!csvPath) return null;
+  try {
+    const { readFile } = await import('fs/promises');
+    const content = await readFile(csvPath, 'utf8');
+    const seen = new Set();
+    const lines = content.split('\n');
+    for (let i = 1; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (!line) continue;
+      // Common Name is column index 1; species names never contain commas
+      const firstComma = line.indexOf(',');
+      const secondComma = line.indexOf(',', firstComma + 1);
+      if (firstComma < 0 || secondComma < 0) continue;
+      const name = line.slice(firstComma + 1, secondComma).trim();
+      // Normalize parenthetical subspecies: "Rock Pigeon (Feral Pigeon)" → "Rock Pigeon"
+      const normalized = name.replace(/\s*\(.*?\)$/, '').trim();
+      if (normalized) {
+        seen.add(name);
+        seen.add(normalized);
+      }
+    }
+    return seen.size > 0 ? seen : null;
+  } catch (err) {
+    process.stderr.write(`Life list CSV error: ${err.message}\n`);
+    return null;
+  }
+}
+
 async function handlePlanVacationBirding(args) {
   const homeRegion = args.home_region || DEFAULTS.regionCode;
   const destination = await resolveDestination(args.destination);
@@ -1066,8 +1095,8 @@ async function handlePlanVacationBirding(args) {
 
   const { lat, lng, regionCode } = destination;
 
-  // Fetch all data in parallel
-  const [nearbyHotspots, notableObs, destSpecies, homeSpecies, birdingWin] = await Promise.all([
+  // Fetch all data in parallel — life list loads alongside API calls
+  const [nearbyHotspots, notableObs, destSpecies, homeSpecies, birdingWin, lifeList] = await Promise.all([
     ebird.getNearbyHotspots(lat, lng, 50).catch(() => []),
     ebird.getNearbyNotableObservations(lat, lng, 14, 50).catch(() => []),
     regionCode
@@ -1075,6 +1104,7 @@ async function handlePlanVacationBirding(args) {
       : Promise.resolve(null),
     birdcast.getExpectedSpecies(homeRegion, tripStartDate, { ignoreSeasonCheck: true }).catch(() => null),
     handleBirdingWindow({ lat, lng, date: tripStartDate }).catch(() => null),
+    loadLifeList(process.env.EBIRD_LIFE_LIST_CSV),
   ]);
 
   // Rank top 15 hotspots by all-time count, then re-rank by recent checklist count
@@ -1095,89 +1125,156 @@ async function handlePlanVacationBirding(args) {
     .slice(0, 5);
 
   // Compute target species using BirdCast historical bar chart frequencies
-  let targetSpecies = { wontFindInCincinnati: [], rareInCincinnati: [] };
+  let targetSpecies;
   let dataNote;
 
-  if (destSpecies && homeSpecies) {
-    const homeMap = new Map(homeSpecies.map((s) => [s.commonName, s.probability]));
+  if (destSpecies) {
+    const homeMap = homeSpecies
+      ? new Map(homeSpecies.map((s) => [s.commonName, s.probability]))
+      : new Map();
 
     let destThreshold = 0.15;
-    let homeThreshold = 0.10;
+    const homeThreshold = 0.10;
 
     let pool = destSpecies
       .filter((s) => s.commonName && !NOISE_SPECIES.has(s.commonName))
       .filter((s) => s.probability >= destThreshold)
-      .filter((s) => (homeMap.get(s.commonName) ?? 0) < homeThreshold)
       .map((s) => ({ ...s, homeProbability: homeMap.get(s.commonName) ?? 0 }));
 
-    // Too many results: tighten thresholds
-    if (pool.length > 40) {
-      pool = pool.filter((s) => s.probability > 0.25 && s.homeProbability < 0.05);
+    if (lifeList) {
+      // Life-list mode: primary split is seen vs. not seen
+      // Still filter to species that are rare/absent in Cincinnati to keep the list focused
+      pool = pool.filter((s) => s.homeProbability < homeThreshold);
+
+      // Tighten if too many
+      if (pool.length > 40) {
+        pool = pool.filter((s) => s.probability > 0.25 && s.homeProbability < 0.05);
+      }
+      // Relax if too few
+      if (pool.length < 5) {
+        destThreshold = 0.10;
+        pool = destSpecies
+          .filter((s) => s.commonName && !NOISE_SPECIES.has(s.commonName))
+          .filter((s) => s.probability >= destThreshold)
+          .filter((s) => (homeMap.get(s.commonName) ?? 0) < homeThreshold)
+          .map((s) => ({ ...s, homeProbability: homeMap.get(s.commonName) ?? 0 }));
+      }
+
+      const toEntry = (s) => ({
+        name: s.commonName,
+        destinationFrequency: Math.round(s.probability * 100) / 100,
+        cincinnatiFrequency: Math.round(s.homeProbability * 100) / 100,
+        onYourLifeList: lifeList.has(s.commonName),
+      });
+
+      const notSeen = pool.filter((s) => !lifeList.has(s.commonName));
+      const alreadySeen = pool.filter((s) => lifeList.has(s.commonName));
+
+      targetSpecies = {
+        newToYourLifeList: notSeen
+          .sort((a, b) => b.probability - a.probability)
+          .slice(0, 15)
+          .map(toEntry),
+        seenBeforeButRareHere: alreadySeen
+          .sort((a, b) => b.probability - a.probability)
+          .slice(0, 10)
+          .map(toEntry),
+      };
+
+      const lifeTally = lifeList.size;
+      dataNote = `Using your eBird life list (${lifeTally} species). ` +
+        `"New to your life list" = findable here (>${Math.round(destThreshold * 100)}% frequency) but not in your records. ` +
+        `Frequencies from BirdCast historical bar chart for the week of ${tripStartDate}.`;
+    } else {
+      // No life list: fall back to Cincinnati frequency comparison
+      pool = pool.filter((s) => s.homeProbability < homeThreshold);
+
+      if (pool.length > 40) {
+        pool = pool.filter((s) => s.probability > 0.25 && s.homeProbability < 0.05);
+      }
+
+      let similarNote = null;
+      if (pool.length < 5) {
+        destThreshold = 0.10;
+        pool = destSpecies
+          .filter((s) => s.commonName && !NOISE_SPECIES.has(s.commonName))
+          .filter((s) => s.probability >= destThreshold)
+          .filter((s) => (homeMap.get(s.commonName) ?? 0) < homeThreshold)
+          .map((s) => ({ ...s, homeProbability: homeMap.get(s.commonName) ?? 0 }));
+        similarNote = 'This destination has similar species to Cincinnati — thresholds relaxed to show the most distinctive local birds.';
+      }
+
+      const toEntry = (s) => ({
+        name: s.commonName,
+        destinationFrequency: Math.round(s.probability * 100) / 100,
+        cincinnatiFrequency: Math.round(s.homeProbability * 100) / 100,
+      });
+
+      targetSpecies = {
+        wontFindInCincinnati: pool
+          .filter((s) => s.homeProbability < 0.02)
+          .sort((a, b) => b.probability - a.probability)
+          .slice(0, 15)
+          .map(toEntry),
+        rareInCincinnati: pool
+          .filter((s) => s.homeProbability >= 0.02)
+          .sort((a, b) => b.probability - a.probability)
+          .slice(0, 15)
+          .map(toEntry),
+      };
+
+      dataNote = similarNote
+        ?? `Frequencies from BirdCast historical bar chart for the week of ${tripStartDate}. Set EBIRD_LIFE_LIST_CSV for personalized life-list comparisons.`;
     }
-
-    let similarNote = null;
-    // Too few results: relax thresholds
-    if (pool.length < 5) {
-      destThreshold = 0.10;
-      pool = destSpecies
-        .filter((s) => s.commonName && !NOISE_SPECIES.has(s.commonName))
-        .filter((s) => s.probability >= destThreshold)
-        .filter((s) => (homeMap.get(s.commonName) ?? 0) < homeThreshold)
-        .map((s) => ({ ...s, homeProbability: homeMap.get(s.commonName) ?? 0 }));
-      similarNote = 'This destination has similar species to Cincinnati — thresholds relaxed to show the most distinctive local birds.';
-    }
-
-    const toEntry = (s) => ({
-      name: s.commonName,
-      destinationFrequency: Math.round(s.probability * 100) / 100,
-      cincinnatiFrequency: Math.round(s.homeProbability * 100) / 100,
-    });
-
-    targetSpecies.wontFindInCincinnati = pool
-      .filter((s) => s.homeProbability < 0.02)
-      .sort((a, b) => b.probability - a.probability)
-      .slice(0, 15)
-      .map(toEntry);
-
-    targetSpecies.rareInCincinnati = pool
-      .filter((s) => s.homeProbability >= 0.02)
-      .sort((a, b) => b.probability - a.probability)
-      .slice(0, 15)
-      .map(toEntry);
-
-    dataNote = similarNote
-      ?? `Species frequencies from BirdCast historical bar chart for the week of ${tripStartDate}. This is multi-year eBird data — great for planning trips weeks or months in advance.`;
   } else {
+    targetSpecies = lifeList
+      ? { newToYourLifeList: [], seenBeforeButRareHere: [] }
+      : { wontFindInCincinnati: [], rareInCincinnati: [] };
     dataNote = regionCode
       ? 'BirdCast frequency data unavailable for this destination or date. Target species comparison omitted.'
       : 'No region code available — target species comparison requires a county-level region code or recognized city.';
   }
 
-  // Notable recent sightings (deduped by species)
+  // Notable recent sightings (deduped by species), annotated with life-list status
   const notableRecentSightings = Array.isArray(notableObs)
     ? [...new Map(notableObs.map((o) => [o.speciesCode, o])).values()]
-        .map((o) => ({ name: o.comName, date: o.obsDt, location: o.locName }))
+        .map((o) => ({
+          name: o.comName,
+          date: o.obsDt,
+          location: o.locName,
+          ...(lifeList ? { onYourLifeList: lifeList.has(o.comName) } : {}),
+        }))
         .slice(0, 10)
     : [];
 
   // Build summary
-  const won = targetSpecies.wontFindInCincinnati.length;
-  const rare = targetSpecies.rareInCincinnati.length;
+  const primaryCount = lifeList
+    ? (targetSpecies.newToYourLifeList?.length ?? 0)
+    : (targetSpecies.wontFindInCincinnati?.length ?? 0);
+  const secondaryCount = lifeList
+    ? (targetSpecies.seenBeforeButRareHere?.length ?? 0)
+    : (targetSpecies.rareInCincinnati?.length ?? 0);
+
   const topSpot = hotspotData[0];
   const parts = [`${destination.name} — ${tripLabel}.`];
-  if (won > 0 || rare > 0) {
-    parts.push(`★ ${won} species you won't find in Cincinnati, ▲ ${rare} more that are rare there but common here.`);
+  if (primaryCount > 0 || secondaryCount > 0) {
+    if (lifeList) {
+      parts.push(`★ ${primaryCount} species not on your life list that are findable here, ▲ ${secondaryCount} you've seen before but are rare in Cincinnati.`);
+    } else {
+      parts.push(`★ ${primaryCount} species you won't find in Cincinnati, ▲ ${secondaryCount} more that are rare there but common here.`);
+    }
   }
   if (topSpot) {
     parts.push(`Top spot: ${topSpot.name} — ${topSpot.recentChecklists} checklists and ${topSpot.recentSpecies} species in the last week.`);
   }
-  if (destSpecies && homeSpecies) {
+  if (destSpecies) {
     parts.push('Frequency data is historical (multi-year eBird records) — reliable for planning ahead regardless of current conditions.');
   }
 
   return {
     destination: destination.name,
     dates: tripLabel,
+    lifeListLoaded: lifeList ? `${lifeList.size} species` : null,
     birdingWindow: birdingWin,
     topHotspots: hotspotData,
     targetSpecies,

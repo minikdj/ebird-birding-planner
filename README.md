@@ -54,7 +54,8 @@ Add to your Claude Desktop `claude_desktop_config.json`:
       "args": ["/absolute/path/to/ebird-birding-planner/src/index.js"],
       "env": {
         "EBIRD_API_KEY": "your_key_here",
-        "BIRDCAST_API_KEY": "your_key_here"
+        "BIRDCAST_API_KEY": "your_key_here",
+        "EBIRD_LIFE_LIST_CSV": "/path/to/MyEBirdData.csv"
       }
     }
   }
