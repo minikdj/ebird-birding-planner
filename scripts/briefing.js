@@ -15,6 +15,9 @@ async function main() {
     birdcastKey: process.env.BIRDCAST_API_KEY,
     resendKey: process.env.RESEND_API_KEY,
     emailTo: process.env.BRIEFING_EMAIL_TO,
+    // Must be a verified sender domain in your Resend account.
+    // @resend.dev only delivers to the account owner's email — set your own domain here.
+    emailFrom: process.env.BRIEFING_FROM_EMAIL || 'Birding Briefing <briefing@resend.dev>',
     lat: parseFloat(process.env.BRIEFING_LAT || String(DEFAULTS.lat)),
     lng: parseFloat(process.env.BRIEFING_LNG || String(DEFAULTS.lng)),
     region: process.env.BRIEFING_REGION || DEFAULTS.regionCode,
@@ -80,20 +83,28 @@ async function main() {
 
   let sent = false;
 
-  if (config.resendKey && config.emailTo) {
+  if (!config.resendKey) {
+    console.error('RESULT: EMAIL NOT SENT — RESEND_API_KEY is not configured as a Routine secret.');
+  } else if (!config.emailTo) {
+    console.error('RESULT: EMAIL NOT SENT — BRIEFING_EMAIL_TO is not configured as a Routine secret.');
+  } else {
     try {
       const { Resend } = await import('resend');
       const resend = new Resend(config.resendKey);
-      await resend.emails.send({
-        from: 'Birding Briefing <briefing@resend.dev>',
+      const response = await resend.emails.send({
+        from: config.emailFrom,
         to: config.emailTo,
         subject,
         html,
       });
-      console.log('Email sent via Resend');
-      sent = true;
+      if (response?.error) {
+        console.error('RESULT: EMAIL NOT SENT — Resend API error:', JSON.stringify(response.error));
+      } else {
+        console.log(`RESULT: EMAIL SENT via Resend to ${config.emailTo} (id: ${response?.data?.id ?? 'unknown'})`);
+        sent = true;
+      }
     } catch (err) {
-      console.error('Resend failed:', err.message);
+      console.error('RESULT: EMAIL NOT SENT — Resend threw:', err.message);
     }
   }
 
@@ -101,7 +112,7 @@ async function main() {
     await mkdir('./briefing-output', { recursive: true });
     const filename = `./briefing-output/briefing-${today}.html`;
     await writeFile(filename, html);
-    console.log(`No email provider configured. HTML saved to ${filename}`);
+    console.log(`RESULT: HTML SAVED to ${filename} (no email sent — fix secrets above)`);
   }
 
   process.exit(0);
