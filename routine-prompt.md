@@ -100,7 +100,7 @@ Before writing anything, take a moment to reason about the data holistically. As
 Consider:
 - Is migration exceptional (very high or very low for the season)?
 - Does `weather.today.rainImpactNote` exist? If so, this must be prominently mentioned — rain directly affects whether it's worth going out.
-- Are there notable/rare species that override everything else?
+- Are there genuine **prize birds** in `notableObservations`? For each notable species, ask yourself: Is this rare for the county? Is this a species at peak passage that requires effort to find? Is this a vagrant that almost never appears here? If yes → it deserves a dedicated Chase Target card. Use your knowledge of species rarity and status — the data only tells you a bird was seen, you tell the birder why it matters and how to find it.
 - Is the overnight wind pattern creating a fallout opportunity (rain overnight + clearing at dawn)?
 - Does the 5-day outlook show a much better day coming up soon? If so, say so.
 - Is the season running significantly above or below historical average? Check `migration.season.comparisonNote` and `weeklyTrend`.
@@ -119,21 +119,34 @@ Structure your email as inline-CSS HTML (mobile-friendly, max-width 600px, table
 1. **Executive summary** (3 bullets at top, fits email preview pane):
    - Migration intensity last night
    - Rain / weather impact on this morning's birding (if `rainImpactNote` is present, make this bullet 2)
-   - Top notable species OR best upcoming day if today is poor
+   - Top chase target species OR best upcoming day if today is poor
 
-2. **Migration Last Night** — BirdCast birds aloft, isHigh flag, flight direction/speed if available, season total vs historical average with weekly trend. Use `migration.narrativeSummary` as a starting point.
+2. **★ Today's Chase Targets** — Only include this section if there are genuine prize birds worth making a special effort for. A "prize bird" is one that is: rare or unusual for the county/region, at a particularly meaningful moment in its migration window (peak passage for a hard-to-find species), a species that takes real effort to locate, or a genuine vagrant/rarity. **Do not include common migrants here just because they appear in `notableObservations`.**
 
-3. **Weather & Birding Conditions** — Overnight wind, morning forecast, `migrationInterpretation`, and critically: if `rainImpactNote` is not null, include it prominently with practical advice.
+   For each chase target (1–3 max), write a dedicated card styled with a red left border (`#c0392b`). Each card must include:
+   - **Species name** (prominent, in red) + location + date last seen
+   - **Why it's a prize** (1 sentence on county rarity, state status, or significance — use your knowledge, not just the data)
+   - **Where to look** within the hotspot: specific habitat, trail section, time of day (e.g., "dense shrubby understory near the north trail edge at Otto Armleder")
+   - **Field ID** (1–2 sentences): the key song, behavior, or visual that will help find it ("listen for a loud emphatic *beecher-beecher-beecher*; it walks on the ground with a bobbing gait")
+   - **Time-sensitivity**: is it likely to linger (e.g., a lingering waterbird) or must be checked today (e.g., a warbler at peak passage)?
 
-4. **Top Hotspots This Week** — Top 3–5 from aggregate data, showing 7-day species count. If `morningRainLikely` is true, add a note that conditions may suppress activity at open hotspots. Cross-reference `notableObservations` by location to call out any hotspot-specific finds.
+   Cross-reference `migration.lastNight`: if it was a HIGH night, note that there may be additional individuals of target species present beyond the known bird.
 
-5. **Notable / Rare Sightings** — Only if `hasNotables` is true. List species, location, date. Highlight anything exceptional.
+   If there are no genuine prize birds today, **omit this section entirely** — do not include a "Chase Targets" section with common or moderately unusual birds.
 
-6. **5-Day Outlook** — Table of upcoming days. Call out the single best day explicitly. If today is poor (rain, north winds), tell the birder which day to target instead and why.
+3. **Migration Last Night** — BirdCast birds aloft, isHigh flag, flight direction/speed if available, season total vs historical average with weekly trend. Use `migration.narrativeSummary` as a starting point.
 
-7. **Birding Window** — Civil twilight, sunrise, recommended arrival, activity cutoff.
+4. **Weather & Birding Conditions** — Overnight wind, morning forecast, `migrationInterpretation`, and critically: if `rainImpactNote` is not null, include it prominently with practical advice.
 
-Adjust emphasis freely. If rain dominates, lead with that. If a Kirtland's Warbler was just spotted, that's the lede. If the season is 40% above average and last night was HIGH, open with that excitement.
+5. **Top Hotspots This Week** — Top 3–5 from aggregate data, showing 7-day species count. If `morningRainLikely` is true, add a note that conditions may suppress activity at open hotspots. Cross-reference `notableObservations` by location to call out any hotspot-specific finds.
+
+6. **Notable / Rare Sightings** — Only if `hasNotables` is true. List species, location, date. The most exceptional birds should already have a Chase Target card above — this section is the supporting cast: a table of all notable observations for completeness.
+
+7. **5-Day Outlook** — Table of upcoming days. Call out the single best day explicitly. If today is poor (rain, north winds), tell the birder which day to target instead and why.
+
+8. **Birding Window** — Civil twilight, sunrise, recommended arrival, activity cutoff.
+
+Adjust emphasis freely. If rain dominates, lead with that. If a Kirtland's Warbler was just spotted, that's the entire email. If the season is 40% above average and last night was HIGH, open with that excitement.
 
 **For QUIET_PERIOD:**
 
