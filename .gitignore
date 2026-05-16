@@ -2,5 +2,6 @@ node_modules/
 .env
 stderr.log
 briefing-output/
+briefing-draft.json
 *.log
 .DS_Store

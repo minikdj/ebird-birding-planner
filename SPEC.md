@@ -102,72 +102,63 @@ to arrive — and make a judgment call.
 
 ## 3. Routine Agent Design
 
-### Triage prompt (runs first, fast)
+**Current prompt**: See `routine-prompt.md` in the repo root for the full prompt
+to paste into claude.ai → Routines. Summary of the 7-step flow below.
+
+### Execution flow
 
 ```
-You are a migration monitoring agent for Cincinnati, OH (Hamilton County,
-US-OH-061, 39.1°N 84.5°W).
+Step 1: npm install --silent && node scripts/triage.js
+        → Reads recommendation from JSON output
 
-Today is {DATE}. Time is 4:00 AM ET.
+Step 2: SILENT_SKIP → log and done
+        FULL_BRIEFING or QUIET_PERIOD → continue
 
-You are running as a Claude Code cloud session. The project repo has been cloned
-to the working directory. Use the bash tool to run Node scripts.
+Step 3: node scripts/aggregate.js
+        → Comprehensive data JSON (~25s)
 
-STEP 1 — TRIAGE (do this first, takes ~10 seconds):
-  Run: node scripts/triage.js
-  This script fetches BirdCast migration data and NWS weather for last night
-  and tonight, then prints a JSON summary to stdout.
-  Reason about the JSON output to proceed.
+Step 4: Agent reasons about data holistically
+        (rain impact? exceptional season? fallout conditions? best upcoming day?)
 
-STEP 2 — DECIDE:
-  Based on the triage output, choose one of three actions:
+Step 5: Agent writes email HTML + subject (full briefing or quiet note)
 
-  A) FULL BRIEFING — send if ANY of these are true:
-     - Last night's migration was HIGH intensity (>500K birds over Hamilton County)
-     - Any rare/unusual species reported in the last 48h within 50km
-     - Tonight's conditions favor heavy migration (south winds >10mph, clear skies)
-     - It's been more than 5 days since the last briefing (send a catch-up)
+Step 6: Agent saves briefing-draft.json { subject, htmlBody }
 
-  B) QUIET PERIOD — send a short note if:
-     - Migration has been LOW for 3+ consecutive nights
-     - Next 4-day forecast shows unfavorable conditions (north winds, persistent rain)
-     - You have NOT sent a quiet-period note in the last 5 days
-     Then: reschedule this Routine to run again in 4 days.
-
-  C) SILENT SKIP — exit without sending if:
-     - You are within a quiet period (last action was QUIET PERIOD < 5 days ago)
-     - AND conditions have not changed meaningfully
-     Note: You have no persistent memory between runs, so reason from the data:
-     if migration has been consistently low for >5 days, assume quiet period.
-
-STEP 3 — EXECUTE:
-  For FULL BRIEFING: run node scripts/briefing.js — this script gathers full
-    data from all sources, renders the HTML email, and sends it via Resend.
-  For QUIET PERIOD: run node scripts/briefing.js --quiet — sends short note,
-    then call update_scheduled_task to reschedule to +4 days.
-  For SILENT SKIP: log "Skipping — quiet period active" and exit.
+Step 7: node scripts/send.js briefing-draft.json
+        → EMAIL SENT or HTML SAVED
+        → If QUIET_PERIOD: also call update_scheduled_task +4 days
 ```
 
-### Scoring rubric the agent uses
+### Triage scoring rubric (computed in `scripts/triage.js`)
 
-| Signal | Weight | Notes |
-|--------|--------|-------|
-| BirdCast cumulative birds (last night) | High | >500K = almost always send |
-| BirdCast `isHigh` flag | High | Overrides other signals |
-| Notable species in 50km (eBird) | High | Any review-species = always send |
-| Tonight's wind direction (NWS) | Medium | S/SW winds = favorable; N/NW = poor |
-| Consecutive low nights | Medium | 3+ nights of <50K = quiet period |
-| Days since last briefing | Medium | >5 days = send catch-up regardless |
-| Pressure trend | Low | Falling = front coming, rising = fallout window |
+| Signal | Score delta | Notes |
+|--------|-------------|-------|
+| BirdCast `isHigh` flag | +4 | Always triggers FULL_BRIEFING regardless of total score |
+| Cumulative birds > 500K | +3 | Exceptional night |
+| Cumulative birds > 100K | +2 | Active night |
+| Cumulative birds > 50K | +1 | Moderate night |
+| Notable species present (eBird, 50km, 48h) | +2 | Any unusual species = always worth sending |
+| S or SW overnight wind + precip < 30% | +2 | Favorable migration conditions |
+| N or NW wind + precip > 60% | -2 | Suppressed migration |
+
+Thresholds: score ≥ 5 OR isHigh OR notables → `FULL_BRIEFING`; score ≥ 2 → `QUIET_PERIOD`; score < 2 → `SILENT_SKIP`.
+
+### Why the agent writes the email (not a script)
+
+The previous architecture used `briefing.js` — a template that filled fixed slots
+regardless of conditions. The current architecture puts the agent in the rendering
+role so it can:
+- Suppress irrelevant sections (no 5-day outlook if every day shows rain)
+- Elevate unusual findings (rare species becomes the lede, not bullet 3)
+- Cross-reference data (high overnight rain + clearing at dawn = fallout note)
+- Write accurate quiet notes with actual data ("4 nights below 50K" not generic copy)
+- Flag rain impact on morning birding explicitly when it matters
 
 ### Rescheduling logic
 
-When the agent decides QUIET PERIOD:
-1. Note today's date
-2. Estimate when conditions improve (next front, end of unfavorable pattern)
-3. Default to +4 days if uncertain
-4. Call `update_scheduled_task` to set next run to that date
-5. Revert to daily schedule on the resumed run
+On QUIET_PERIOD: agent calls `update_scheduled_task` to reschedule +4 days.
+On the resumed run: triage re-evaluates from current data; if conditions have
+improved (score ≥ 5), sends full briefing and reverts to daily cadence.
 
 ---
 
@@ -226,6 +217,8 @@ Because Routines cannot reach the local MCP server, a parallel execution path
 uses standalone scripts under `scripts/` that import the same underlying client
 code from `src/`. This keeps all API logic in one place and avoids duplication.
 
+### Directory layout
+
 ```
 ebird-birding-planner/
 ├── src/
@@ -237,37 +230,100 @@ ebird-birding-planner/
 │   ├── inaturalist-client.js ← shared by MCP server AND scripts
 │   └── utils.js              ← Cache, resolveLocation, toYMD, CITY_LOOKUP, …
 └── scripts/
-    ├── triage.js             ← fast check for Routine STEP 1
-    ├── briefing.js           ← full data gather + email for Routine STEP 3
+    ├── triage.js             ← fast triage check (~10s): FULL_BRIEFING / QUIET_PERIOD / SILENT_SKIP
+    ├── aggregate.js          ← comprehensive data aggregation (~25s): all migration + weather + hotspot data
+    ├── send.js               ← email delivery: reads briefing-draft.json, sends via Resend/fallback
+    ├── briefing.js           ← legacy template-based briefing (kept as fallback reference)
     └── test.js               ← smoke test suite (6 tests)
 ```
 
+### Routine execution flow
+
+```
+Step 1: node scripts/triage.js
+        → JSON: { recommendation, migrationScore, notableSpecies, weather, recommendationReason }
+        → SILENT_SKIP → done
+        → FULL_BRIEFING or QUIET_PERIOD → continue
+
+Step 2: node scripts/aggregate.js
+        → JSON: { migration, weather, birdingWindow, hotspots, notableObservations, flags }
+        → agent reads JSON and reasons holistically
+
+Step 3: Agent writes email body + subject, saves to briefing-draft.json
+
+Step 4: node scripts/send.js briefing-draft.json
+        → RESULT: EMAIL SENT  (or HTML SAVED as fallback)
+```
+
+**Key design principle:** `triage.js` is cheap (one fast decision pass). `aggregate.js` is comprehensive but only runs when we've decided to send. The agent is the email renderer — it reasons about the full data rather than filling a template, so contextual factors (rain suppressing activity, exceptional season totals, fallout conditions) can influence the email content naturally.
+
 ### `scripts/triage.js`
 
-Fast triage check that the Routine runs first (~10 seconds). Imports
-`EBirdClient` and `BirdCastClient` directly. Fetches:
-- BirdCast migration intensity for last night
-- NWS overnight wind direction/speed and tonight's forecast
+Fast triage check (~10 seconds). Fetches BirdCast last-night intensity, eBird
+notable observations (last 48h), and NWS overnight weather. Outputs JSON with:
 
-Exits with a JSON object printed to stdout so the Routine agent can reason about
-it. No email sending. Designed to be cheap and quick.
+| Field | Description |
+|-------|-------------|
+| `recommendation` | `"FULL_BRIEFING"` / `"QUIET_PERIOD"` / `"SILENT_SKIP"` |
+| `migrationScore` | 0–10 composite score (BirdCast intensity + notable bonus + weather bonus) |
+| `notableSpecies` | Array of notable species common names (last 48h, 50km) |
+| `notableCount` | Length of notableSpecies |
+| `lastNight` | `{ cumulativeBirds, formattedCount, isHigh, peakDirection, peakSpeedMph }` |
+| `weather` | `{ overnightWind, precipProbability, migrationInterpretation, weatherUnavailable }` |
+| `seasonStatus` | `"above average by 12%"` / `"below average by 8%"` / `null` |
+| `recommendationReason` | Human-readable explanation of the decision |
 
-### `scripts/briefing.js`
+Scoring rubric: `isHigh` → +4, `>500K birds` → +3, `>100K` → +2, `>50K` → +1,
+notable species present → +2, S/SW wind + low precip → +2, N/NW + heavy rain → -2.
+Thresholds: score ≥ 5 OR `isHigh` OR notables → FULL_BRIEFING; score ≥ 2 → QUIET_PERIOD;
+score < 2 → SILENT_SKIP.
 
-Full data gather, email rendering, and send. Accepts a `--quiet` flag to send
-the short quiet-period email instead of the full briefing. Imports all clients
-from `src/`, gathers all data sources in parallel, renders the HTML email, and
-sends via Resend. HTML is sanitised throughout with `escHtml()` before
-interpolation into email templates.
+### `scripts/aggregate.js`
 
-Both scripts read secrets from environment variables (populated by the Routine's
-secret configuration at runtime).
+Comprehensive data aggregation (~25 seconds). Fetches all data sources in parallel.
+Outputs JSON with:
+
+| Field | Description |
+|-------|-------------|
+| `migration.lastNight` | BirdCast live: count, isHigh, peak flight direction/speed/altitude |
+| `migration.season` | Season total vs multi-year average, weekly trend (building/declining/steady) |
+| `migration.topExpectedSpecies` | Top 20 expected species by historical probability for this week |
+| `migration.narrativeSummary` | Plain-English BirdCast summary |
+| `weather.today` | NWS overnight + morning forecast; `rainImpactNote` if rain affects birding |
+| `weather.outlook` | 5-day forward outlook: wind, precip, migration intensity, rain impact, birding window per day |
+| `birdingWindow` | Civil twilight, sunrise, golden hour end, solar noon, activity cutoff (temp-adjusted) |
+| `hotspots` | Top 5 by 7-day species count (active community proxy); filtered to > 0 species |
+| `notableObservations` | Deduplicated notable/rare species (last 14 days, 50km); sorted by recency |
+| `flags` | `{ highMigrationNight, hasNotables, morningRainLikely, favorableOvernightWind }` |
+
+**Rain impact detection:** `rainImpactNote` is non-null when morning precip ≥ 40%.
+At ≥ 70%: heavy rain, activity significantly suppressed, advice to check sheltered edges.
+At 40–69%: moderate rain possible, plan shorter window.
+Special case: high overnight precip + clear morning = potential fallout note.
+
+### `scripts/send.js`
+
+Reads `briefing-draft.json` (format: `{ subject, htmlBody, emailTo?, emailFrom? }`),
+delivers via:
+1. Resend (primary — `RESEND_API_KEY`)
+2. SendGrid (fallback — `SENDGRID_API_KEY`)
+3. Save to `./briefing-output/briefing-YYYY-MM-DD.html` (final fallback)
+
+Outputs `RESULT: EMAIL SENT` or `RESULT: HTML SAVED` to stdout.
+Exits 0 on success or disk-save fallback; exits 1 only on unrecoverable errors
+(missing draft file, missing required fields in draft).
+
+### `scripts/briefing.js` (legacy)
+
+Original template-based briefing kept as a reference and fallback. Not used by the
+current Routine flow. Can still be run manually:
+- `node scripts/briefing.js` → full HTML email
+- `node scripts/briefing.js --quiet` → short quiet-period email
 
 ### `scripts/test.js`
 
-6-test smoke suite. Verifies that each client module can successfully make a
-real API call with the credentials in environment. Run with `node scripts/test.js`.
-Currently all 6/6 passing.
+6-test smoke suite. Verifies each client module with real API calls.
+Run with `node scripts/test.js`. All 6/6 passing.
 
 ---
 
@@ -1016,3 +1072,4 @@ resolved.
 | 2026-05-16 | Spec cleanup: fixed time references (5:45 AM → 4:00 AM ET), marked Section 4B [DONE], updated Section 12 L9 as fixed, added email chart gap note, updated Section 11 to IN PROGRESS. |
 | 2026-05-16 | Full architecture + security + code quality re-review. Fixed R2-1 through R2-9 (HIGH/MEDIUM bugs: missing .catch(), wrong NWS coords, HTML injection, activityCutoff clamp, life list cache, package.json cleanup). Open items R2-A through R2-F tracked in Section 12. |
 | 2026-05-16 | Fixed all remaining review items: R2-B (toYMD UTC bug), R2-C (Cache unification), R2-D (InputError class), R2-E (CSV header parsing), R2-F (deduped cardinal function), L1 (tools.js module split). R2-A investigated and found correct — no fix needed. 6/6 smoke tests passing. |
+| 2026-05-16 | Architectural refactor of Routine email system: added `scripts/aggregate.js` (comprehensive data aggregation → JSON) and `scripts/send.js` (email delivery from draft JSON). Routine agent now writes the email body dynamically using its reasoning instead of filling a fixed template. Rain impact detection added. Section 3 and Section 4B updated. `routine-prompt.md` rewritten with 7-step agent flow. `briefing.js` retained as legacy fallback. |
