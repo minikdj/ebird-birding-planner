@@ -54,6 +54,9 @@ const INAT_CACHE_TTL = 6 * 60 * 60 * 1000;  // 6 hours
 
 const inflightBirdCast = new Map();
 
+// Life list cache — loaded once, never stale during server lifetime
+let _lifeListCache = undefined; // undefined = not yet loaded; null = loaded but absent
+
 // ---------------------------------------------------------------------------
 // Taxonomy + species resolution
 // ---------------------------------------------------------------------------
@@ -548,6 +551,7 @@ async function handleBirdingWindow(args) {
   if (tempF != null && tempF > 75) {
     cutoffMinutes -= Math.floor((tempF - 75) / 5) * 15;
   }
+  cutoffMinutes = Math.max(cutoffMinutes, 6 * 60); // never recommend arriving before 6 AM
   const cutoffH = Math.floor(cutoffMinutes / 60);
   const cutoffM = cutoffMinutes % 60;
   const activityCutoff = `${cutoffH > 12 ? cutoffH - 12 : cutoffH}:${String(cutoffM).padStart(2, "0")} ${cutoffH >= 12 ? "PM" : "AM"}`;
@@ -697,7 +701,10 @@ async function handleMigrationForecast(args) {
 
   // Enrich with NWS weather interpretation
   try {
-    const weather = await nws.getBirdingWeather(DEFAULTS.lat, DEFAULTS.lng, dateInfo.date);
+    const resolvedCoords = resolveLocation(regionCode) ?? { lat: DEFAULTS.lat, lng: DEFAULTS.lng };
+    const weatherLat = resolvedCoords.lat ?? DEFAULTS.lat;
+    const weatherLng = resolvedCoords.lng ?? DEFAULTS.lng;
+    const weather = await nws.getBirdingWeather(weatherLat, weatherLng, dateInfo.date);
     if (!weather.weatherUnavailable) {
       result.overnightWinds = weather.overnight;
       result.morningWeather = weather.morning;
@@ -742,11 +749,11 @@ async function handleHotspotDetails(args) {
 
   const [info, recentObs, notableObs] = await Promise.all([
     ebird.getHotspotInfo(locId).catch(() => null),
-    ebird.getRecentObservations(locId, 7),
-    ebird.getRecentObservations(locId, 14),
+    ebird.getRecentObservations(locId, 7).catch(() => []),
+    ebird.getRecentObservations(locId, 14).catch(() => []),
   ]);
 
-  const speciesSet = new Set(recentObs.map((o) => o.speciesCode));
+  const speciesSet = new Set(recentObs.map((o) => o.speciesCode).filter(Boolean));
   const speciesWithDates = {};
   for (const obs of recentObs) {
     if (!speciesWithDates[obs.speciesCode]) {
@@ -759,7 +766,7 @@ async function handleHotspotDetails(args) {
   }
 
   // Get 14-day species for "frequency" approximation
-  const allSpecies14 = new Set(notableObs.map((o) => o.speciesCode));
+  const allSpecies14 = new Set(notableObs.map((o) => o.speciesCode).filter(Boolean));
 
   return {
     summary: `${info?.locName ?? locId}: ${speciesSet.size} species in the last 7 days, ${allSpecies14.size} in the last 14 days.`,
@@ -792,7 +799,7 @@ async function handleCompareHotspots(args) {
   let nearbyHotspots = null;
   const resolvedIds = [];
   for (const input of hotspotInputs) {
-    if (input.startsWith("L")) {
+    if (/^L\d+$/.test(input)) {
       resolvedIds.push(input);
     } else {
       if (!nearbyHotspots && location.lat && location.lng) {
@@ -814,7 +821,7 @@ async function handleCompareHotspots(args) {
     resolvedIds.map(async (locId) => {
       const [info, obs] = await Promise.all([
         ebird.getHotspotInfo(locId).catch(() => null),
-        ebird.getRecentObservations(locId, 7),
+        ebird.getRecentObservations(locId, 7).catch(() => []),
       ]);
       const speciesSet = new Set(obs.map((o) => o.speciesCode));
       return {
@@ -822,7 +829,7 @@ async function handleCompareHotspots(args) {
         name: info?.locName ?? locId,
         speciesCodes: speciesSet,
         speciesNames: new Map(obs.map((o) => [o.speciesCode, o.comName])),
-        checklistCount: new Set(obs.map((o) => o.subId)).size,
+        checklistCount: new Set(obs.map((o) => o.subId).filter(Boolean)).size,
         recentSpeciesCount: speciesSet.size,
         totalSpeciesAllTime: info?.numSpeciesAllTime ?? null,
       };
@@ -968,7 +975,7 @@ async function handleBestDayToBird(args) {
       let bcData = null;
 
       if (birdcast.isInMigrationSeason(dateStr)) {
-        const bcResult = await getBirdCastData(regionCode, dateStr);
+        const bcResult = await getBirdCastData(regionCode, dateStr).catch(() => ({ live: null, season: null, species: null, summary: null }));
         bcData = bcResult.live;
         if (bcData) {
           const birds = bcData.cumulativeBirds ?? 0;
@@ -1071,7 +1078,11 @@ async function resolveDestination(raw) {
 }
 
 async function loadLifeList(csvPath) {
-  if (!csvPath) return null;
+  if (_lifeListCache !== undefined) return _lifeListCache;
+  if (!csvPath) {
+    _lifeListCache = null;
+    return null;
+  }
   try {
     const { readFile } = await import('fs/promises');
     const content = await readFile(csvPath, 'utf8');
@@ -1092,9 +1103,11 @@ async function loadLifeList(csvPath) {
         seen.add(normalized);
       }
     }
-    return seen.size > 0 ? seen : null;
+    _lifeListCache = seen.size > 0 ? seen : null;
+    return _lifeListCache;
   } catch (err) {
     process.stderr.write(`Life list CSV error: ${err.message}\n`);
+    _lifeListCache = null;
     return null;
   }
 }

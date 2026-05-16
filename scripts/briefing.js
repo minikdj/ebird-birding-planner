@@ -190,7 +190,7 @@ function buildFullHtml(data, today, config) {
     : [];
 
   const bullet2 = notableSpecies.length > 0
-    ? `&#x2605; ${notableSpecies.length} notable species nearby: ${notableSpecies.slice(0, 3).join(', ')}${notableSpecies.length > 3 ? ' +more' : ''}`
+    ? `&#x2605; ${notableSpecies.length} notable species nearby: ${notableSpecies.slice(0, 3).map(escHtml).join(', ')}${notableSpecies.length > 3 ? ' +more' : ''}`
     : '&#x25BD; No notable species flagged in the last 14 days';
 
   const bullet3 = weatherInterpretation.length > 80
@@ -242,7 +242,7 @@ function buildFullHtml(data, today, config) {
       <table width="100%" style="background:#fff;border-radius:6px;padding:16px;" cellpadding="0" cellspacing="0">
         <tr><td><strong style="font-size:13px;text-transform:uppercase;color:#555;letter-spacing:1px;">Weather Outlook</strong></td></tr>
         <tr><td style="font-size:14px;padding:8px 0;">${weatherInterpretation}</td></tr>
-        <tr><td style="font-size:13px;color:#555;">Overnight wind: ${overnightWind} &middot; Morning: ${morningTemp}&deg;F</td></tr>
+        <tr><td style="font-size:13px;color:#555;">Overnight wind: ${escHtml(String(overnightWind))} &middot; Morning: ${escHtml(String(morningTemp))}&deg;F</td></tr>
       </table>
     </td></tr>
     <tr><td style="padding:12px 20px 0;">
@@ -256,7 +256,7 @@ function buildFullHtml(data, today, config) {
       const outlookRows = (outlook || []).map(d =>
         `<tr>
           <td style="padding:6px 0;font-size:14px;width:140px;">${escHtml(d.dayName)}</td>
-          <td style="padding:6px 0;font-size:14px;width:100px;color:#555;">${d.wind} ${d.windSpeed}mph</td>
+          <td style="padding:6px 0;font-size:14px;width:100px;color:#555;">${escHtml(String(d.wind ?? ''))} ${escHtml(String(d.windSpeed ?? 0))}mph</td>
           <td style="padding:6px 0;font-size:14px;">${escHtml(d.outlook)}</td>
         </tr>`
       ).join('');

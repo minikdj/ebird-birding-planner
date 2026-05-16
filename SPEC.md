@@ -760,7 +760,7 @@ Send test emails to both Gmail and Apple Mail. Check:
 
 ## 12. Code Review Findings
 
-**Status: fixes in progress** — reviewed 2026-05-15. All CRIT and HIGH findings fixed in commit after the review. Medium findings fixed in same pass. Low findings tracked below.
+**Status: [IN PROGRESS]** — Full re-review run 2026-05-16 (architecture + security + code quality). All CRIT, HIGH, and MEDIUM findings from both passes are now fixed. Remaining open items tracked below.
 
 ### CRIT — Fix immediately
 
@@ -784,19 +784,48 @@ Send test emails to both Gmail and Apple Mail. Check:
 | M8 | `index.js:699` | `best_day_to_bird` calls `birdcast.getLiveMigration` directly, bypassing the 24h cache | Route through `getBirdCastData` |
 | M9 | `index.js:714–718` | `getRegionStats` fetched per past day but `statsNote` never used in ranking — wasted API quota | Include `stats.numSpecies` in day score, or remove the call |
 
-### LOW — Track, don't block Phase 2
+### LOW — Originally tracked
 
-| ID | File | Finding |
-|----|------|---------|
-| L1 | `index.js` | File will exceed 1200 lines after Phase 2 — split into schemas / handlers / helpers / server |
-| L2 | `ebird-client.js` | `_get` in BirdCastClient should be `#get` (true private, consistent with EBirdClient's `#enforceRateLimit`) |
-| L3 | `index.js` | `compare_hotspots` accepts unbounded hotspot arrays — cap at 10 |
-| L4 | `index.js:477` | `hotspot_details` name input has no length limit — cap at 200 chars |
-| L5 | `index.js` | Magic numbers in scoring (`×2`, `×5`, `slice(0,15)`) should be named constants |
-| L6 | `index.js:138` | `getHotspotSpeciesCounts` catch block swallows errors silently — log to stderr |
-| L7 | `index.js:741` | `best_day_to_bird` ranking ignores fetched eBird stats — fetches but doesn't score |
-| L8 | `utils.js:185` | "This weekend" returns one day in `resolveDate` but two in `resolveDateRange` — inconsistent |
-| L9 | `scripts/briefing.js` | ~~Top hotspots taken from first 3 by all-time species count — includes restricted/inactive spots with 0 recent species~~ | **FIXED** — fetch top 20, re-rank by 7-day recent species count, filter zeros |
+| ID | File | Status | Finding |
+|----|------|--------|---------|
+| L1 | `index.js` | Open | File is ~1400 lines — split into `src/tools.js` / `src/handlers.js` / thin `src/index.js` wiring. Unblocks handler unit testing. |
+| L2 | `birdcast-client.js` | **FIXED** | `_get` → `#get` (true ES private method) |
+| L3 | `index.js` | **FIXED** | `compare_hotspots` capped at 10 items |
+| L4 | `index.js` | **FIXED** | `hotspot_details` name input capped at 200 chars |
+| L5 | `index.js` | **FIXED** | Named constants for scoring weights and candidate limits |
+| L6 | `index.js` | **FIXED** | `getHotspotSpeciesCounts` catch block now logs to stderr |
+| L7 | `index.js` | **DONE** (already was) | `best_day_to_bird` stats bonus already applied at line 990 |
+| L8 | `utils.js` | **FIXED** | Comment documenting "this weekend" asymmetry |
+| L9 | `briefing.js` | **FIXED** | Top hotspots re-ranked by 7-day recent species count, zeros filtered |
+
+### Round 2 review findings (2026-05-16)
+
+From architecture, security, and code quality reviews of the full repo.
+
+#### Fixed in same pass
+
+| ID | Severity | File | Finding |
+|----|----------|------|---------|
+| R2-1 | HIGH | `index.js` | `handleHotspotDetails`: `getRecentObservations` calls missing `.catch(() => [])` — eBird errors crash the handler |
+| R2-2 | HIGH | `index.js` | `handleCompareHotspots`: same missing `.catch()` + `subId` absent makes checklist count always 1 (added `.filter(Boolean)`) |
+| R2-3 | HIGH | `index.js` | `handleCompareHotspots`: `input.startsWith("L")` accepts "Lake Erie Metropark" as locId — replaced with `/^L\d+$/.test()` |
+| R2-4 | MEDIUM | `index.js` | `handleMigrationForecast`: NWS weather always fetched for Cincinnati coords regardless of `region_code` passed — now resolves region to coordinates |
+| R2-5 | MEDIUM | `index.js` | `handleBirdingWindow`: `activityCutoff` unbounded below — clamped to minimum 6:00 AM |
+| R2-6 | MEDIUM | `briefing.js` | HTML injection: `bullet2`, `overnightWind`, `morningTemp`, 5-day outlook `d.wind`/`d.windSpeed` interpolated without `escHtml()` |
+| R2-7 | MEDIUM | `index.js` | `handleBestDayToBird`: `getBirdCastData` not wrapped in `.catch()` — BirdCast failure kills entire tool response |
+| R2-8 | LOW | `index.js` | `loadLifeList` reads from disk on every `plan_vacation_birding` call — now cached in `_lifeListCache` module-level variable |
+| R2-9 | LOW | `package.json` | `chart.js` and `chartjs-node-canvas` listed as deps but never imported — removed. MCP SDK pinned to exact version `1.29.0` |
+
+#### Open / tracked
+
+| ID | Severity | File | Finding |
+|----|----------|------|---------|
+| R2-A | MEDIUM | `index.js` | Rate limiter serializes all eBird calls via promise queue — effective throughput is 1 req/RTT not 90/min. Fix: push timestamp at entry, not after delay. Complex refactor — tracked. |
+| R2-B | MEDIUM | `index.js` | `toISOString().slice(0,10)` gives UTC date in `handleBestDayToBird` date loop — at 11 PM ET this is off by one day. Fix: use local-time `toYMD()` from utils (currently unexported). |
+| R2-C | LOW | `index.js` | `NWSClient` and `INaturalistClient` each have their own `Map`-based cache — duplicates the `Cache` class from utils.js, TTL constants defined twice. Unify at future refactor. |
+| R2-D | LOW | Multiple | `InputError` subclass needed so validation errors surface to MCP caller instead of being swallowed by generic error handler. |
+| R2-E | LOW | `index.js` | Life list CSV column index hardcoded (split on commas 1 and 2) — should parse header row to find "Common Name" column index dynamically for robustness. |
+| R2-F | LOW | `scripts/` | `cardinalFromDeg` in triage.js duplicates `_degreesToCardinal` in birdcast-client.js — consolidate when module split (L1) is done. |
 
 ### Email chart gap [PLANNED]
 
@@ -804,7 +833,7 @@ Section 7 describes two inline PNG charts rendered via `chartjs-node-canvas`:
 - 7-day migration bar chart (BirdCast `cumulativeBirds` per night)
 - Warbler frequency trend line (BirdCast bar chart probability over the migration season)
 
-`scripts/briefing.js` currently generates the email **without charts**. The dependency (`chartjs-node-canvas`) requires native canvas bindings that need to be compiled — feasible in a Routine cloud session but not yet implemented. Tracking this as the remaining gap in the email spec.
+`scripts/briefing.js` currently generates the email **without charts**. `chart.js` and `chartjs-node-canvas` have been removed from package.json since they are not used. If charts are re-added, they should be installed as `optionalDependencies` (require native `canvas` compilation via `node-gyp`). Tracking as future enhancement.
 
 ---
 
@@ -953,3 +982,4 @@ resolved.
 | 2026-05-16 | Added Section 13: Vacation Discovery Report spec — new MCP tool plan_vacation_birding for Claude Desktop, with target species algorithm and hotspot ranking by community activity. |
 | 2026-05-16 | Personal life list CSV integration added to plan_vacation_birding (EBIRD_LIFE_LIST_CSV). Section 13 updated to reflect implementation. |
 | 2026-05-16 | Spec cleanup: fixed time references (5:45 AM → 4:00 AM ET), marked Section 4B [DONE], updated Section 12 L9 as fixed, added email chart gap note, updated Section 11 to IN PROGRESS. |
+| 2026-05-16 | Full architecture + security + code quality re-review. Fixed R2-1 through R2-9 (HIGH/MEDIUM bugs: missing .catch(), wrong NWS coords, HTML injection, activityCutoff clamp, life list cache, package.json cleanup). Open items R2-A through R2-F tracked in Section 12. |
