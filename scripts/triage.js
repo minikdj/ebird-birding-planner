@@ -6,16 +6,11 @@
 import { BirdCastClient, degreesToCardinal } from '../src/birdcast-client.js';
 import { NWSClient } from '../src/nws-client.js';
 import { EBirdClient } from '../src/ebird-client.js';
-import { DEFAULTS, formatNumber } from '../src/utils.js';
-
-function toLocalYMD(d) {
-  const y = d.getFullYear(), m = String(d.getMonth()+1).padStart(2,'0'), day = String(d.getDate()).padStart(2,'0');
-  return `${y}-${m}-${day}`;
-}
+import { DEFAULTS, formatNumber, toYMD, FAVORABLE_WINDS, POOR_WINDS } from '../src/utils.js';
 
 async function main() {
-  const ebirdKey = process.env.EBIRD_API_KEY;
-  const birdcastKey = process.env.BIRDCAST_API_KEY;
+  const ebirdKey = (process.env.EBIRD_API_KEY || '').trim();
+  const birdcastKey = (process.env.BIRDCAST_API_KEY || '').trim();
 
   if (!ebirdKey || !birdcastKey) {
     process.stdout.write(JSON.stringify({ error: 'Missing API keys', sendBriefing: false }, null, 2) + '\n');
@@ -23,14 +18,17 @@ async function main() {
   }
 
   const lat = parseFloat(process.env.BRIEFING_LAT || String(DEFAULTS.lat));
+  if (!Number.isFinite(lat) || lat < -90 || lat > 90) { process.stderr.write('Warning: BRIEFING_LAT invalid\n'); }
   const lng = parseFloat(process.env.BRIEFING_LNG || String(DEFAULTS.lng));
+  if (!Number.isFinite(lng) || lng < -180 || lng > 180) { process.stderr.write('Warning: BRIEFING_LNG invalid\n'); }
   const region = process.env.BRIEFING_REGION || DEFAULTS.regionCode;
+  if (!/^[A-Z]{2}(-[A-Z0-9]{2,3}(-\d+)?)?$/i.test(region)) { process.stderr.write('Warning: BRIEFING_REGION may be invalid: ' + region + '\n'); }
 
   const birdcast = new BirdCastClient(birdcastKey);
   const nws = new NWSClient();
   const ebird = new EBirdClient(ebirdKey);
 
-  const today = toLocalYMD(new Date());
+  const today = toYMD(new Date());
 
   const [live, season, weather, notableObs] = await Promise.all([
     birdcast.getLiveMigration(region, today).catch(() => null),
@@ -65,9 +63,7 @@ async function main() {
   const overnightWind = weather?.overnight?.windDirection?.toUpperCase() ?? '';
   const overnightPrecip = weather?.overnight?.precipProbability ?? null;
 
-  // Match aggregate.js FAVORABLE_WINDS / POOR_WINDS constants
-  const FAVORABLE_WINDS = new Set(['S', 'SW', 'SSW', 'SE']);
-  const POOR_WINDS = new Set(['N', 'NW', 'NNW', 'NE']);
+  // Use shared FAVORABLE_WINDS / POOR_WINDS from utils (imported at top)
   if (FAVORABLE_WINDS.has(overnightWind) && overnightPrecip != null && overnightPrecip < 30) {
     migrationScore += 2;
   } else if (POOR_WINDS.has(overnightWind) && overnightPrecip != null && overnightPrecip > 60) {

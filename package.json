@@ -7,9 +7,15 @@
     "ebird-birding-planner": "src/index.js"
   },
   "type": "module",
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "scripts": {
     "start": "node src/index.js",
-    "mcp": "node src/index.js"
+    "mcp": "node src/index.js",
+    "triage": "node scripts/triage.js",
+    "aggregate": "node scripts/aggregate.js",
+    "send": "node scripts/send.js"
   },
   "keywords": [
     "ebird",
@@ -22,7 +28,6 @@
   "license": "MIT",
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.29.0",
-    "dotenv": "^17.4.2",
     "resend": "^6.12.3",
     "suncalc": "^1.9.0"
   }

@@ -14,6 +14,7 @@ export class BirdCastClient {
 
   constructor(apiKey) {
     this.apiKey = apiKey;
+    this._lastBirdCastCall = 0;
   }
 
   // -------------------------------------------------------------------------
@@ -58,6 +59,9 @@ export class BirdCastClient {
    */
   async #get(url) {
     try {
+      const elapsed = Date.now() - this._lastBirdCastCall;
+      if (elapsed < 200) await new Promise(r => setTimeout(r, 200 - elapsed));
+      this._lastBirdCastCall = Date.now();
       const response = await fetch(url);
       if (!response.ok) {
         const safeUrl = url.replace(/([?&]key=)[^&]+/, '$1***');
@@ -94,10 +98,11 @@ export class BirdCastClient {
       return null;
     }
 
+    const params = new URLSearchParams({ key: this.apiKey, applyThreshold: 'true' });
     const url =
       `${BirdCastClient.BASE_URL}/is-birdcast-alert-api/livemigration` +
       `/${encodeURIComponent(regionCode)}/${date}` +
-      `?key=${this.apiKey}&applyThreshold=true`;
+      `?${params}`;
 
     return this.#get(url);
   }
@@ -117,10 +122,11 @@ export class BirdCastClient {
       return null;
     }
 
+    const params = new URLSearchParams({ key: this.apiKey });
     const url =
       `${BirdCastClient.BASE_URL}/is-birdcast-alert-api/seasonhistorical` +
       `/${encodeURIComponent(regionCode)}/${date}` +
-      `?key=${this.apiKey}`;
+      `?${params}`;
 
     return this.#get(url);
   }
@@ -145,10 +151,11 @@ export class BirdCastClient {
       return null;
     }
 
+    const params = new URLSearchParams({ key: this.apiKey });
     const url =
       `${BirdCastClient.BASE_URL}/is-birdcast-alert-api/barchart` +
       `/${encodeURIComponent(regionCode)}/${date}` +
-      `?key=${this.apiKey}`;
+      `?${params}`;
 
     const data = await this.#get(url);
     if (!data || !Array.isArray(data.dataRows)) {
@@ -251,7 +258,7 @@ export class BirdCastClient {
           null
         );
         if (peakInterval?.numAloft) {
-          const dir = _degreesToCardinal(peakInterval.avgDirection);
+          const dir = degreesToCardinal(peakInterval.avgDirection);
           const speed = peakInterval.avgSpeed != null
             ? ` at ${Math.round(peakInterval.avgSpeed)} mph`
             : '';
@@ -360,7 +367,3 @@ export function degreesToCardinal(degrees) {
   return dirs[(index + 8) % 8];
 }
 
-// For backward compatibility within this module
-function _degreesToCardinal(degrees) {
-  return degreesToCardinal(degrees);
-}

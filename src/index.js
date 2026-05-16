@@ -40,13 +40,13 @@ class InputError extends Error {
 // Clients & caches
 // ---------------------------------------------------------------------------
 
-const apiKey = process.env.EBIRD_API_KEY;
+const apiKey = (process.env.EBIRD_API_KEY || '').trim();
 if (!apiKey) {
   process.stderr.write("ERROR: EBIRD_API_KEY environment variable is required.\n");
   process.exit(1);
 }
 
-const birdcastKey = process.env.BIRDCAST_API_KEY;
+const birdcastKey = (process.env.BIRDCAST_API_KEY || '').trim();
 if (!birdcastKey) {
   process.stderr.write("ERROR: BIRDCAST_API_KEY environment variable is required.\n");
   process.exit(1);
@@ -264,6 +264,7 @@ async function handlePlanBirdingTrip(args) {
   // Map notable sightings to hotspots
   const notableByLoc = {};
   for (const obs of notable) {
+    if (!obs.locId) continue;
     const lid = obs.locId;
     if (!notableByLoc[lid]) notableByLoc[lid] = [];
     notableByLoc[lid].push({ species: obs.comName, date: obs.obsDt, locName: obs.locName });
@@ -313,6 +314,8 @@ async function handlePlanBirdingTrip(args) {
 async function handleBirdingWeather(args) {
   const lat = args.lat ?? DEFAULTS.lat;
   const lng = args.lng ?? DEFAULTS.lng;
+  if (lat < -90 || lat > 90) return { error: 'lat out of range' };
+  if (lng < -180 || lng > 180) return { error: 'lng out of range' };
   const dateInfo = resolveDate(args.date || "today") ?? resolveDate("today");
   return nws.getBirdingWeather(lat, lng, dateInfo.date);
 }
@@ -321,6 +324,8 @@ async function handleVerifySighting(args) {
   if (!args.species) return { error: "species is required." };
   const lat = args.lat ?? DEFAULTS.lat;
   const lng = args.lng ?? DEFAULTS.lng;
+  if (lat < -90 || lat > 90) return { error: 'lat out of range' };
+  if (lng < -180 || lng > 180) return { error: 'lng out of range' };
   const radius = Math.min(Math.max(1, coerceNumber(args.radius_km, 30)), 200);
   const daysBack = Math.min(Math.max(1, coerceNumber(args.days_back, 14)), 30);
   return inat.getVerifiedSightings(args.species, lat, lng, radius, daysBack);
@@ -337,7 +342,7 @@ async function handleBirdingWindow(args) {
 
   function fmtTime(d) {
     if (!d || isNaN(d.getTime())) return "N/A";
-    return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: "America/New_York" });
+    return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: process.env.BRIEFING_TIMEZONE || "America/New_York" });
   }
 
   const civilTwilight = fmtTime(times.dawn);
@@ -380,7 +385,7 @@ async function handleSpeciesFrequency(args) {
   }
 
   const entry = allSpecies.find((s) => s.speciesCode === speciesCode || s.commonName?.toLowerCase() === args.species.toLowerCase());
-  if (!entry || !entry.probability) {
+  if (!entry || entry.probability == null) {
     return { species: args.species, speciesCode, currentWeekProbability: 0, interpretation: `${args.species} has no BirdCast frequency data for ${regionCode}.` };
   }
 
@@ -455,7 +460,7 @@ async function handleMigrationForecast(args) {
     };
   }
 
-  const bc = await getBirdCastData(regionCode, dateInfo.date);
+  const bc = await getBirdCastData(regionCode, dateInfo.date).catch(err => ({ live: null, season: null, species: null, summary: null, error: err.message }));
 
   const result = {
     regionCode,
@@ -517,12 +522,13 @@ async function handleMigrationForecast(args) {
 async function handleHotspotDetails(args) {
   let locId = args.hotspot;
 
+  // Truncate before regex test so the locId regex is applied after capping
+  if (typeof locId === 'string' && locId.length > 200) {
+    locId = locId.slice(0, 200);
+  }
+
   // If not a location ID pattern, search by name
   if (!/^L\d+$/.test(locId)) {
-    // Cap string input at 200 chars to avoid excessively long searches
-    if (typeof locId === 'string' && locId.length > 200) {
-      locId = locId.slice(0, 200);
-    }
     const location = loc(args.location);
     if (location.lat && location.lng) {
       const hotspots = await ebird.getNearbyHotspots(location.lat, location.lng, 50);
@@ -652,12 +658,17 @@ async function handleCompareHotspots(args) {
     };
   });
 
-  // Resolve shared codes to names
-  const nameMap = hotspotData[0].speciesNames;
+  // Resolve shared codes to names — merge across all hotspots for better coverage
+  const nameMap = new Map();
+  for (const h of hotspotData) {
+    for (const [code, name] of h.speciesNames) {
+      if (!nameMap.has(code)) nameMap.set(code, name);
+    }
+  }
   const sharedNames = shared.map((c) => nameMap.get(c) ?? c);
 
   // Verify up to 3 unique species via iNaturalist
-  if (location.lat != null) {
+  if (Number.isFinite(location.lat) && Number.isFinite(location.lng)) {
     const allUnique = comparison.flatMap((h) => h.uniqueSpecies).slice(0, 3);
     const verifications = await Promise.all(
       allUnique.map((sp) => inat.getVerifiedSightings(sp, location.lat ?? DEFAULTS.lat, location.lng ?? DEFAULTS.lng, 30, 14).catch(() => null))
@@ -726,7 +737,7 @@ async function handleSpeciesFinder(args) {
   }
 
   const sightings = Object.values(byLoc)
-    .sort((a, b) => b.obsDt.localeCompare(a.obsDt))
+    .sort((a, b) => (b.obsDt || '').localeCompare(a.obsDt || ''))
     .map((o) => ({
       location: o.locName,
       locId: o.locId,
@@ -859,7 +870,9 @@ async function resolveDestination(raw) {
   if (fromLookup) return fromLookup;
 
   // Fall back to BirdCast region search
-  const regions = await birdcast.findRegion(raw).catch(() => []);
+  let query = raw;
+  query = query.slice(0, 200);
+  const regions = await birdcast.findRegion(query).catch(() => []);
   if (!regions.length) return null;
 
   const regionCode = regions[0].code;

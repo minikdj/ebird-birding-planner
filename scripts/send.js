@@ -26,12 +26,15 @@
 // htmlBody is agent-generated and delivered as-is — injection risk is accepted.
 
 import { readFile, mkdir, writeFile } from 'fs/promises';
-import { dirname, join, resolve } from 'path';
+import { dirname, join, resolve, sep } from 'path';
 import { fileURLToPath } from 'url';
+import { Resend } from 'resend';
 import { toYMD } from '../src/utils.js';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 // briefing-output/ is always relative to the repo root, not the process cwd
+const repoRoot = resolve(__dirname, '..');
 const BRIEFING_OUTPUT_DIR = resolve(__dirname, '..', 'briefing-output');
 
 // ---------------------------------------------------------------------------
@@ -56,6 +59,12 @@ async function main() {
 
   if (!draftPath) {
     process.stderr.write('Usage: node scripts/send.js <briefing-draft.json>\n');
+    process.exit(1);
+  }
+
+  const resolvedDraft = resolve(draftPath);
+  if (!resolvedDraft.startsWith(repoRoot + sep)) {
+    process.stderr.write('Error: draftPath must be within the repo root\n');
     process.exit(1);
   }
 
@@ -97,12 +106,11 @@ async function main() {
     process.stderr.write('RESULT: EMAIL NOT SENT — RESEND_API_KEY is not configured.\n');
   } else if (!emailTo) {
     process.stderr.write('RESULT: EMAIL NOT SENT — BRIEFING_EMAIL_TO is not configured.\n');
-  } else if (!emailTo.includes('@')) {
+  } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailTo)) {
     process.stderr.write(`RESULT: EMAIL NOT SENT — BRIEFING_EMAIL_TO appears malformed: "${emailTo}"\n`);
   } else {
     // --- Primary: Resend ---
     try {
-      const { Resend } = await import('resend');
       const resend = new Resend(resendKey);
       const response = await resend.emails.send({
         from: emailFrom,

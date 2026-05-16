@@ -1,6 +1,83 @@
 // utils.js — utility functions for the eBird birding planner MCP server
 
 // ---------------------------------------------------------------------------
+// Wind direction sets
+// ---------------------------------------------------------------------------
+
+export const FAVORABLE_WINDS = new Set(['S', 'SW', 'SSW', 'SE', 'W']);
+export const POOR_WINDS = new Set(['N', 'NW', 'NNW', 'NE']);
+
+// ---------------------------------------------------------------------------
+// Activity window constants
+// ---------------------------------------------------------------------------
+
+export const ACTIVITY_CUTOFF_BASE_MINUTES = 180; // 3 hours after sunrise
+export const HEAT_THRESHOLD_F = 75;
+export const HEAT_STEP_F = 5;
+export const HEAT_PENALTY_MINUTES = 15;
+export const EARLIEST_ARRIVAL_MINUTES = 15;
+
+// ---------------------------------------------------------------------------
+// computeActivityCutoff
+// ---------------------------------------------------------------------------
+
+/**
+ * Compute the latest recommended birding time based on sunrise and temperature.
+ * @param {Date} sunriseDateObj - Sunrise time as a Date object
+ * @param {number|null} morningHighF - Forecasted morning high in °F
+ * @returns {Date}
+ */
+export function computeActivityCutoff(sunriseDateObj, morningHighF) {
+  let cutoffMs = sunriseDateObj.getTime() + ACTIVITY_CUTOFF_BASE_MINUTES * 60 * 1000;
+  if (morningHighF != null && morningHighF > HEAT_THRESHOLD_F) {
+    const steps = Math.floor((morningHighF - HEAT_THRESHOLD_F) / HEAT_STEP_F);
+    cutoffMs -= steps * HEAT_PENALTY_MINUTES * 60 * 1000;
+  }
+  const floorMs = sunriseDateObj.getTime() + EARLIEST_ARRIVAL_MINUTES * 60 * 1000;
+  return new Date(Math.max(cutoffMs, floorMs));
+}
+
+// ---------------------------------------------------------------------------
+// haversineKm (exported)
+// ---------------------------------------------------------------------------
+
+/**
+ * Calculate the great-circle distance between two points in kilometers.
+ * @param {number} lat1
+ * @param {number} lon1
+ * @param {number} lat2
+ * @param {number} lon2
+ * @returns {number}
+ */
+export function haversineKm(lat1, lon1, lat2, lon2) {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLng = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+// ---------------------------------------------------------------------------
+// weekIndexForDate
+// ---------------------------------------------------------------------------
+
+/**
+ * Return a 0-based week-of-year index for a YYYY-MM-DD string (treated as noon UTC).
+ * @param {string} dateStr - YYYY-MM-DD
+ * @returns {number}
+ */
+export function weekIndexForDate(dateStr) {
+  const d = new Date(dateStr + 'T12:00:00Z');
+  const start = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  const dayOfYear = Math.ceil((d - start) / 86400000) + 1;
+  return Math.floor((dayOfYear - 1) / 7);
+}
+
+// ---------------------------------------------------------------------------
 // Cache
 // ---------------------------------------------------------------------------
 
@@ -348,18 +425,6 @@ const CINCY_NEARBY_COUNTIES = new Set([
 
 const CINCY_LAT = 39.1;
 const CINCY_LNG = -84.5;
-
-function haversineKm(lat1, lng1, lat2, lng2) {
-  const R    = 6371;
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLng = ((lng2 - lng1) * Math.PI) / 180;
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLng / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
 
 export function isCincinnatiArea(lat, lng, regionCode) {
   if (regionCode) {

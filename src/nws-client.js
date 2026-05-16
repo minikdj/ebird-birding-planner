@@ -2,7 +2,7 @@ import { Cache } from './utils.js';
 
 export class NWSClient {
   static BASE_URL = 'https://api.weather.gov';
-  static USER_AGENT = '(birding-planner, minikdj11@gmail.com)';
+  static USER_AGENT = `(birding-planner, ${process.env.NWS_CONTACT_EMAIL || 'birding-briefing@example.com'})`;
   static CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
   static POINTS_FORECAST_DELAY_MS = 250;
 
@@ -50,9 +50,12 @@ export class NWSClient {
 
       // Step 3: Get hourly forecast
       const forecastUrl = pointsData.properties.forecastHourly;
+      if (!forecastUrl.startsWith('https://api.weather.gov/')) {
+        throw new Error('Unexpected forecastHourly URL domain: ' + forecastUrl);
+      }
       const forecastData = await this._get(forecastUrl);
 
-      if (!forecastData || !Array.isArray(forecastData.properties.periods)) {
+      if (!forecastData || !forecastData.properties || !Array.isArray(forecastData.properties.periods)) {
         process.stderr.write('NWSClient: No periods array in forecast response\n');
         return this._unavailableResponse();
       }

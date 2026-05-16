@@ -93,7 +93,7 @@ function computeRainImpactNote(weather) {
  * Derive a daylight / birding window from suncalc for a given date + coordinates.
  */
 function buildBirdingWindow(dateStr, lat, lng) {
-  const d = new Date(dateStr + 'T07:00:00'); // mid-morning local, avoids DST edge
+  const d = new Date(dateStr + 'T12:00:00Z');
   const times = suncalc.getTimes(d, lat, lng);
   return {
     civilTwilight: formatTime(times.dawn),
@@ -242,8 +242,13 @@ async function buildOutlook(birdcast, nws, config, today) {
     };
   };
 
-  // All 5 days in parallel
-  return Promise.all([1, 2, 3, 4, 5].map(buildDay));
+  // Sequential with 300ms stagger to avoid NWS rate limiting
+  const outlookResults = [];
+  for (const i of [1, 2, 3, 4, 5]) {
+    outlookResults.push(await buildDay(i));
+    await new Promise(r => setTimeout(r, 300));
+  }
+  return outlookResults;
 }
 
 /**
@@ -257,8 +262,10 @@ async function buildHotspots(nearbyHotspots, ebird, lat, lng) {
     .sort((a, b) => (b.numSpeciesAllTime ?? 0) - (a.numSpeciesAllTime ?? 0))
     .slice(0, 20);
 
-  const hotspotData = await Promise.all(
-    candidates.map(async (h) => {
+  const results = [];
+  for (let i = 0; i < candidates.length; i += 5) {
+    const chunk = candidates.slice(i, i + 5);
+    const chunkResults = await Promise.all(chunk.map(async (h) => {
       const obs7day = await ebird.getRecentObservations(h.locId, 7).catch(() => []);
       const species7 = new Set((obs7day || []).map((o) => o.speciesCode).filter(Boolean));
 
@@ -271,8 +278,10 @@ async function buildHotspots(nearbyHotspots, ebird, lat, lng) {
         // The top-level notableObservations field (from getNearbyNotableObservations) is the
         // canonical source — the agent can cross-reference by location name.
       };
-    })
-  );
+    }));
+    results.push(...chunkResults);
+  }
+  const hotspotData = results;
 
   return hotspotData
     .filter((h) => h.speciesCount7Day > 0)
@@ -285,8 +294,8 @@ async function buildHotspots(nearbyHotspots, ebird, lat, lng) {
 // ---------------------------------------------------------------------------
 
 async function main() {
-  const ebirdKey = process.env.EBIRD_API_KEY;
-  const birdcastKey = process.env.BIRDCAST_API_KEY;
+  const ebirdKey = (process.env.EBIRD_API_KEY || '').trim();
+  const birdcastKey = (process.env.BIRDCAST_API_KEY || '').trim();
 
   if (!ebirdKey || !birdcastKey) {
     process.stdout.write(JSON.stringify({
@@ -295,13 +304,18 @@ async function main() {
     return;
   }
 
-  // Parse and validate coordinates — fall back to Cincinnati defaults if invalid
+  // Parse and validate region + coordinates — fall back to defaults if invalid
+  const region = process.env.BRIEFING_REGION || DEFAULTS.regionCode;
+  if (!/^[A-Z]{2}(-[A-Z0-9]{2,3}(-\d+)?)?$/i.test(region)) {
+    process.stderr.write('Warning: BRIEFING_REGION may be invalid: ' + region + '\n');
+  }
+
   const rawLat = parseFloat(process.env.BRIEFING_LAT || '');
   const rawLng = parseFloat(process.env.BRIEFING_LNG || '');
   const config = {
     lat: Number.isFinite(rawLat) && rawLat >= -90 && rawLat <= 90 ? rawLat : DEFAULTS.lat,
     lng: Number.isFinite(rawLng) && rawLng >= -180 && rawLng <= 180 ? rawLng : DEFAULTS.lng,
-    region: process.env.BRIEFING_REGION || DEFAULTS.regionCode,
+    region,
   };
   if (!Number.isFinite(rawLat)) {
     process.stderr.write('aggregate.js: BRIEFING_LAT invalid or unset — using default\n');

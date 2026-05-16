@@ -67,6 +67,9 @@ export class EBirdClient {
   }
 
   getNearbyHotspots(lat, lng, dist = 30) {
+    if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+      throw new Error('Invalid coordinates');
+    }
     return this.makeRequest('/ref/hotspot/geo', { lat, lng, dist, fmt: 'json' });
   }
 
@@ -86,6 +89,9 @@ export class EBirdClient {
   }
 
   getNearbyNotableObservations(lat, lng, back = 14, dist = 50) {
+    if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+      throw new Error('Invalid coordinates');
+    }
     return this.makeRequest('/data/obs/geo/recent/notable', { lat, lng, back, dist });
   }
 
