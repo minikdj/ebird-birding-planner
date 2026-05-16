@@ -30,7 +30,7 @@
 
 Build a smart daily birding briefing system that:
 
-- Runs automatically every morning at 5:45 AM ET during migration season
+- Runs automatically every morning at 4:00 AM ET during migration season
 - Uses Claude as an intelligent agent (not a dumb cron script) to decide whether
   the briefing is worth sending
 - Sends a rich HTML email when migration is active or notable species are present
@@ -71,7 +71,7 @@ to arrive — and make a judgment call.
 
 ### Routine configuration
 
-- **Schedule**: daily at 5:45 AM ET (cron: `45 9 * * *` UTC)
+- **Schedule**: daily at 4:00 AM ET (cron: `0 8 * * *` UTC)
 - **Season gating**: the agent prompt includes season dates; agent exits cleanly
   outside season (Mar 15 – Jun 7 spring, Aug 1 – Nov 15 fall)
 - **Self-reschedule tool**: `mcp__scheduled-tasks__update_scheduled_task`
@@ -108,7 +108,7 @@ to arrive — and make a judgment call.
 You are a migration monitoring agent for Cincinnati, OH (Hamilton County,
 US-OH-061, 39.1°N 84.5°W).
 
-Today is {DATE}. Time is 5:45 AM ET.
+Today is {DATE}. Time is 4:00 AM ET.
 
 You are running as a Claude Code cloud session. The project repo has been cloned
 to the working directory. Use the bash tool to run Node scripts.
@@ -212,7 +212,7 @@ When the agent decides QUIET PERIOD:
 
 ## 4B. Script Architecture for Routines
 
-**Status: [PLANNED]**
+**Status: [DONE]**
 
 Because Routines cannot reach the local MCP server, a parallel execution path
 uses standalone scripts under `scripts/` that import the same underlying client
@@ -719,7 +719,7 @@ PRs for review before merging.
 
 ## 11. Testing Plan
 
-**Status: [PLANNED]**
+**Status: [IN PROGRESS]**
 
 ### MCP server tools (existing)
 
@@ -796,7 +796,15 @@ Send test emails to both Gmail and Apple Mail. Check:
 | L6 | `index.js:138` | `getHotspotSpeciesCounts` catch block swallows errors silently — log to stderr |
 | L7 | `index.js:741` | `best_day_to_bird` ranking ignores fetched eBird stats — fetches but doesn't score |
 | L8 | `utils.js:185` | "This weekend" returns one day in `resolveDate` but two in `resolveDateRange` — inconsistent |
-| L9 | `scripts/briefing.js` | Top hotspots taken from first 3 by all-time species count — includes restricted/inactive spots with 0 recent species | Fetch top 20, sort by 7-day recent species count, take top 3 with count > 0 |
+| L9 | `scripts/briefing.js` | ~~Top hotspots taken from first 3 by all-time species count — includes restricted/inactive spots with 0 recent species~~ | **FIXED** — fetch top 20, re-rank by 7-day recent species count, filter zeros |
+
+### Email chart gap [PLANNED]
+
+Section 7 describes two inline PNG charts rendered via `chartjs-node-canvas`:
+- 7-day migration bar chart (BirdCast `cumulativeBirds` per night)
+- Warbler frequency trend line (BirdCast bar chart probability over the migration season)
+
+`scripts/briefing.js` currently generates the email **without charts**. The dependency (`chartjs-node-canvas`) requires native canvas bindings that need to be compiled — feasible in a Routine cloud session but not yet implemented. Tracking this as the remaining gap in the email spec.
 
 ---
 
@@ -899,15 +907,19 @@ Sort each tier by destination frequency descending.
 - NWS weather is US-only; for international destinations, weather data will be unavailable (return gracefully)
 - BirdCast covers US only; for international trips, fall back to eBird recent observations only and omit the frequency comparison
 
+### Personal life list integration [DONE]
+
+The tool reads an eBird CSV data export (`EBIRD_LIFE_LIST_CSV` env var pointing to a local file). When configured, target species output switches modes:
+
+- **With life list**: primary tier = `newToYourLifeList` (findable at destination, not in user's history), secondary tier = `seenBeforeButRareHere`
+- **Without life list**: falls back to Cincinnati frequency comparison (`wontFindInCincinnati` / `rareInCincinnati`)
+
+The CSV is the "Download My Data" export from ebird.org → My eBird. Column 1 (Common Name) is extracted; parenthetical subspecies are normalized. Notable recent sightings are annotated with `onYourLifeList: true/false`. The `lifeListLoaded` field in the response reports how many species were parsed.
+
 ### What this does NOT do
 
 - No email / no Routine integration — Claude Desktop conversation only
-- Does not know the user's personal life list — "new to you" means "uncommon in Cincinnati," not literally new to the individual
 - Does not replace `plan_birding_trip` for local trip planning — that tool handles the Cincinnati-area use case
-
-### Future consideration
-
-If the user wants to add personal life list tracking (so "new to you" means literally never seen before), that would require a separate data source (e.g., eBird personal checklist export). Tracked as a future enhancement, not in scope now.
 
 ---
 
@@ -939,3 +951,5 @@ resolved.
 | 2026-05-16 | Implemented Section 13: plan_vacation_birding MCP tool. Added historical data strategy (BirdCast bar chart with ignoreSeasonCheck), checklist-count hotspot ranking, two-tier target species algorithm, and 20+ known destination entries in CITY_LOOKUP. |
 | 2026-05-16 | Updated SPEC status markers — all Phase 2 tools, enrichments, email, and repo setup marked [DONE]. |
 | 2026-05-16 | Added Section 13: Vacation Discovery Report spec — new MCP tool plan_vacation_birding for Claude Desktop, with target species algorithm and hotspot ranking by community activity. |
+| 2026-05-16 | Personal life list CSV integration added to plan_vacation_birding (EBIRD_LIFE_LIST_CSV). Section 13 updated to reflect implementation. |
+| 2026-05-16 | Spec cleanup: fixed time references (5:45 AM → 4:00 AM ET), marked Section 4B [DONE], updated Section 12 L9 as fixed, added email chart gap note, updated Section 11 to IN PROGRESS. |

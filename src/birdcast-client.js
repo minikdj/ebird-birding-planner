@@ -56,7 +56,7 @@ export class BirdCastClient {
    * @param {string} url
    * @returns {Promise<object|null>}
    */
-  async _get(url) {
+  async #get(url) {
     try {
       const response = await fetch(url);
       if (!response.ok) {
@@ -99,7 +99,7 @@ export class BirdCastClient {
       `/${encodeURIComponent(regionCode)}/${date}` +
       `?key=${this.apiKey}&applyThreshold=true`;
 
-    return this._get(url);
+    return this.#get(url);
   }
 
   /**
@@ -122,7 +122,7 @@ export class BirdCastClient {
       `/${encodeURIComponent(regionCode)}/${date}` +
       `?key=${this.apiKey}`;
 
-    return this._get(url);
+    return this.#get(url);
   }
 
   /**
@@ -150,7 +150,7 @@ export class BirdCastClient {
       `/${encodeURIComponent(regionCode)}/${date}` +
       `?key=${this.apiKey}`;
 
-    const data = await this._get(url);
+    const data = await this.#get(url);
     if (!data || !Array.isArray(data.dataRows)) {
       return null;
     }
@@ -190,7 +190,7 @@ export class BirdCastClient {
       `${BirdCastClient.BASE_URL}/region/info` +
       `?regionCode=${encodeURIComponent(regionCode)}`;
 
-    const data = await this._get(url);
+    const data = await this.#get(url);
     if (!data) return null;
 
     return { name: data.name ?? regionCode };
@@ -207,7 +207,7 @@ export class BirdCastClient {
       `${BirdCastClient.BASE_URL}/region/find` +
       `?q=${encodeURIComponent(query)}`;
 
-    const data = await this._get(url);
+    const data = await this.#get(url);
     if (!Array.isArray(data)) return [];
 
     return data.map((r) => ({

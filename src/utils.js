@@ -200,7 +200,9 @@ export function resolveDate(input) {
     dateObj = offsetDay(today, -1);
     label = `yesterday (${humanLabel(dateObj)})`;
   } else if (lower === "this weekend") {
-    // Next Saturday, or today if it's Saturday
+    // Note: resolveDate("this weekend") returns Saturday only (single trip day).
+    // resolveDateRange("this weekend") returns Sat-Sun (the full weekend window).
+    // This asymmetry is intentional — date context wants one day, range context wants both.
     dateObj = nextWeekday(today, 6);
     label = `this Saturday (${humanLabel(dateObj)})`;
   } else if (lower === "this week") {

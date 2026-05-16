@@ -163,7 +163,8 @@ async function getHotspotSpeciesCounts(hotspots) {
             recentObservations: obs,
             speciesList: [...speciesSet],
           };
-        } catch {
+        } catch (err) {
+          process.stderr.write(`getHotspotSpeciesCounts error for ${h.locId}: ${err.message}\n`);
           return { ...h, recentSpeciesCount: 0, recentObservations: [], speciesList: [] };
         }
       })
@@ -403,6 +404,10 @@ const tools = [
 // ---------------------------------------------------------------------------
 
 async function handlePlanBirdingTrip(args) {
+  const SCORE_SPECIES_WEIGHT = 2;
+  const SCORE_NOTABLE_WEIGHT = 5;
+  const HOTSPOT_CANDIDATE_LIMIT = 15;
+
   const location = loc(args.location);
   const dateInfo = resolveDate(args.date || "today") ?? resolveDate("today");
   const radius = Math.min(Math.max(1, coerceNumber(args.radius_km, DEFAULTS.radiusKm)), 100);
@@ -421,10 +426,10 @@ async function handlePlanBirdingTrip(args) {
     nws.getBirdingWeather(lat, lng, dateInfo.date).catch(() => null),
   ]);
 
-  // Limit to top 15 hotspots by numSpeciesAllTime, then get recent obs for each
+  // Limit to top candidates by numSpeciesAllTime, then get recent obs for each
   const topHotspots = nearbyHotspots
     .sort((a, b) => (b.numSpeciesAllTime ?? 0) - (a.numSpeciesAllTime ?? 0))
-    .slice(0, 15);
+    .slice(0, HOTSPOT_CANDIDATE_LIMIT);
 
   const enriched = await getHotspotSpeciesCounts(topHotspots);
 
@@ -467,7 +472,7 @@ async function handlePlanBirdingTrip(args) {
   const ranked = enriched
     .map((h) => {
       const notableHere = notableByLoc[h.locId] || [];
-      const score = h.recentSpeciesCount * 2 + notableHere.length * 5;
+      const score = h.recentSpeciesCount * SCORE_SPECIES_WEIGHT + notableHere.length * SCORE_NOTABLE_WEIGHT;
       return { ...h, notableSightings: notableHere, score };
     })
     .sort((a, b) => b.score - a.score);
@@ -709,6 +714,10 @@ async function handleHotspotDetails(args) {
 
   // If not a location ID pattern, search by name
   if (!/^L\d+$/.test(locId)) {
+    // Cap string input at 200 chars to avoid excessively long searches
+    if (typeof locId === 'string' && locId.length > 200) {
+      locId = locId.slice(0, 200);
+    }
     const location = loc(args.location);
     if (location.lat && location.lng) {
       const hotspots = await ebird.getNearbyHotspots(location.lat, location.lng, 50);
@@ -766,9 +775,15 @@ async function handleHotspotDetails(args) {
 }
 
 async function handleCompareHotspots(args) {
-  const hotspotInputs = args.hotspots;
+  let hotspotInputs = args.hotspots;
   if (!hotspotInputs || hotspotInputs.length < 2) {
     return { error: "Please provide at least 2 hotspot IDs or names to compare." };
+  }
+
+  let capped = false;
+  if (hotspotInputs.length > 10) {
+    capped = true;
+    hotspotInputs = hotspotInputs.slice(0, 10);
   }
 
   const location = loc(args.location);
@@ -856,12 +871,18 @@ async function handleCompareHotspots(args) {
     .map((h) => `${h.name}: ${h.recentSpeciesCount} species, ${h.checklistsThisWeek} checklists, ${h.uniqueSpecies.length} unique`)
     .join(" | ");
 
-  return {
+  const result = {
     summary: `Comparison: ${summary}. ${sharedNames.length} species shared across all.`,
     sharedSpecies: sharedNames,
     sharedSpeciesCount: sharedNames.length,
     hotspots: comparison,
   };
+
+  if (capped) {
+    result.note = "Input was limited to 10 hotspots.";
+  }
+
+  return result;
 }
 
 async function handleSpeciesFinder(args) {
