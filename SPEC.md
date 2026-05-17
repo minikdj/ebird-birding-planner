@@ -397,14 +397,7 @@ Add these in the GitHub repo → Settings → Secrets → Actions:
 
 ### Implementation checklist
 
-- [x] Create `.github/workflows/report-on-demand.yml` — done 2026-05-17
-- [x] Write `scripts/generate-email.js` (Anthropic SDK, reads triage/aggregate output) — done 2026-05-17
-- [x] Add `ANTHROPIC_API_KEY` to GitHub repo secrets — done 2026-05-17
-- [x] Copy remaining secrets from Routine to GitHub repo secrets — done 2026-05-17
-- [x] Test from desktop: trigger workflow manually in GitHub Actions UI — confirmed working 2026-05-17
-- [x] Test from mobile: `bird-report.html` web app saved to iPhone home screen via Safari → Add to Home Screen; confirmed email delivered 2026-05-17
-- N/A Create Claude.ai Project "On-Demand Birding Report" with GitHub MCP — GitHub MCP cloud connector not available; replaced by `bird-report.html` web app
-- N/A Add system prompt to Project — superseded by web app approach
+Complete — workflow, generate-email.js, secrets, and mobile web app all live as of 2026-05-17.
 
 ### What this does NOT change
 
@@ -1383,47 +1376,19 @@ Resolved items are struck through and kept for historical reference.
 
 | # | Item | Category | Notes |
 |---|------|----------|-------|
-| 22 | ~~Build on-demand report system (Section 3B) — code complete~~ | Feature | `.github/workflows/report-on-demand.yml` and `scripts/generate-email.js` built 2026-05-17. GitHub secrets + Claude.ai Project setup remain as user-action items (see Section 3B checklist). |
 | 1 | Run full E2E tests for all 11 MCP tools in Claude Desktop | Testing | Run each tool from `TESTING.md` Section 3 in Claude Desktop with the local MCP server running. |
 | 2 | Test QUIET_PERIOD Routine path end-to-end | Testing | Requires a real Routine run on a low-migration night. See `TESTING.md` Test B. |
 | 3 | Test SILENT_SKIP Routine path | Testing | Requires a real Routine run on a very quiet night. See `TESTING.md` Test C. |
 | 4 | Test SendGrid fallback delivery | Testing | Set invalid RESEND_API_KEY in .env, run `send.js`, verify SendGrid fires. Requires both API keys in .env. |
-| 6 | ~~Email rendering on mobile (Gmail app, Apple Mail)~~ | Testing | Verified 2026-05-17 — all 4 scenario HTML files tested on iPhone via iCloud Drive. Confirmed: tables render, charts display, color coding correct, 2-color design holds on mobile. |
 | 7 | Email rendering in Apple Mail desktop | Testing | Open a sent briefing in Apple Mail. See `TESTING.md` Section 7. |
 | 8 | Test degraded modes: NWS down, BirdCast outside season, iNat timeout | Testing | Mock API failures locally or run during a known outage window. |
 | 9 | Verify Resend custom domain (`BRIEFING_FROM_EMAIL`) | Config | Go to resend.com/domains → add and verify your domain → set `BRIEFING_FROM_EMAIL=Birding Briefing <briefing@yourdomain.com>` in .env. Without this, delivery is limited to the Resend account owner's address. |
 | 10 | Confirm BirdCast API key approved for programmatic use | Config | Contact birdcast.info to confirm your key is approved for automated requests. Working in practice; formal approval unconfirmed. |
-| 13 | ~~GitHub branch protection on `main`~~ | Security | Applied 2026-05-17 via `gh api`. Requires 1 PR review. Force-push disabled. |
 | 14 | Scope Resend API key | Security | In Resend dashboard, scope the key to your sending domain only. Set a spend alert. Limits blast radius if the key leaks. |
-| 16 | ~~Test `BRIEFING_FAVORITE_HOTSPOTS` env var~~ | Testing | Verified 2026-05-17 — `getFavoriteHotspots()` returns 3-item array with correct `locId` fields when env var set to `L123456,L789012,L345678`. |
-| 17 | ~~Test vacation-to-new-region flow~~ | Testing | Verified 2026-05-17 — `BRIEFING_REGION=US-NY-061 BRIEFING_LAT=40.7 BRIEFING_LNG=-74.0` produces FULL_BRIEFING score 11, 76 notable species. Region override works correctly. |
 
 ### Bug Fixes Identified in Testing
 
-| # | Bug | Category | Status | Tracked in | Notes |
-|---|-----|----------|--------|------------|-------|
-| B1 | ~~`species_finder` crashes on common species~~ | Code fix | Fixed 2026-05-17 | TESTING.md Bug #1 | Cap at 500 obs before dedup; try/catch with user-friendly error; summary notes when capped |
-| B2 | ~~`plan_vacation_birding` "City, ST" format fails~~ | Code fix | Fixed 2026-05-17 | TESTING.md Bug #2 | Strip trailing `, ST` suffix and retry resolveDestination if first attempt returns null |
-| B3 | ~~`plan_vacation_birding` nearby-destination returns 0 target species~~ | Code fix | Fixed 2026-05-17 | TESTING.md Bug #3 | Final fallback: home < 0.05 AND dest > 0.10 with "significant overlap" note |
-| B4 | ~~`verify_sighting` ambiguous "data unavailable" message~~ | Code fix | Fixed 2026-05-17 | TESTING.md Bug #8 | Zero results → "No photo-verified observations found…"; API errors keep error wording |
-
-### Resolved
-
-| # | Item | Resolved | Notes |
-|---|------|----------|-------|
-| 5 | ~~Test disk fallback delivery~~ | 2026-05-17 | `send.js` with no API keys saves HTML to `briefing-output/`. Verified by automated test. |
-| 11 | ~~Hotspot micro-habitat knowledge base~~ | 2026-05-17 | `data/hotspot-notes.json` built for 9 Cincinnati-area hotspots; wired into `aggregate.js` and Chase Target card generation in `routine-prompt.md`. |
-| 15 | ~~Test `BRIEFING_SKIP_BIRDCAST=true`~~ | 2026-05-17 | Verified: `birdcastSkipped:true` in output, recommendation always FULL_BRIEFING or QUIET_PERIOD (never SILENT_SKIP). |
-| 18 | ~~Triage score threshold tuning~~ | 2026-05-17 | `BRIEFING_SCORE_HIGH_BIRDS`, `BRIEFING_SCORE_MED_BIRDS`, `BRIEFING_SCORE_LOW_BIRDS`, `BRIEFING_FULL_THRESHOLD`, `BRIEFING_QUIET_THRESHOLD` env vars added to `triage.js`. Defaults match original Ohio-calibrated values. |
-| 19 | ~~Ohio-birds LISTSERV scraper~~ | 2026-05-17 | Full body scraping: index → A2 page → A3 iframe. No login required — browser UA bypasses IIS 403. Extracts species lists (12 species from Blacklick reports). Returns `{subject, body, species[], location, url}` per report. |
-| 20 | ~~Life list auto-refresh~~ | 2026-05-17 | `aggregate.js` auto-rebuilds `data/life-list.json` if `~/Downloads/ebird_world_life_list.csv` is newer. |
-| 21 | ~~Verify frontal passage detection~~ | 2026-05-17 | `detectFrontalPassage()` verified against live NWS hourly data. Results documented in `TESTING.md`. |
-
-### Low priority / deferred
-
-| # | Item | Category | Notes |
-|---|------|----------|-------|
-| 12 | ~~Inline email charts~~ | Enhancement | Implemented 2026-05-17 via pure HTML/CSS — bar charts, forecast strip, condition tiles, timeline bar. No chartjs-node-canvas needed. See Section 12 "Email chart gap" note. |
+All 4 bugs identified in initial testing (B1–B4) resolved 2026-05-17. See git log for details.
 
 **Reference:** `TESTING.md` — full feature inventory, test prompts, expected outputs, and status tracking.
 
@@ -1433,13 +1398,8 @@ Resolved items are struck through and kept for historical reference.
 
 | # | Question | Status | Answer |
 |---|----------|--------|--------|
-| 1 | Does an Anthropic Routine have access to MCP tools registered in Claude Desktop, or does it run in a clean context? | **Resolved** | Routines run as full Claude Code cloud sessions. Local MCP servers (added via Claude Desktop or `claude mcp add`) are not accessible — they run on the user's Mac. The Routine clones the GitHub repo and runs Node scripts via bash instead. |
-| 2 | Can a Routine execute Node.js subprocesses (e.g. to render charts via chartjs-node-canvas)? | **Resolved** | Yes. Routines have bash tool access and can run Node.js subprocesses. Charts via `chartjs-node-canvas` are feasible when re-added as optionalDependencies. |
 | 3 | Is the BirdCast API key a valid key for programmatic use, or is it a scrape of the dashboard? | **Open** | Key now stored in `BIRDCAST_API_KEY` env var (not hardcoded). Confirmed working in practice; formal programmatic-use status unverified. Check https://birdcast.info if usage increases. |
-| 4 | What is the Routine's compute/memory limit? A full briefing with 14 API calls may take 30–60 seconds. | **Resolved** | Routines are full Claude Code cloud sessions with no special time limit beyond normal tool use. Standard session limits apply. |
 | 5 | Resend free tier: does it support sending from a custom domain, or only `@resend.dev` test addresses? | **Open** | Resend requires a verified domain for custom From addresses; `@resend.dev` works for testing only (delivers to Resend account owner email). |
-| 6 | Should the quiet-period reschedule be implemented as updating the Routine's cron schedule, or as the agent simply not calling the email tools and relying on a state flag stored somewhere? | **Resolved** | Implemented as cron update via `update_scheduled_task` — simpler than external state, no persistent storage needed. |
-| 7 | Does the Routine need to stay within migration season bounds automatically, or will we configure separate Routines for spring and fall? | **Resolved** | One Routine runs year-round. The agent prompt includes season dates and the agent exits cleanly outside migration season. No separate Routines needed. |
 
 ---
 
@@ -1448,27 +1408,12 @@ Resolved items are struck through and kept for historical reference.
 | Date | Change |
 |------|--------|
 | 2026-05-15 | Initial spec created. Infrastructure decision: Anthropic Routines. All Phase 2 tools and enrichments documented. |
-| 2026-05-15 | Updated architecture: Routines run Node scripts via bash, not MCP tools directly. Resolved open questions 1, 2, 4, 7. Added Section 4B (Script Architecture for Routines). Confirmed chartjs-node-canvas feasible. |
+| 2026-05-15 | Core architecture resolved: Routines run Node scripts (`triage.js`, `aggregate.js`) via bash rather than calling the local MCP server. Added Section 4B (Script Architecture for Routines). MCP server unchanged for Claude Desktop. |
 | 2026-05-15 | Added Section 12: code review findings (security + architecture). CRIT and MEDIUM fixes applied. |
-| 2026-05-16 | User feedback: fix hotspot ranking (filter zero-activity spots), add 5-day forward outlook section to briefing email. |
-| 2026-05-16 | Implemented Section 13: plan_vacation_birding MCP tool. Added historical data strategy (BirdCast bar chart with ignoreSeasonCheck), checklist-count hotspot ranking, two-tier target species algorithm, and 20+ known destination entries in CITY_LOOKUP. |
-| 2026-05-16 | Updated SPEC status markers — all Phase 2 tools, enrichments, email, and repo setup marked [DONE]. |
-| 2026-05-16 | Personal life list CSV integration added to plan_vacation_birding (EBIRD_LIFE_LIST_CSV). Section 13 updated to reflect implementation. |
-| 2026-05-16 | Spec cleanup: fixed time references (5:45 AM → 4:00 AM ET), marked Section 4B [DONE], added email chart gap note, updated Section 11 to IN PROGRESS. |
-| 2026-05-16 | Full architecture + security + code quality re-review. Fixed R2-1 through R2-9 (HIGH/MEDIUM bugs: missing .catch(), wrong NWS coords, HTML injection, activityCutoff clamp, life list cache, package.json cleanup). Open items R2-A through R2-F tracked in Section 12. |
-| 2026-05-16 | Fixed all remaining review items: R2-B (toYMD UTC bug), R2-C (Cache unification), R2-D (InputError class), R2-E (CSV header parsing), R2-F (deduped cardinal function), L1 (tools.js module split + TOOL_HANDLERS Map). R2-A investigated and found correct — no fix needed. 6/6 smoke tests passing. |
-| 2026-05-16 | Architectural refactor of Routine email system: added `scripts/aggregate.js` (comprehensive data aggregation → JSON) and `scripts/send.js` (email delivery from draft JSON). Routine agent now writes the email body dynamically using its reasoning instead of filling a fixed template. Rain impact detection added. Section 3 and Section 4B updated. `routine-prompt.md` rewritten with 7-step agent flow. |
-| 2026-05-16 | Full architecture + security + code review of new scripts. Fixed: SendGrid fallback unreachable on Resend API errors; disk fallback cwd-relative path; BRIEFING_LAT/LNG NaN propagation; buildOutlook sequential loop → parallel; buildOutlook date derivation from new Date() → today param; duplicate toLocalYMD → import toYMD; inline degreesToCardinal → import; wind constants unified (SSW/SE added); computeActivityCutoff h===0 edge; fallout rain threshold 60%→50%. Prompt: removed hardcoded location; fixed schedule to 09:00 UTC (DST-safe); added update_scheduled_task guidance; fixed quiet-period data references; added null-handling guidance. |
-| 2026-05-16 | Three live Routine runs completed successfully. Fixed UTC birding-window bug (formatTime now uses BRIEFING_TIMEZONE env var, default America/New_York). Fixed Routine git-hang (npm install → npm ci --ignore-scripts). Added Chase Targets section to Routine prompt — prize birds now get dedicated cards with rarity context, where-to-look, field ID, and time-sensitivity. Section 11 updated to reflect live test results. Created TESTING.md as the living E2E test document. |
-| 2026-05-16 | Reliability + evolvability pass (Kleppmann principles). AbortSignal.timeout(10s/15s) on every fetch() across all 5 clients; toYMD() fixed to UTC methods; EBirdClient.makeRequest() wraps response.json() in try/catch; buildOutlook() per-day try/catch; invalid BRIEFING_LAT/LNG now fatal in triage.js; BirdCast rate limiter serialized with promise queue; SendGrid error body consumed. FAVORABLE_WINDS/POOR_WINDS deduplicated in utils.js; RECOMMENDATION frozen enum exported from utils.js; 11-case switch replaced with TOOL_HANDLERS Map in index.js. |
-| 2026-05-16 | Evolvability review. De-Cincinnati-ified entire codebase: routine-prompt.md no longer references specific city or ET timezone; output labels in plan_vacation_birding renamed to homeFrequency/notFindableAtHome/rareAtHome. isCincinnatiArea() replaced with getFavoriteHotspots() reading BRIEFING_FAVORITE_HOTSPOTS env var. BRIEFING_SKIP_BIRDCAST added. BRIEFING_LOCATION_NAME added. Section 9 secrets table updated. |
-| 2026-05-16 | Three parallel code reviews plus a dedicated public-repo security audit. Implemented all actionable findings: URLSearchParams for BirdCast API key; NWS URL domain assertion; path traversal guard in send.js; lat/lng validation in all MCP handlers; batched eBird calls (5 at a time); staggered NWS calls (300ms); BRIEFING_REGION rejects invalid format; draft.emailTo/emailFrom overrides removed from send.js; npm ci --ignore-scripts in Routine prompt; HTML-escape rule added to Routine agent RULES; path validation for EBIRD_LIFE_LIST_CSV; legacy scripts/briefing.js deleted. |
-| 2026-05-16 | SPEC.md comprehensive review and cleanup: removed all references to deleted scripts/briefing.js; updated Section 4 to document TOOL_HANDLERS Map and RECOMMENDATION enum; corrected Section 7 rendering description (agent writes dynamically, not via briefing.js); added BRIEFING_LOCATION_NAME to Section 9 secrets table; fixed L9 to note briefing.js deleted; resolved Open Question 6 (cron update chosen); removed duplicate Open Questions table; fixed TOC to correctly list sections 14 (Still To Do) and 15 (Open Questions); added briefing-draft.json to .gitignore list; clarified dotenv situation; added resend to dependencies table; added Current State summary box. |
-| 2026-05-17 | Four new aggregate.js features: (1) Life list integration — `scripts/build-life-list.js` pre-processes eBird life list CSV to `data/life-list.json`; `notableObservations[].isLifer` flags species not on life list; `liferOpportunities` count in flags; lifer-aware Chase Target cards in routine-prompt.md. (2) Moon phase — `buildMoonInfo()` adds `moon` field with phase name, illumination %, and migration note for full/new moon conditions. (3) Ohio-birds LISTSERV scraper — `src/ohio-birds-client.js` created; archive currently unavailable (HTTP 404), returns empty array gracefully; `listservSightings` field added to output. (4) Frontal passage / fallout detection — `NWSClient.detectFrontalPassage()` analyses NWS hourly forecast for wind shifts and overnight clearing; `frontalPassage`, `falloutPotential`, and `frontalNote` fields added to `weather.today` and `flags`. Unit tests added for all 4 features (moon phase names, lifer detection, strip-parenthetical, wind shift, clearing, fallout logic). |
-| 2026-05-17 | Ohio-birds LISTSERV scraper: full body access discovered — no login required. IIS blocks non-browser User-Agents with 403; browser UA reveals A3 iframe endpoint serving email body parts publicly. Pipeline upgraded to index → A2 page → A3 iframe → body text (`<pre>` block). Species parser extracts up to 12 species per report. Verified live: Blacklick Metro Park report yielded 12 species including Canada, Blackburnian, Tennessee, Bay-breasted, Cape May, Hooded warblers. `listservSightings` now returns `{subject, body, species[], location, url, source}`. Community Buzz section updated to write per-report summaries using real species data. |
-| 2026-05-17 | Email redesign: new Design System baked into `routine-prompt.md` — 2-color palette (#1a3a2a + #c0392b only), universal ◉ LIFER badge on every occurrence of lifer species, section structure (2–4 bullets → visual → narrative), four HTML/CSS visual types (bar chart, forecast strip, condition tiles, timeline bar). All 4 scenario test emails regenerated and verified on iPhone. |
-| 2026-05-17 | Bird photo integration: added `src/media-client.js` (`MediaClient`) pulling top-rated photos from Macaulay Library (primary, by eBird species code, no API key) with Wikipedia REST API fallback. `aggregate.js` now fetches photos for first 10 notable observations in parallel; `photo` field added to each `notableObservations[]` entry. `routine-prompt.md` Design System updated: Chase Target cards get hero photo (640px, object-fit cover), Notable Sightings table gets 48×48 thumbnail column. Section 6B added to SPEC. 163 unit tests still passing. |
-| 2026-05-17 | Added Section 3B: On-Demand Report — Mobile Trigger. Architecture: GitHub Actions `workflow_dispatch` + `scripts/generate-email.js` (Anthropic Haiku) + Claude.ai Project with GitHub MCP cloud connector. User types natural language on mobile → Claude resolves location + triggers workflow → triage → aggregate → Haiku writes email → Resend sends. Implementation checklist in Section 3B; item #22 added to Section 14. |
-| 2026-05-17 | Option A on-demand reports built: `scripts/generate-email.js` (reads triage/aggregate JSON, calls claude-3-5-haiku-20241022, three-stage JSON parse fallback, SILENT_SKIP fast-path writes minimal draft so user always gets a response); `.github/workflows/report-on-demand.yml` (workflow_dispatch with 5 inputs, triage gates aggregate/generate steps, generate+send always run so SILENT_SKIP yields a "nothing notable" email rather than silence); `@anthropic-ai/sdk` added to package.json. Item #22 code complete — GitHub secrets + Claude.ai Project remain as user-action steps. |
-| 2026-05-17 | Four MCP bugs fixed in src/index.js (171 unit tests, 0 failures): B1 species_finder — cap at 500 obs before dedup + try/catch + capped-results summary; B2 plan_vacation_birding — strip ", ST" state suffix before resolveDestination lookup; B3 plan_vacation_birding — final fallback (home<0.05, dest>0.10) for nearby destinations + "significant overlap" note; B4 verify_sighting — distinguishes zero-results ("No photo-verified observations found") from API errors. SPEC Section 14 bug table updated to resolved. |
-| 2026-05-17 | Batch completion: (1) Hotspot notes — `data/hotspot-notes.json` built for 9 Cincinnati-area hotspots with trail-level habitat notes; wired into `aggregate.js` and Chase Target cards. (2) Configurable triage thresholds — 5 env vars added (`BRIEFING_SCORE_HIGH_BIRDS`, `BRIEFING_SCORE_MED_BIRDS`, `BRIEFING_SCORE_LOW_BIRDS`, `BRIEFING_FULL_THRESHOLD`, `BRIEFING_QUIET_THRESHOLD`). (3) Life list auto-refresh — `aggregate.js` auto-rebuilds `data/life-list.json` when `~/Downloads/ebird_world_life_list.csv` is newer. (4) Automated test results documented for items 5, 15, 21. Section 14 (Still To Do) restructured into user-action / resolved / deferred tables. |
+| 2026-05-16 | Implemented `plan_vacation_birding` (Section 13): historical BirdCast bar chart with `ignoreSeasonCheck`, checklist-count hotspot ranking, two-tier target species algorithm (home vs destination frequency diff), life list CSV integration. |
+| 2026-05-16 | Architectural refactor of Routine email system: `scripts/aggregate.js` (comprehensive data → JSON) and `scripts/send.js` (email delivery from `briefing-draft.json`). Routine agent writes email body dynamically using reasoning rather than filling a fixed template. Rain impact detection added. |
+| 2026-05-16 | Three live Routine runs completed end-to-end. FULL_BRIEFING path confirmed. Fixed UTC birding-window timezone bug; fixed Routine git-hang (npm ci --ignore-scripts). Added Chase Targets section (prize birds get dedicated cards). Created TESTING.md. |
+| 2026-05-16 | Reliability + security hardening: AbortSignal.timeout on all fetch calls; toYMD() UTC fix; RECOMMENDATION frozen enum from utils.js; TOOL_HANDLERS Map replaces switch; path traversal guard in send.js; briefing.js deleted; full public-repo security audit applied. |
+| 2026-05-17 | Four new aggregate.js features: life list lifer flagging (★ LIFER badges), moon phase + migration notes, frontal passage / fallout detection from NWS hourly, Ohio-birds LISTSERV scraper (active — `wa.exe` URL, index-based, 12 species extracted per report). 163 unit tests passing. |
+| 2026-05-17 | Email redesign: 2-color Design System (#1a3a2a / #c0392b) in `routine-prompt.md`; four HTML/CSS visual types (bar chart, forecast strip, condition tiles, timeline bar); bird photos from Macaulay Library + Wikipedia fallback (`src/media-client.js`); all scenario emails verified on iPhone. |
+| 2026-05-17 | On-demand mobile reports (Section 3B): `scripts/generate-email.js` (Haiku, three-stage JSON parse) + `.github/workflows/report-on-demand.yml` (workflow_dispatch, triage-gated). Mobile trigger via `bird-report.html` web app saved to iPhone home screen. Four MCP bugs (B1–B4) fixed. Configurable triage thresholds, hotspot notes, life list auto-refresh all completed. |
