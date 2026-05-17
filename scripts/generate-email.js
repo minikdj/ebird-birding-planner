@@ -121,7 +121,7 @@ const client = new Anthropic({ apiKey });
 let rawResponse;
 try {
   const message = await client.messages.create({
-    model: 'claude-haiku-4-5',
+    model: 'claude-sonnet-4-5',
     max_tokens: 8192,
     system: systemPrompt,
     messages: [
