@@ -516,7 +516,8 @@ async function main() {
   //   migration.narrativeSummary, weather.today.overnight, weather.today.morning,
   //   weather.today.rainImpactNote, weather.today.migrationInterpretation,
   //   weather.today.weatherUnavailable, weather.outlook[], birdingWindow,
-  //   hotspots[], notableObservations[], flags, moon, lifeList, listservSightings
+  //   hotspots[], notableObservations[], flags, moon, lifeList, listservSightings,
+  //   hotspotNotes (keyed by locId)
 
   const liferOpportunities = notableObservations.filter(o => o.isLifer).length;
 
@@ -563,6 +564,8 @@ async function main() {
     notableObservations,
 
     listservSightings: ohioBirdsSightings ?? [],
+
+    hotspotNotes,
 
     // Life list summary (null if not loaded)
     lifeList: lifeList

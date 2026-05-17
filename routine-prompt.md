@@ -95,6 +95,7 @@ The JSON contains:
 - `hotspots` — top 5 by 7-day species count (proxy for active birder community)
 - `notableObservations` — deduplicated rare/unusual species, last 14 days, 50km; sorted by recency; each has `isLifer: boolean` (true = not yet on life list)
 - `listservSightings` — recent trip reports from Ohio-birds LISTSERV, each `{ subject, body, species[], location, url, source }`. The `body` is the first ~1200 chars of the actual email text; `species` is a parsed list of birds mentioned. Use this to surface what the Ohio birding community is actively finding and discussing. May be empty if archive is unavailable.
+- `hotspotNotes` — keyed by eBird locId; each entry has `trails[]`, `habitatSummary`, `rareSpeciesPotential`. Cross-reference `notableObservations[].locId` with `hotspotNotes` to write specific "Where to look" field directions in Chase Target cards.
 - `lifeList` — `{ totalSpecies, source }` or null if life list not loaded
 - `flags` — `{ highMigrationNight, hasNotables, morningRainLikely, favorableOvernightWind, frontalPassage, falloutPotential, liferOpportunities }`
 
@@ -138,7 +139,7 @@ Structure your email as inline-CSS HTML (mobile-friendly, max-width 600px, table
    - If `isLifer` is true for this species: add a prominent **"★ LIFER OPPORTUNITY"** badge at the top of the card in red (#c0392b).
    - **Species name** (prominent, in red) + location + date last seen
    - **Why it's a prize** (1 sentence on county rarity, state status, or significance — use your knowledge, not just the data)
-   - **Where to look** within the hotspot: specific habitat, trail section, time of day (e.g., "dense shrubby understory near the north trail edge at Otto Armleder")
+   - **Where to look** within the hotspot: specific habitat, trail section, time of day (e.g., "dense shrubby understory near the north trail edge at Otto Armleder"). If `hotspotNotes[locId]` exists, use the matching trail's `directions` and `habitat` fields verbatim or paraphrased.
    - **Field ID** (1–2 sentences): the key song, behavior, or visual that will help find it ("listen for a loud emphatic *beecher-beecher-beecher*; it walks on the ground with a bobbing gait")
    - **Time-sensitivity**: is it likely to linger (e.g., a lingering waterbird) or must be checked today (e.g., a warbler at peak passage)?
 

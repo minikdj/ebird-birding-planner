@@ -1,0 +1,292 @@
+{
+  "L298164": {
+    "name": "Otto Armleder Memorial Park",
+    "county": "Hamilton",
+    "habitatSummary": "River-bottom floodplain park along the Little Miami River with a mosaic of wet agricultural fields (bean/corn), overgrown shrubby edges, willow/cottonwood floodplain forest, and mowed grass areas. The shrubby thicket corridor between the paved loop and the bean field is the signature migrant trap — dense tangles of multiflora rose, elderberry, and goldenrod hold skulking migrants that funnel here overnight. Flooding in the lower fields concentrates shorebirds in late summer and early fall.",
+    "trails": [
+      {
+        "name": "Paved loop / mud trail to bean field",
+        "habitat": "shrubby edge, overgrown field, wet thicket, floodplain scrub",
+        "targetSpecies": ["Connecticut Warbler", "Mourning Warbler", "Alder Flycatcher", "Willow Flycatcher", "Yellow Warbler", "Common Yellowthroat", "Gray Catbird"],
+        "directions": "From the main parking lot off Kellogg Avenue, take the paved loop trail east toward the river. Where the pavement ends and a muddy path continues toward the bean field (roughly 0.3 miles in), stop at the transition zone. The dense shrubby thicket on both sides of the path — especially the north-facing edge — is the prime Connecticut Warbler spot. Walk the mud trail slowly toward the field; birds often flush low across the path. Check both sides of the opening where the brush gives way to the field margin.",
+        "bestTime": "May 10–June 5, first 90 minutes of daylight",
+        "notes": "Connecticut Warbler recorded here repeatedly in the May 9–17 2026 window. Birds are heard far more often than seen — listen for a loud, emphatic 'beecher-beecher-beecher' or 'teacher-teacher-teacher'. Walk in silence; they flush and disappear into thickets quickly. Mourning Warbler is more common in the same habitat."
+      },
+      {
+        "name": "Little Miami River floodplain loop",
+        "habitat": "cottonwood/willow bottomland forest, river edge",
+        "targetSpecies": ["Yellow-billed Cuckoo", "Prothonotary Warbler", "Louisiana Waterthrush", "Wood Duck", "Great Blue Heron", "Belted Kingfisher"],
+        "directions": "Follow the paved trail north past the bean field area toward the river edge. The cottonwood/willow strip along the Little Miami is narrow but productive. Prothonotary Warbler occasionally nests in cavities along the river bank — look low over the water in flooded pockets.",
+        "bestTime": "Late April–June for neotropical migrants; year-round for herons/kingfisher",
+        "notes": "Water level fluctuations heavily influence shorebird presence in the adjacent fields — check eBird for recent reports before the visit."
+      },
+      {
+        "name": "Open grass / mowed areas near parking",
+        "habitat": "mowed lawn, scattered trees",
+        "targetSpecies": ["American Golden-Plover", "Buff-breasted Sandpiper", "Upland Sandpiper", "Eastern Meadowlark", "Bobolink"],
+        "directions": "Scan the mowed areas just east of the parking lot during fall migration (late August–September). Buff-breasted Sandpiper has appeared here with Golden-Plover during southerly rain events that ground shorebirds mid-migration.",
+        "bestTime": "Late August–early October for shorebirds; May for grassland sparrows",
+        "notes": "Not a reliable shorebird spot — entirely dependent on recent rain and field conditions. Worth a 5-minute scan from the parking lot before heading to the shrub trail."
+      }
+    ],
+    "parkingCoords": [39.1231, -84.4059],
+    "peakSeason": "May–early June (spring warbler migration)",
+    "rareSpeciesPotential": ["Connecticut Warbler", "Mourning Warbler", "Kentucky Warbler", "Alder Flycatcher", "Yellow-bellied Flycatcher", "Buff-breasted Sandpiper"]
+  },
+
+  "L285901": {
+    "name": "Shawnee Lookout Park",
+    "county": "Hamilton",
+    "habitatSummary": "A hilltop park at the confluence of the Great Miami and Ohio Rivers offering one of the best panoramic hawk migration watch points in SW Ohio. The park combines upland oak-hickory forest, shrubby hillside edges, and river-view overlooks. The ridgeline creates a natural leading line for migrating raptors and broad-winged hawks in fall. In spring, the confluence draws lingering waterfowl and the forest holds a quality woodland warbler migration.",
+    "trails": [
+      {
+        "name": "Miami Fort Trail (ridgeline hawk watch)",
+        "habitat": "upland oak-hickory forest, rocky ridge, open lookout",
+        "targetSpecies": ["Broad-winged Hawk", "Sharp-shinned Hawk", "Cooper's Hawk", "Osprey", "Bald Eagle", "American Kestrel", "Merlin"],
+        "directions": "From the main Shawnee Lookout lot, take the Miami Fort Trail (blue blazes) 1.1 miles to the earthwork overlook at the ridge. The open promontory faces south-southwest toward the river confluence — this is the hawk watch point. Scan low and high during peak periods. Birds typically funnel along the ridge from the north/northeast and kettle over the trees before crossing the river.",
+        "bestTime": "September 10–October 20 for Broad-winged Hawk (peak around Sept 15); mid-October for Sharp-shinned/Cooper's",
+        "notes": "Not an officially staffed hawk watch but well-known to local birders. Broad-winged Hawk kettles can be spectacular on NW wind days following a cold front. Mid-week visits are quieter."
+      },
+      {
+        "name": "Little Turtle Trail (forest loop)",
+        "habitat": "mature oak-hickory upland forest, ravine with seeps",
+        "targetSpecies": ["Louisiana Waterthrush", "Worm-eating Warbler", "Ovenbird", "Wood Thrush", "Scarlet Tanager", "Red-headed Woodpecker", "Eastern Wood-Pewee"],
+        "directions": "Take the Little Turtle Trail (red blazes) from the main lot. The ravine sections with seeps are the most productive — Louisiana Waterthrush breeds in the wetter ravines near stream crossings. Worm-eating Warbler is reliable on the drier, leaf-littered slopes mid-May. Walk slowly on the uphill slopes and listen for the dry, insect-like buzzy trill of Worm-eating Warbler from the leaf litter.",
+        "bestTime": "May–June for breeding birds; late April for early migrants",
+        "notes": "Red-headed Woodpecker is a year-round resident in the more open oak sections — look for the dramatic black-and-white pattern against red head at snags near the hilltop."
+      },
+      {
+        "name": "Overlook / river confluence scan",
+        "habitat": "open river, sandbars, mudflats when exposed",
+        "targetSpecies": ["Bonaparte's Gull", "Common Tern", "Caspian Tern", "Ring-billed Gull", "Herring Gull", "American White Pelican", "Double-crested Cormorant"],
+        "directions": "From the Miami Fort overlook, scan the river confluence with binoculars or a scope. Exposed sandbars (most visible in late summer/fall when water is lower) attract terns and gulls. American White Pelican has been recorded here during fall passage.",
+        "bestTime": "August–November; best at low water when sandbars exposed",
+        "notes": "Scope recommended for river scanning. Morning light (looking west/southwest) can be challenging — arrive early or position on the east-facing slope."
+      }
+    ],
+    "parkingCoords": [39.1344, -84.7442],
+    "peakSeason": "September–October (fall hawk migration); May (spring woodland migrants)",
+    "rareSpeciesPotential": ["Broad-winged Hawk", "Worm-eating Warbler", "American White Pelican", "Common Tern", "Mississippi Kite"]
+  },
+
+  "L285760": {
+    "name": "Spring Grove Cemetery & Arboretum",
+    "county": "Hamilton",
+    "habitatSummary": "A 733-acre Victorian cemetery and nationally registered arboretum in the heart of Cincinnati. The combination of mature ornamental and native trees, shrubs, open lawns, and multiple small ponds creates exceptional migrant habitat. The diversity of tree species — including rare specimens not found in surrounding urban areas — concentrates insect-rich canopy for warblers. The ponds hold waterfowl and occasional shorebirds. Spring migration here is legendary among Cincinnati birders.",
+    "trails": [
+      {
+        "name": "North section ponds (Section 100 area)",
+        "habitat": "ornamental ponds, weeping willows, shrubby edges",
+        "targetSpecies": ["Common Snipe", "American Bittern", "Solitary Sandpiper", "Green Heron", "Wood Duck", "Hooded Merganser", "Ring-necked Duck"],
+        "directions": "Enter at the north gate (Winton Place entrance) and work your way to the ponds in the northern sections. The ponds with weeping willows and emergent vegetation along the edges hold the most species. Bittern hides in emergent vegetation at pond edges — walk quietly and scan the cattail margins early in the morning.",
+        "bestTime": "April–May for waterfowl and early migrants; April for bittern/snipe",
+        "notes": "The cemetery has variable access hours — check current schedule before visiting. Drive-through birding is permitted."
+      },
+      {
+        "name": "Main entrance / historic section (Sections 1–30)",
+        "habitat": "massive canopy trees (oak, beech, tulip poplar, exotic specimens), lawn openings",
+        "targetSpecies": ["Bay-breasted Warbler", "Blackpoll Warbler", "Cape May Warbler", "Tennessee Warbler", "Philadelphia Vireo", "Blue-headed Vireo", "Olive-sided Flycatcher"],
+        "directions": "Enter from the main Spring Grove Avenue entrance. The mature canopy trees in the historic old-growth sections (roughly sections 1–30 near the chapel) are the warbler hotspot. Work upward into the canopy: Cape May and Bay-breasted Warblers favor the treetops of conifers and large oaks. Walk the main road slowly and look for foraging flocks moving through. The lawns beneath large trees often hold Palm Warblers and Yellow-rumped Warblers in early spring.",
+        "bestTime": "May 1–25 peak warbler migration; late April for early arrivals",
+        "notes": "Early morning (before 9am) is essential — the cemetery opens at 8am and foot traffic increases rapidly. Check eBird for the current hotspot map; specific trees that hold rarities are often documented."
+      },
+      {
+        "name": "Southwest section (Sections 80–90, arboretum area)",
+        "habitat": "arboretum plantings, open glades, ornamental shrubs",
+        "targetSpecies": ["Yellow-breasted Chat", "Eastern Towhee", "White-crowned Sparrow", "Fox Sparrow", "Lincoln's Sparrow", "Hermit Thrush"],
+        "directions": "The southwest sections of the cemetery have denser ornamental shrub plantings that attract sparrows and secretive thrushes during migration. Check the thick hedgerows and ornamental beds for sparrow flocks in October–November and April.",
+        "bestTime": "April for spring migrants; October–November for sparrows and thrushes",
+        "notes": "This section is underbirded relative to the north ponds and historic sections — worth exploring if you have extra time."
+      }
+    ],
+    "parkingCoords": [39.1756, -84.5284],
+    "peakSeason": "May 1–20 (spring warbler migration)",
+    "rareSpeciesPotential": ["Olive-sided Flycatcher", "Yellow-bellied Flycatcher", "Philadelphia Vireo", "Cape May Warbler", "Bay-breasted Warbler", "American Bittern"]
+  },
+
+  "L285827": {
+    "name": "Gilmore Ponds Preserve",
+    "county": "Butler",
+    "habitatSummary": "A series of restored oxbow ponds, wetland cells, and shrubby upland edges along the Great Miami River valley in Butler County. One of SW Ohio's premier shorebird migration sites when water levels are managed properly. The shallow mudflat areas attract large numbers and diversity of migrating shorebirds in late summer and fall. Breeding marsh birds include Least Bittern, Sora, and Virginia Rail.",
+    "trails": [
+      {
+        "name": "Main pond complex (levee walk)",
+        "habitat": "shallow mudflats, emergent marsh, open water cells",
+        "targetSpecies": ["Baird's Sandpiper", "White-rumped Sandpiper", "Dunlin", "Pectoral Sandpiper", "Semipalmated Sandpiper", "Lesser Yellowlegs", "Greater Yellowlegs", "Least Bittern", "Sora", "Virginia Rail"],
+        "directions": "Park at the Gilmore Road access and walk the levee between the pond cells. The exposed mudflat edges on the east sides of the ponds are most productive for shorebirds — water levels fluctuating between 30–50% full create optimal mudflat exposure. Scan from the levee tops with a scope if possible; shorebirds are scattered across the flats and best detected from an elevated vantage.",
+        "bestTime": "Late July–October for shorebirds (peak Aug 10–Sept 15); May–June for breeding marsh birds",
+        "notes": "Water level management dramatically affects shorebird quality — check eBird for recent reports before making a special trip. When dry, the site has little to offer. When water is right, it can rival Killdeer Plains for shorebird diversity."
+      },
+      {
+        "name": "Shrubby upland edge (south boundary)",
+        "habitat": "shrubby edge, old field, wet thicket",
+        "targetSpecies": ["Alder Flycatcher", "Willow Flycatcher", "Yellow Warbler", "Willow Flycatcher", "Swamp Sparrow", "Marsh Wren"],
+        "directions": "The shrubby margins along the south boundary of the preserve (along the fenceline) hold Empidonax flycatchers during late spring migration. Alder Flycatcher passes through May 20 – June 5. Listen for the 'fee-BEE-o' of Alder vs. the 'FITZ-bew' of Willow — habitat overlap here makes this a good comparison site.",
+        "bestTime": "May 20–June 10 for Alder Flycatcher",
+        "notes": "Mosquitoes can be intense in the wet edge habitat — insect repellent strongly recommended from May onward."
+      }
+    ],
+    "parkingCoords": [39.4102, -84.5334],
+    "peakSeason": "August–September (shorebird migration)",
+    "rareSpeciesPotential": ["Baird's Sandpiper", "White-rumped Sandpiper", "Ruff", "American Avocet", "Black-necked Stilt", "Least Bittern", "Wilson's Phalarope"]
+  },
+
+  "L285844": {
+    "name": "Caesar Creek State Park",
+    "county": "Warren",
+    "habitatSummary": "A large reservoir with 2,800 acres of water surface surrounded by upland forest, grassland, and shrubby edges. Caesar Creek Lake is one of SW Ohio's premier inland waterbird sites — large enough to attract loons, grebes, scoters, and rare gulls during migration. The spillway area below the dam, Clarksville Road access points, and the swim beach parking area are the key vantage points. Rocky shoreline at lower water levels attracts shorebirds.",
+    "trails": [
+      {
+        "name": "Clarksville Road / main lake overlooks",
+        "habitat": "open reservoir, rocky points, wooded shoreline",
+        "targetSpecies": ["Common Loon", "Red-throated Loon", "Horned Grebe", "Red-necked Grebe", "Surf Scoter", "White-winged Scoter", "Black Scoter", "Long-tailed Duck", "Lesser Scaup", "Greater Scaup"],
+        "directions": "From US-42, take Clarksville Road to the lake access point with the widest lake view. Park and scan with a scope — the open water mid-lake is where divers and loons concentrate. Work the near shore for grebes. Birds can be distant (500m+) so a 60–80x scope is nearly essential for scoter ID. Check multiple access points along Clarksville Road as birds move around the lake.",
+        "bestTime": "November–December for diving ducks and rare waterfowl; March–April for loons and grebes",
+        "notes": "Scope is mandatory for this site. Red-throated Loon, all three scoter species, and Long-tailed Duck have all been recorded here. Check eBird for the most recent access point producing birds — access varies with water level and season."
+      },
+      {
+        "name": "Spillway / tailwater area below dam",
+        "habitat": "fast water, rocky substrate, grassy banks",
+        "targetSpecies": ["Bonaparte's Gull", "Ring-billed Gull", "Herring Gull", "Iceland Gull", "Lesser Black-backed Gull", "Common Merganser", "Hooded Merganser"],
+        "directions": "Access the spillway from Warren County off Clarksville Road at the dam. The tailwater below the spillway attracts gulls (especially November–February) and mergansers. Lesser Black-backed Gull and Iceland Gull have been recorded here — scan gull flocks carefully for structural differences. Check the rocky outcrops at water's edge.",
+        "bestTime": "November–February for rare gulls",
+        "notes": "Gull watching is best on overcast days when glare is reduced. Afternoon light from the west can be favorable."
+      },
+      {
+        "name": "Swim beach / park road grassland",
+        "habitat": "mowed grass, shoreline, scattered shrubs",
+        "targetSpecies": ["American Pipit", "Horned Lark", "Lapland Longspur", "Snow Bunting", "American Golden-Plover"],
+        "directions": "The mowed areas around the swim beach parking lot and adjacent park roads attract grassland/open-country species during fall and winter. Scan flocks of Horned Larks carefully for Lapland Longspur or Snow Bunting.",
+        "bestTime": "October–March for winter finches and open-country species",
+        "notes": "Snow Bunting and Lapland Longspur are never guaranteed — visit after northerly cold snaps for best chance."
+      }
+    ],
+    "parkingCoords": [39.5050, -84.0581],
+    "peakSeason": "November–December (diving ducks); March–April (loons/grebes)",
+    "rareSpeciesPotential": ["Red-throated Loon", "Red-necked Grebe", "Surf Scoter", "White-winged Scoter", "Long-tailed Duck", "Iceland Gull", "Lesser Black-backed Gull", "Snow Bunting"]
+  },
+
+  "L285890": {
+    "name": "Miami Whitewater Forest",
+    "county": "Hamilton",
+    "habitatSummary": "A large Hamilton County Park District property with mature upland forest, a 85-acre lake, and restored meadow/prairie habitats. The diversity of habitats in a single park makes it one of the most species-rich sites in Hamilton County year-round. The lake attracts waterfowl and shorebirds; the forest holds breeding Cerulean Warbler and other interior-forest species; the prairies attract grassland birds. The boomerang trail system provides access to all habitats.",
+    "trails": [
+      {
+        "name": "Timberlakes area / lake margin",
+        "habitat": "reservoir, shrubby lake edge, weeping willows",
+        "targetSpecies": ["Osprey", "Common Loon", "Pied-billed Grebe", "Ring-necked Duck", "Bufflehead", "Common Merganser", "Hooded Merganser", "Green Heron", "Black-crowned Night-Heron"],
+        "directions": "Access the lake from the Timberlakes parking area. Walk the perimeter trail clockwise — the north shore has the most productive shrubby edges for migrant warblers while the open south shore gives the best lake scanning views. Osprey is reliable here spring through fall; a pair has nested in recent years.",
+        "bestTime": "March–May for waterfowl; May for warblers along the edge",
+        "notes": "The lake is stocked for fishing and sees heavy recreational use on weekends — early morning weekday visits are much quieter."
+      },
+      {
+        "name": "Badlands Trail / upland forest (north section)",
+        "habitat": "mature oak-hickory upland forest, ridge and ravine",
+        "targetSpecies": ["Cerulean Warbler", "Louisiana Waterthrush", "Worm-eating Warbler", "Kentucky Warbler", "Hooded Warbler", "Acadian Flycatcher", "Eastern Wood-Pewee"],
+        "directions": "Take the Badlands Trail from the main forest trailhead. The ridge tops in the north section of the park support Cerulean Warbler — listen for the buzzy, ascending trill high in the canopy from mid-May onward. Walk the ridge and stop frequently to scan the canopy. Kentucky Warbler is in the dense understory on the valley slopes — listen for its emphatic 'churry-churry-churry' from low in the vegetation. Louisiana Waterthrush is in the ravine bottoms with streams.",
+        "bestTime": "May 10–July 4 for breeding interior-forest species",
+        "notes": "Cerulean Warbler is the target species here — Miami Whitewater is one of the more reliable Hamilton County sites. Best located by song from the ridge; they feed very high and can be hard to see."
+      },
+      {
+        "name": "Prairie / meadow restoration (south section)",
+        "habitat": "restored tallgrass prairie, old field, brushy edges",
+        "targetSpecies": ["Dickcissel", "Bobolink", "Eastern Meadowlark", "Savannah Sparrow", "Grasshopper Sparrow", "Henslow's Sparrow", "Northern Harrier"],
+        "directions": "The prairie restoration areas in the southern section of the park (off the main park road near the golf course) support grassland nesters. Grasshopper Sparrow is regular; Henslow's Sparrow has nested in the past — listen for the brief insect-like 'tsick' from within the dense grass. Dickcissel visits some summers when food is abundant.",
+        "bestTime": "May 20–July 15 for grassland breeders; October for migrant sparrows",
+        "notes": "Henslow's Sparrow presence is variable — check eBird for current-season records before targeting."
+      }
+    ],
+    "parkingCoords": [39.2589, -84.7481],
+    "peakSeason": "May–June (breeding forest and grassland species)",
+    "rareSpeciesPotential": ["Cerulean Warbler", "Kentucky Warbler", "Henslow's Sparrow", "Worm-eating Warbler", "Common Loon"]
+  },
+
+  "L285843": {
+    "name": "East Fork State Park",
+    "county": "Clermont",
+    "habitatSummary": "A large reservoir in Clermont County with extensive surrounding forest, grassland restoration, and floodplain habitat. East Fork Lake is underbirded relative to Caesar Creek and often produces quality sightings with less competition. The surrounding upland forest holds interior breeding species. Shoreline areas at lower water levels attract shorebirds.",
+    "trails": [
+      {
+        "name": "East Fork Lake main overlooks",
+        "habitat": "open reservoir, rocky points, wooded shoreline",
+        "targetSpecies": ["Common Loon", "Horned Grebe", "Lesser Scaup", "Canvasback", "Redhead", "Ruddy Duck", "Ring-necked Duck", "Common Goldeneye"],
+        "directions": "Access the lake from the boat ramp areas on the west side of the reservoir (off Bantam Road/Afton-Olive Branch Road). Scan from the boat ramp and parking areas toward the open water. Unlike Caesar Creek, East Fork has fewer vantage points — the boat ramp areas provide the best direct views. Check sheltered coves for diving duck concentrations.",
+        "bestTime": "November–March for diving ducks; November for rarities",
+        "notes": "East Fork is an underbirded gem — the relative lack of eBird coverage means rarities may go undetected. Worth regular visits during waterfowl season."
+      },
+      {
+        "name": "Backpack trail / upland forest",
+        "habitat": "mixed upland forest, successional edge, stream corridors",
+        "targetSpecies": ["Chuck-will's-widow", "Whip-poor-will", "Hooded Warbler", "Wood Thrush", "Great Crested Flycatcher", "Broad-winged Hawk"],
+        "directions": "The backpack trail system on the north side of the park provides access to the most mature forest. Chuck-will's-widow and Whip-poor-will have nested here — listen at dusk from late May onward at the forest edge near the campground area.",
+        "bestTime": "May–June for breeding species; dusk surveys in late May for nightjars",
+        "notes": "The East Fork forest is one of the few reliable Hamilton/Clermont County sites for Chuck-will's-widow. Check eBird for the specific access point where they were most recently reported."
+      }
+    ],
+    "parkingCoords": [39.0333, -84.1167],
+    "peakSeason": "November–March (waterfowl); May–June (breeding forest)",
+    "rareSpeciesPotential": ["Common Goldeneye", "Canvasback", "Chuck-will's-widow", "Red-necked Grebe"]
+  },
+
+  "L1023530": {
+    "name": "Winton Woods",
+    "county": "Hamilton",
+    "habitatSummary": "A large Hamilton County Park District property in the northwest Cincinnati suburbs with Winton Lake, mature upland forest, floodplain bottomland, and managed open areas. Winton Lake is a reliable site for waterfowl and has produced rare ducks in fall and winter. The forest has breeding interior species. The park's proximity to urban areas makes it accessible and productive year-round.",
+    "trails": [
+      {
+        "name": "Winton Lake / Kingfisher Trail",
+        "habitat": "reservoir, wooded shore, shrubby lake margins",
+        "targetSpecies": ["Wood Duck", "Hooded Merganser", "Ring-necked Duck", "Bufflehead", "Pied-billed Grebe", "Great Blue Heron", "Green Heron", "Belted Kingfisher"],
+        "directions": "Park at the Winton Lake boat ramp/picnic area off Winton Road. Walk the Kingfisher Trail around the north and west shores — the most productive section is the north shore where shrubs and emergent vegetation meet the open water. The boat ramp at the east end provides the widest scanning view across the lake.",
+        "bestTime": "March–November for breeding and migrant waterfowl; year-round for herons",
+        "notes": "Winton Lake freezes less readily than smaller ponds due to its size — when surrounding waters freeze, ducks concentrate here. Check in mid-winter after cold snaps."
+      },
+      {
+        "name": "Mill Creek floodplain / bottomland forest",
+        "habitat": "riparian bottomland forest, wet floodplain, shrubby edge",
+        "targetSpecies": ["Prothonotary Warbler", "Yellow-billed Cuckoo", "Wood Thrush", "Red-bellied Woodpecker", "Pileated Woodpecker", "Barred Owl"],
+        "directions": "Take the forest trail from the main Winton Woods picnic area (off Sharon Road) into the Mill Creek bottomland. The floodplain forest is damp and productive. Prothonotary Warbler has nested here in years with suitable water levels — check the larger dead snags and cavities near the water. Barred Owl is often heard from this section at dawn.",
+        "bestTime": "May–June for breeding neotropical migrants; year-round for owls and woodpeckers",
+        "notes": "The bottomland can be very wet in spring — waterproof footwear recommended."
+      }
+    ],
+    "parkingCoords": [39.2444, -84.5428],
+    "peakSeason": "November–March (waterfowl); May–June (breeding warblers)",
+    "rareSpeciesPotential": ["Prothonotary Warbler", "Pileated Woodpecker", "Barred Owl", "Common Goldeneye"]
+  },
+
+  "L302157": {
+    "name": "Fernald Preserve",
+    "county": "Hamilton",
+    "habitatSummary": "A former uranium processing facility northwest of Cincinnati, now a 1,050-acre nature preserve managed by US DOE/FWS. The extensive wetland complex (constructed during remediation), native prairie restoration, and shrubby successional habitat make this one of Hamilton County's premier birding destinations. The wetland cells are visible from elevated observation platforms with scope views across the pools. One of the best shorebird sites in the Cincinnati area.",
+    "trails": [
+      {
+        "name": "Wetland observation platforms (cells 1–4)",
+        "habitat": "managed shallow wetland cells, emergent marsh, mudflats",
+        "targetSpecies": ["Dunlin", "Pectoral Sandpiper", "Baird's Sandpiper", "White-rumped Sandpiper", "Semipalmated Sandpiper", "Semipalmated Plover", "Lesser Yellowlegs", "Least Bittern", "American Bittern", "Sora", "Virginia Rail", "American Avocet"],
+        "directions": "From the main Fernald Preserve parking lot (off Route 128, north of New Haven Road), take the main trail 0.5 miles to the wetland observation platform overlooking cells 1 and 2. The platforms provide elevated views over the managed wetland cells — bring a scope, as shorebirds are often 100–300m distant on the far mudflats. Cell water levels are actively managed by the site; the shallowest cells with exposed mudflat edges are most productive. Walk the entire trail system to check cells 3 and 4 as well.",
+        "bestTime": "Late July–October for shorebirds (peak Aug 1–Sept 20); April–May for breeding marsh birds",
+        "notes": "American Avocet has appeared here during fall. American Bittern breeds at Fernald — listen for the booming 'pump-er-lunk' calls at dawn and dusk from late April onward. The preserve has regulated visitor hours (typically dawn to dusk) — check fernaldpreserve.org for current access."
+      },
+      {
+        "name": "Prairie restoration (south section)",
+        "habitat": "restored tallgrass prairie, old field edges, brush piles",
+        "targetSpecies": ["Dickcissel", "Henslow's Sparrow", "Grasshopper Sparrow", "Eastern Meadowlark", "Northern Harrier", "Short-eared Owl"],
+        "directions": "The extensive prairie restoration south of the wetland cells is one of the best prairie habitats in Hamilton County. Henslow's Sparrow has nested here — listen from the trail margins for the barely-audible 'tsick' from within the grass June–July. Short-eared Owl hunts the prairie edges at dusk from October through March — arrive 30 minutes before sunset and watch the field edges.",
+        "bestTime": "May–July for grassland nesters; October–March for Short-eared Owl",
+        "notes": "Fernald hosts guided birding programs — check with the interpretive center for scheduled events. The prairie section is best accessed by looping past the wetland platforms and continuing south on the main trail."
+      },
+      {
+        "name": "Shrubby edge / former industrial area (north boundary)",
+        "habitat": "dense shrubs, overgrown edge, scattered trees",
+        "targetSpecies": ["Blue-winged Warbler", "Prairie Warbler", "Yellow-breasted Chat", "Common Yellowthroat", "Willow Flycatcher", "White-eyed Vireo"],
+        "directions": "The north perimeter trail follows the former industrial boundary where dense multiflora rose and shrub thickets have colonized disturbed ground. This shrubby edge is excellent for early May migrants and breeding shrubland species. Blue-winged Warbler is reliable here in May–June. White-eyed Vireo sings loudly from dense brush — listen for the sharp 'chick-per-weeo-chick' song.",
+        "bestTime": "May 5–June 20 for shrubland breeders and migrants",
+        "notes": "The north section is underbirded — most visitors focus on the wetland platforms. The shrub edge can be surprisingly productive on slow shorebird days."
+      }
+    ],
+    "parkingCoords": [39.2906, -84.6956],
+    "peakSeason": "August–September (shorebird migration); May (spring migrants)",
+    "rareSpeciesPotential": ["American Avocet", "American Bittern", "Henslow's Sparrow", "Short-eared Owl", "Wilson's Phalarope", "Marbled Godwit"]
+  }
+}
