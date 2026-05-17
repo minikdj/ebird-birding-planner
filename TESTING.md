@@ -216,6 +216,15 @@ Where has an American Robin been seen near Cincinnati recently?
 ```
 - [ ] Returns results without crash even with many observations
 
+**Edge case — empty observations after dedup:**
+```
+Where has a Canada Goose been seen near Cincinnati recently?
+```
+- [ ] Species with thousands of observations deduplicates by location without crash
+- [ ] `handleSpeciesFinder` returns a valid summary even if all observations collapse to a single location
+- [ ] No `TypeError` or unhandled promise rejection (the empty-array path after dedup must be handled)
+- [ ] Response body is a non-empty string (not `undefined` or blank)
+
 ---
 
 ### Tool 6: `best_day_to_bird`
@@ -237,6 +246,21 @@ What's the best day to go birding this week? I'm targeting warblers.
 What's the best day to go birding this week?
 ```
 - [ ] Works without target species, scores by migration + weather only
+
+**Edge case — invalid date range (start > end):**
+
+Invoke `best_day_to_bird` directly (via MCP JSON or unit test) with `startDate` after `endDate`, e.g. `startDate: "2026-05-20"`, `endDate: "2026-05-17"`.
+
+- [ ] Returns a graceful error message (e.g. "Start date must be before end date"), not a crash
+- [ ] No unhandled exception / stack trace returned to caller
+- [ ] Exit code 0 from the MCP process
+
+**Edge case — single-day range (start === end):**
+
+Invoke with `startDate` and `endDate` set to the same date.
+
+- [ ] Returns a valid single-day ranking (one entry) without crash
+- [ ] Score computed for that one day; recommendation references it by name
 
 ---
 
@@ -473,6 +497,27 @@ RESULT: HTML SAVED to /Users/djm/claude/ebird-birding-planner/briefing-output/br
 
 ---
 
+### send.js — stale draft warning
+
+Simulate a briefing-draft.json that was written more than 1 hour before `send.js` is called (e.g. aggregate ran, then something stalled for 2 hours before send ran).
+
+```bash
+# Create a draft file, then backdate its mtime by 2 hours
+echo '{"subject":"Stale Test","htmlBody":"<p>Stale</p>"}' > briefing-output/stale-draft.json
+touch -t $(date -v-2H +"%Y%m%d%H%M") briefing-output/stale-draft.json
+
+# Run send.js against the stale draft
+node scripts/send.js briefing-output/stale-draft.json 2>&1
+```
+
+**Expected:**
+- [ ] A `WARNING` line appears on **stderr** referencing the draft age (e.g. "WARNING: briefing draft is 2h old — data may be stale")
+- [ ] Email (or disk fallback) still completes — the warning does not abort the send
+- [ ] Exit code 0
+- [ ] The WARNING is not swallowed (visible even when stderr is redirected separately)
+
+---
+
 ### send.js — missing draft file
 
 ```bash
@@ -558,6 +603,70 @@ EOF
 
 **Expected:** `source: wikipedia`, `url present: true`
 
+**Edge case — species code with no Macaulay Library photos:**
+
+Use a species code that is valid but has no Macaulay photos (e.g. a newly split taxon or a code with zero results from the ML API).
+
+```bash
+node --input-type=module <<'EOF'
+import { MediaClient } from './src/media-client.js';
+const media = new MediaClient();
+// 'x00001' is a deliberately bogus code — no ML photos exist
+const photo = await media.getTopPhoto('x00001', 'Nonexistent Species');
+console.log('source:', photo?.source);   // expect: 'wikipedia' (fallthrough)
+console.log('url present:', !!photo?.url);
+EOF
+```
+
+- [ ] `source` is `wikipedia` (fell through from Macaulay to Wikipedia)
+- [ ] `url present: true`
+- [ ] No crash
+
+**Edge case — both Macaulay and Wikipedia fail:**
+
+```bash
+node --input-type=module <<'EOF'
+import { MediaClient } from './src/media-client.js';
+const media = new MediaClient();
+// Pass an invalid code AND a nonsense common name so Wikipedia also returns nothing
+const photo = await media.getTopPhoto('x00001', 'zzzzzzzz_no_such_bird_zzzzzz');
+console.log('result:', photo);  // expect: null
+EOF
+```
+
+- [ ] Returns `null` (not `undefined`, not an object with a null `url`)
+- [ ] No unhandled promise rejection, no crash
+
+**Edge case — 10 species in parallel (batching):**
+
+```bash
+node --input-type=module <<'EOF'
+import { MediaClient } from './src/media-client.js';
+const media = new MediaClient();
+const codes = [
+  ['conwar', 'Connecticut Warbler'],
+  ['nrwswa', 'Northern Rough-winged Swallow'],
+  ['balori', 'Baltimore Oriole'],
+  ['rewbla', 'Red-winged Blackbird'],
+  ['amerob', 'American Robin'],
+  ['norcar', 'Northern Cardinal'],
+  ['bkcchi', 'Black-capped Chickadee'],
+  ['houfin', 'House Finch'],
+  ['sonspa', 'Song Sparrow'],
+  ['amegfi', 'American Goldfinch'],
+];
+const results = await Promise.all(codes.map(([code, name]) => media.getTopPhoto(code, name)));
+console.log('total results:', results.length);
+console.log('non-null:', results.filter(Boolean).length);
+results.forEach((r, i) => console.log(codes[i][0], r?.source ?? 'null'));
+EOF
+```
+
+- [ ] `total results: 10` (array length correct even if some are null)
+- [ ] No batch silently drops a species (every index is either a photo object or `null`, not `undefined`)
+- [ ] 3-wide batching means at most 3 concurrent Macaulay requests at a time — verify via timing (~3 batches × ~1s = ~3s total, not ~10s sequential)
+- [ ] No crash
+
 ---
 
 ### aggregate.js — photo field verification
@@ -566,6 +675,31 @@ When running `node scripts/aggregate.js`, verify in the output:
 
 - [ ] `notableObservations[0].photo` is either null or an object with keys: `url`, `thumbnailUrl`, `source`
 - [ ] `notableObservations[0].speciesCode` is present and non-null
+
+---
+
+### Life-list CSV parser — quoted species names (known risk)
+
+eBird life-list exports may contain species names with embedded commas (e.g. hypothetical subspecies labels). The current parser uses `split(',')` which does not handle RFC 4180 quoted fields.
+
+**Manual test procedure:**
+
+1. Export your eBird life list CSV from ebird.org → My eBird → Download My Data
+2. Open the CSV in a text editor and search for any species names wrapped in double quotes (e.g. `"Aythya affinis, Lesser Scaup"`)
+3. If any exist, run:
+   ```bash
+   node --input-type=module <<'EOF'
+   import { loadLifeList } from './src/life-list.js';
+   const list = await loadLifeList(process.env.EBIRD_LIFE_LIST_CSV);
+   console.log('Loaded:', list.size, 'species');
+   EOF
+   ```
+
+**Expected:**
+- [ ] `list.size` matches the number of species rows in the CSV (not fewer)
+- [ ] No species name truncated at a comma (e.g. a species that should appear as "Lesser Scaup" is not stored as "Lesser Scaup" when its CSV field was quoted)
+
+**Known issue:** `split(',')` does not handle quoted fields. If quoted species names exist in the export, `loadLifeList` will silently misparse them. Fix: replace the split with a proper CSV parser (e.g. `csv-parse/sync`).
 
 ---
 
@@ -695,6 +829,33 @@ Trigger with a region that has no current activity (e.g. a winter month or low-a
 - [ ] Claude responds with "Report triggered for Magee Marsh, OH — you'll receive an email within 60 seconds"
 - [ ] Email arrives
 
+#### Test F5: Concurrent on-demand workflow runs
+
+Trigger two on-demand reports simultaneously by clicking "Run workflow" twice in rapid succession (or via two separate `gh workflow run` calls within the same second).
+
+**Expected behaviour (depends on `concurrency:` group configuration in the YAML):**
+- [ ] The second run either **waits** for the first to finish (queue) or is **cancelled** automatically
+- [ ] Only **one** `briefing-draft.json` is written at a time — no partial-write race condition
+- [ ] Both runs complete without `ENOENT` or JSON parse errors caused by reading a partially-written draft
+- [ ] At most one email is sent per trigger pair (if cancel-in-progress is set), or two emails arrive sequentially (if queued)
+
+**How to verify:** Check the Actions tab — a queued or cancelled run shows a distinct icon. Look for any "Unexpected end of JSON input" errors in the generate-email or send steps.
+
+---
+
+#### Test F4: Input sanitization smoke test — SQL/shell injection in `focus` field
+
+**Trigger via bird-report.html** (or the GitHub Actions manual-dispatch form) with:
+- `focus` = `warblers; DROP TABLE users; --`
+
+**Expected:**
+- [ ] The workflow completes without error
+- [ ] The `focus` value reaching the Claude prompt contains only `warblers DROP TABLE users ` (special characters stripped) — visible in the workflow run log
+- [ ] No shell injection occurs (the semicolons/dashes do not affect the `run:` step)
+- [ ] Email subject/body does not echo the raw unsanitized string back to the recipient
+
+**How to verify sanitization:** Check the "Generate email" step log. The value passed to `generate-email.js` should have had special characters removed by the sanitization layer in the workflow YAML (or `generate-email.js` input validation). If the raw string appears verbatim, sanitization is missing.
+
 ---
 
 ## 6. Degraded / Failure Mode Tests
@@ -817,6 +978,13 @@ Compare Lagoon Park and Sharon Woods
 cd /Users/djm/claude/ebird-birding-planner
 node scripts/test.js
 # Expect: 6/6 tests passed
+```
+
+### Unit tests
+```bash
+cd /Users/djm/claude/ebird-birding-planner
+node scripts/test-unit.js 2>&1 | tail -5
+# Current count (last verified 2026-05-17): 171 tests, 171 pass, 0 fail
 ```
 
 ### Local script tests
