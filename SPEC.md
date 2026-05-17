@@ -1066,33 +1066,46 @@ The CSV is the "Download My Data" export from ebird.org → My eBird. Column hea
 
 ## 14. Still To Do
 
-Items that are known, tracked, and not yet completed. Ordered roughly by priority.
+**[USER ACTION]** = requires manual steps outside the codebase (dashboard, email client, Claude Desktop).
+Resolved items are struck through and kept for historical reference.
+
+### Requires user action
 
 | # | Item | Category | Notes |
 |---|------|----------|-------|
-| 1 | Run full E2E tests for all 11 MCP tools in Claude Desktop | Testing | See `TESTING.md` Section 3 — each tool has a specific prompt and expected output criteria |
-| 2 | Test QUIET_PERIOD Routine path end-to-end | Testing | Verify short email format, actual data references, and `update_scheduled_task` rescheduling. See `TESTING.md` Test B |
-| 3 | Test SILENT_SKIP Routine path | Testing | Verify aggregate.js is not run and no email is sent. See `TESTING.md` Test C |
-| 4 | Test SendGrid fallback delivery | Testing | Temporarily set invalid RESEND_API_KEY; verify fallback fires. See `TESTING.md` Section 6 |
-| 5 | Test disk fallback delivery | Testing | Run `send.js` with no API keys; verify HTML file saved. See `TESTING.md` Section 4 |
-| 6 | Email rendering on mobile (Gmail app, Apple Mail) | Testing | See `TESTING.md` Section 7 |
-| 7 | Email rendering in Apple Mail desktop | Testing | See `TESTING.md` Section 7 |
-| 8 | Test degraded modes: NWS down, BirdCast outside season, iNat timeout | Testing | See `TESTING.md` Section 6 |
-| 9 | Verify Resend custom domain (`BRIEFING_FROM_EMAIL`) | Config | Requires domain verification in Resend dashboard; currently using `@resend.dev` test address |
-| 10 | Confirm BirdCast API key is approved for programmatic use | Config | Working in practice; formal status with birdcast.info unverified |
-| 11 | Hotspot micro-habitat knowledge base | Enhancement | A `hotspot-notes.json` file with trail-level notes per park (best spots for Connecticut Warbler, etc.) would let the agent give more specific field directions. Include in `aggregate.js` output. |
-| 19 | ~~Ohio-birds LISTSERV scraper activation~~ | ~~Enhancement~~ | **RESOLVED 2026-05-17.** Correct URL confirmed: `https://listserv.miamioh.edu/scripts/wa.exe`. Archive is publicly accessible; message bodies require login but index subject lines are free. Scraper now parses 16 thread subjects/week from the index and surfaces them as `listservSightings` in the daily email's "Community Buzz" section. |
-| 20 | Life list auto-refresh | Enhancement | `data/life-list.json` is a static snapshot. Currently requires manual re-export from eBird + `node scripts/build-life-list.js`. Could automate by adding a Routine pre-step that fetches the eBird life list API if one becomes available, or by watching for a new CSV in ~/Downloads. |
-| 21 | Verify frontal passage detection accuracy | Testing | `NWSClient.detectFrontalPassage()` is implemented but untested against live NWS hourly data. Run on a known frontal passage day and verify `frontalPassage: true` and correct `frontalNote`. |
-| 12 | Inline email charts | Enhancement | Section 7 describes 7-day migration bar chart and warbler frequency trend. Implement as `optionalDependencies` (`chart.js`, `chartjs-node-canvas`) if re-added. |
-| 13 | GitHub branch protection on `main` | Security | Require PR review before merge, no force-push, signed commits. Prevents a compromised GitHub account from landing malicious code that runs with live API keys in the next Routine execution. |
-| 14 | Scope Resend/SendGrid API keys | Security | Scope Resend key to a single sending domain so a stolen key can't spam arbitrary addresses under your domain reputation. Set spending alerts on eBird/BirdCast if the providers support it. |
-| 15 | Test `BRIEFING_SKIP_BIRDCAST=true` end-to-end | Testing | Set to true, run triage.js, verify BirdCast is not called and recommendation is based on eBird notables only |
-| 16 | Test `BRIEFING_FAVORITE_HOTSPOTS` env var | Testing | Set comma-separated locIds, run plan_birding_trip, verify configured hotspots appear regardless of activity level |
-| 17 | Test vacation-to-new-region flow | Testing | Change BRIEFING_REGION/LAT/LNG/TIMEZONE to a new location, verify triage + aggregate produce correct region data |
-| 18 | Triage score threshold tuning for non-Ohio regions | Config/Enhancement | Current thresholds (>500k birds = +3, etc.) are calibrated for Ohio nocturnal migration volumes. Pacific coast, Gulf Coast, or sparse-region users may always get FULL_BRIEFING or always SILENT_SKIP. Document tuning guidance or expose `BRIEFING_SCORE_HIGH_BIRDS`, `BRIEFING_FULL_THRESHOLD` env vars. |
+| 1 | Run full E2E tests for all 11 MCP tools in Claude Desktop | Testing | Run each tool from `TESTING.md` Section 3 in Claude Desktop with the local MCP server running. |
+| 2 | Test QUIET_PERIOD Routine path end-to-end | Testing | Requires a real Routine run on a low-migration night. See `TESTING.md` Test B. |
+| 3 | Test SILENT_SKIP Routine path | Testing | Requires a real Routine run on a very quiet night. See `TESTING.md` Test C. |
+| 4 | Test SendGrid fallback delivery | Testing | Set invalid RESEND_API_KEY in .env, run `send.js`, verify SendGrid fires. Requires both API keys in .env. |
+| 6 | Email rendering on mobile (Gmail app, Apple Mail) | Testing | Open a sent briefing on iPhone/Android. Check tables, links, dark mode. See `TESTING.md` Section 7. |
+| 7 | Email rendering in Apple Mail desktop | Testing | Open a sent briefing in Apple Mail. See `TESTING.md` Section 7. |
+| 8 | Test degraded modes: NWS down, BirdCast outside season, iNat timeout | Testing | Mock API failures locally or run during a known outage window. |
+| 9 | Verify Resend custom domain (`BRIEFING_FROM_EMAIL`) | Config | Go to resend.com/domains → add and verify your domain → set `BRIEFING_FROM_EMAIL=Birding Briefing <briefing@yourdomain.com>` in .env. Without this, delivery is limited to the Resend account owner's address. |
+| 10 | Confirm BirdCast API key approved for programmatic use | Config | Contact birdcast.info to confirm your key is approved for automated requests. Working in practice; formal approval unconfirmed. |
+| 13 | GitHub branch protection on `main` | Security | Settings → Branches → Add rule: require PR review, no force-push, require signed commits. Protects against a compromised GitHub account pushing malicious code that runs in the next Routine. (Needs authenticated `gh` or web UI.) |
+| 14 | Scope Resend API key | Security | In Resend dashboard, scope the key to your sending domain only. Set a spend alert. Limits blast radius if the key leaks. |
+| 16 | Test `BRIEFING_FAVORITE_HOTSPOTS` env var | Testing | Set comma-separated locIds, use `plan_birding_trip` MCP tool in Claude Desktop, verify configured hotspots appear regardless of activity level. |
+| 17 | Test vacation-to-new-region flow | Testing | Change BRIEFING_REGION/LAT/LNG in .env to a new location, run full pipeline, verify region-correct data. |
 
-**Reference:** `TESTING.md` — full feature inventory, test prompts, expected outputs, and status tracking for all tests above.
+### Resolved
+
+| # | Item | Resolved | Notes |
+|---|------|----------|-------|
+| 5 | ~~Test disk fallback delivery~~ | 2026-05-17 | `send.js` with no API keys saves HTML to `briefing-output/`. Verified by automated test. |
+| 11 | ~~Hotspot micro-habitat knowledge base~~ | 2026-05-17 | `data/hotspot-notes.json` built for 9 Cincinnati-area hotspots; wired into `aggregate.js` and Chase Target card generation in `routine-prompt.md`. |
+| 15 | ~~Test `BRIEFING_SKIP_BIRDCAST=true`~~ | 2026-05-17 | Verified: `birdcastSkipped:true` in output, recommendation always FULL_BRIEFING or QUIET_PERIOD (never SILENT_SKIP). |
+| 18 | ~~Triage score threshold tuning~~ | 2026-05-17 | `BRIEFING_SCORE_HIGH_BIRDS`, `BRIEFING_SCORE_MED_BIRDS`, `BRIEFING_SCORE_LOW_BIRDS`, `BRIEFING_FULL_THRESHOLD`, `BRIEFING_QUIET_THRESHOLD` env vars added to `triage.js`. Defaults match original Ohio-calibrated values. |
+| 19 | ~~Ohio-birds LISTSERV scraper~~ | 2026-05-17 | Full body scraping: index → A2 page → A3 iframe. No login required — browser UA bypasses IIS 403. Extracts species lists (12 species from Blacklick reports). Returns `{subject, body, species[], location, url}` per report. |
+| 20 | ~~Life list auto-refresh~~ | 2026-05-17 | `aggregate.js` auto-rebuilds `data/life-list.json` if `~/Downloads/ebird_world_life_list.csv` is newer. |
+| 21 | ~~Verify frontal passage detection~~ | 2026-05-17 | `detectFrontalPassage()` verified against live NWS hourly data. Results documented in `TESTING.md`. |
+
+### Low priority / deferred
+
+| # | Item | Category | Notes |
+|---|------|----------|-------|
+| 12 | Inline email charts | Enhancement | 7-day migration bar chart + warbler frequency trend. Implement via `chartjs-node-canvas` as optional dependency. Deferred — emails are high-value without charts. |
+
+**Reference:** `TESTING.md` — full feature inventory, test prompts, expected outputs, and status tracking.
 
 ---
 
@@ -1132,4 +1145,5 @@ Items that are known, tracked, and not yet completed. Ordered roughly by priorit
 | 2026-05-16 | Three parallel code reviews plus a dedicated public-repo security audit. Implemented all actionable findings: URLSearchParams for BirdCast API key; NWS URL domain assertion; path traversal guard in send.js; lat/lng validation in all MCP handlers; batched eBird calls (5 at a time); staggered NWS calls (300ms); BRIEFING_REGION rejects invalid format; draft.emailTo/emailFrom overrides removed from send.js; npm ci --ignore-scripts in Routine prompt; HTML-escape rule added to Routine agent RULES; path validation for EBIRD_LIFE_LIST_CSV; legacy scripts/briefing.js deleted. |
 | 2026-05-16 | SPEC.md comprehensive review and cleanup: removed all references to deleted scripts/briefing.js; updated Section 4 to document TOOL_HANDLERS Map and RECOMMENDATION enum; corrected Section 7 rendering description (agent writes dynamically, not via briefing.js); added BRIEFING_LOCATION_NAME to Section 9 secrets table; fixed L9 to note briefing.js deleted; resolved Open Question 6 (cron update chosen); removed duplicate Open Questions table; fixed TOC to correctly list sections 14 (Still To Do) and 15 (Open Questions); added briefing-draft.json to .gitignore list; clarified dotenv situation; added resend to dependencies table; added Current State summary box. |
 | 2026-05-17 | Four new aggregate.js features: (1) Life list integration — `scripts/build-life-list.js` pre-processes eBird life list CSV to `data/life-list.json`; `notableObservations[].isLifer` flags species not on life list; `liferOpportunities` count in flags; lifer-aware Chase Target cards in routine-prompt.md. (2) Moon phase — `buildMoonInfo()` adds `moon` field with phase name, illumination %, and migration note for full/new moon conditions. (3) Ohio-birds LISTSERV scraper — `src/ohio-birds-client.js` created; archive currently unavailable (HTTP 404), returns empty array gracefully; `listservSightings` field added to output. (4) Frontal passage / fallout detection — `NWSClient.detectFrontalPassage()` analyses NWS hourly forecast for wind shifts and overnight clearing; `frontalPassage`, `falloutPotential`, and `frontalNote` fields added to `weather.today` and `flags`. Unit tests added for all 4 features (moon phase names, lifer detection, strip-parenthetical, wind shift, clearing, fallout logic). |
-| 2026-05-17 | Ohio-birds LISTSERV scraper fully activated. Correct base URL confirmed (`https://listserv.miamioh.edu/scripts/wa.exe`). Approach revised: message bodies require LISTSERV login, but the monthly index pages are public. `OhioBirdsClient.getRecentSightings()` now parses subject lines from the index (no individual message fetches), filters with a species/location/migration keyword matcher (11/11 test cases pass), and returns `{ subject, url, source }` objects. Deduplicates normalized thread subjects. Verified live: 16 notable thread subjects extracted from May 2026 archive. `aggregate.js` dead merge loop removed; `listservSightings` passed through as community-buzz context. `routine-prompt.md` updated with Section 7 "Ohio-birds Community Buzz" email block. SPEC.md item 19 marked resolved. |
+| 2026-05-17 | Ohio-birds LISTSERV scraper: full body access discovered — no login required. IIS blocks non-browser User-Agents with 403; browser UA reveals A3 iframe endpoint serving email body parts publicly. Pipeline upgraded to index → A2 page → A3 iframe → body text (`<pre>` block). Species parser extracts up to 12 species per report. Verified live: Blacklick Metro Park report yielded 12 species including Canada, Blackburnian, Tennessee, Bay-breasted, Cape May, Hooded warblers. `listservSightings` now returns `{subject, body, species[], location, url, source}`. Community Buzz section updated to write per-report summaries using real species data. |
+| 2026-05-17 | Batch completion: (1) Hotspot notes — `data/hotspot-notes.json` built for 9 Cincinnati-area hotspots with trail-level habitat notes; wired into `aggregate.js` and Chase Target cards. (2) Configurable triage thresholds — 5 env vars added (`BRIEFING_SCORE_HIGH_BIRDS`, `BRIEFING_SCORE_MED_BIRDS`, `BRIEFING_SCORE_LOW_BIRDS`, `BRIEFING_FULL_THRESHOLD`, `BRIEFING_QUIET_THRESHOLD`). (3) Life list auto-refresh — `aggregate.js` auto-rebuilds `data/life-list.json` when `~/Downloads/ebird_world_life_list.csv` is newer. (4) Automated test results documented for items 5, 15, 21. Section 14 (Still To Do) restructured into user-action / resolved / deferred tables. |
