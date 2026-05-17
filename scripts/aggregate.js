@@ -10,6 +10,8 @@
 
 import suncalc from 'suncalc';
 import { readFileSync } from 'fs';
+import { statSync } from 'fs';
+import { execFileSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import path from 'path';
 import { BirdCastClient, degreesToCardinal } from '../src/birdcast-client.js';
@@ -121,6 +123,45 @@ function buildMoonInfo(dateStr) {
   }
 
   return { phaseName, illuminationPct, phase: Math.round(phase * 100) / 100, migrationNote };
+}
+
+/**
+ * Auto-refresh data/life-list.json if ~/Downloads/ebird_world_life_list.csv
+ * (or the path in EBIRD_LIFE_LIST_CSV) is newer than the cached JSON.
+ * Silently skips if either file is missing.
+ */
+function maybeRefreshLifeList() {
+  const csvPath = process.env.EBIRD_LIFE_LIST_CSV ||
+    `${process.env.HOME}/Downloads/ebird_world_life_list.csv`;
+  const jsonPath = new URL('../data/life-list.json', import.meta.url).pathname;
+  try {
+    const csvMtime = statSync(csvPath).mtimeMs;
+    const jsonMtime = statSync(jsonPath).mtimeMs;
+    if (csvMtime > jsonMtime) {
+      process.stderr.write('Life list CSV is newer than cache — rebuilding data/life-list.json...\n');
+      execFileSync(process.execPath, [
+        new URL('../scripts/build-life-list.js', import.meta.url).pathname,
+      ], {
+        stdio: 'inherit',
+        env: { ...process.env, EBIRD_LIFE_LIST_CSV: csvPath },
+      });
+    }
+  } catch {
+    // CSV or JSON missing — silently skip; build-life-list.js will handle errors if called directly
+  }
+}
+maybeRefreshLifeList();
+
+/**
+ * Load hotspot micro-habitat notes from data/hotspot-notes.json.
+ * Returns an object keyed by eBird locId. Gracefully returns {} if missing.
+ */
+function loadHotspotNotes() {
+  let hotspotNotes = {};
+  try {
+    hotspotNotes = JSON.parse(readFileSync(new URL('../data/hotspot-notes.json', import.meta.url)));
+  } catch { /* optional — graceful if missing */ }
+  return hotspotNotes;
 }
 
 /**
@@ -391,6 +432,9 @@ async function main() {
   const ohioBirds = new OhioBirdsClient();
 
   const today = toYMD(new Date());
+
+  // Load hotspot notes (graceful — returns {} if file missing)
+  const hotspotNotes = loadHotspotNotes();
 
   // Load life list (try/catch inside loadLifeList; returns null if missing)
   const lifeList = loadLifeList();

@@ -18,7 +18,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const REPO_ROOT = path.resolve(__dirname, '..');
 
-const CSV_PATH = '/Users/djm/Downloads/ebird_world_life_list.csv';
+const CSV_PATH = process.env.EBIRD_LIFE_LIST_CSV ||
+  `${process.env.HOME}/Downloads/ebird_world_life_list.csv`;
 const OUTPUT_PATH = path.join(REPO_ROOT, 'data', 'life-list.json');
 
 /**

@@ -1,7 +1,7 @@
 # End-to-End Testing Guide
 
 > Living document — update the Status column as tests are run.
-> Last updated: 2026-05-16
+> Last updated: 2026-05-17
 >
 > Key: ✅ Confirmed working · ⚠️ Partially tested · ❌ Not yet tested · 🔲 Needs re-test after change
 
@@ -46,7 +46,7 @@
 | `scripts/aggregate.js` | Comprehensive data aggregation → JSON | ✅ Confirmed (3 live runs) |
 | `scripts/send.js` — Resend path | Email delivery via Resend | ✅ Confirmed (3 live runs) |
 | `scripts/send.js` — SendGrid path | Fallback email delivery | ❌ Not tested |
-| `scripts/send.js` — disk fallback | Save HTML when both APIs fail | ❌ Not tested |
+| `scripts/send.js` — disk fallback | Save HTML when both APIs fail | ✅ Confirmed (2026-05-17) |
 | `scripts/briefing.js` | Legacy template briefing | ❌ Not tested since architectural refactor |
 | `scripts/test.js` | Smoke test suite | ✅ 6/6 passing |
 
@@ -374,6 +374,46 @@ node scripts/triage.js
 
 ---
 
+### triage.js — BRIEFING_SKIP_BIRDCAST flag — item 15
+
+**Status: PASS** (tested 2026-05-17)
+
+```bash
+source .env && BRIEFING_SKIP_BIRDCAST=true node scripts/triage.js 2>/dev/null
+```
+
+**Actual output (2026-05-17):**
+```json
+{
+  "date": "2026-05-17",
+  "region": "US-OH-061",
+  "birdcastSkipped": true,
+  "migrationScore": 4,
+  "lastNight": null,
+  "notableSpecies": ["Alder Flycatcher", "Black-bellied Plover", "Connecticut Warbler",
+    "Lark Sparrow", "White-rumped Sandpiper", "Dickcissel", "Little Blue Heron"],
+  "notableCount": 7,
+  "weather": {
+    "overnightWind": "S 7mph",
+    "precipProbability": 2,
+    "migrationInterpretation": "Favorable migration conditions. South winds with clear skies overnight — expect new arrivals at dawn.",
+    "weatherUnavailable": false
+  },
+  "seasonStatus": null,
+  "recommendation": "FULL_BRIEFING",
+  "recommendationReason": "BirdCast skipped; 7 notable species found"
+}
+```
+
+**Verify:**
+- [x] `birdcastSkipped: true` present in output
+- [x] `recommendation` is `FULL_BRIEFING` (not `SILENT_SKIP` — BirdCast skip does not force a skip)
+- [x] `lastNight: null` (BirdCast migration data not fetched)
+- [x] `notableSpecies` still populated (eBird notable observations still fetched)
+- [x] Exits code 0
+
+---
+
 ### aggregate.js
 
 ```bash
@@ -406,18 +446,29 @@ RESEND_API_KEY=your_key node scripts/send.js /tmp/test-draft.json
 
 ---
 
-### send.js — disk fallback (no API keys)
+### send.js — disk fallback (no API keys) — item 5
+
+**Status: PASS** (tested 2026-05-17)
 
 ```bash
-echo '{"subject":"Test","htmlBody":"<p>Test</p>"}' > /tmp/test-draft.json
-node scripts/send.js /tmp/test-draft.json
+# Note: draftPath must be inside the repo root (security check)
+echo '{"subject":"Test","htmlBody":"<h1>Test</h1>"}' > briefing-output/test-draft.json
+RESEND_API_KEY="" node scripts/send.js briefing-output/test-draft.json
 ```
 (Run with no `RESEND_API_KEY` and no `SENDGRID_API_KEY` set)
 
+**Actual output:**
+```
+RESULT: EMAIL NOT SENT — RESEND_API_KEY is not configured.
+RESULT: HTML SAVED to /Users/djm/claude/ebird-birding-planner/briefing-output/briefing-2026-05-17.html (no email sent — check secrets above)
+```
+
 **Verify:**
-- [ ] Prints `RESULT: HTML SAVED to .../briefing-output/briefing-YYYY-MM-DD.html`
-- [ ] File actually exists at that path
-- [ ] Exits code 0 (not 1)
+- [x] Prints `RESULT: HTML SAVED to .../briefing-output/briefing-YYYY-MM-DD.html`
+- [x] File actually exists at that path
+- [x] Exits code 0 (not 1)
+
+**Note:** The draft JSON file must be within the repo root — `send.js` enforces a path-traversal guard (`resolvedDraft.startsWith(repoRoot + sep)`). Using `/tmp/` fails with "draftPath must be within the repo root".
 
 ---
 
@@ -430,6 +481,46 @@ node scripts/send.js /tmp/does-not-exist.json
 **Verify:**
 - [ ] Exits code 1
 - [ ] Error message is descriptive (not a raw stack trace)
+
+---
+
+### NWSClient.detectFrontalPassage() — item 21
+
+**Status: PASS** (tested 2026-05-17)
+
+```js
+// /tmp/test-frontal.mjs
+import { NWSClient } from '/Users/djm/claude/ebird-birding-planner/src/nws-client.js';
+const nws = new NWSClient();
+const result = await nws.detectFrontalPassage(39.1, -84.5, new Date().toISOString().split('T')[0]);
+console.log(JSON.stringify(result, null, 2));
+```
+
+```bash
+node /tmp/test-frontal.mjs
+```
+
+**Actual output (2026-05-17, Cincinnati OH, no frontal passage):**
+```json
+{
+  "frontalPassage": false,
+  "falloutPotential": false,
+  "windShiftDetected": false,
+  "clearingDetected": false,
+  "frontalNote": null
+}
+```
+
+**Verify:**
+- [x] Returns all four required fields: `frontalPassage`, `windShiftDetected`, `clearingDetected`, `frontalNote`
+- [x] Returns `falloutPotential` field
+- [x] Does not require any API keys (uses NWS public API)
+- [x] Does not crash when no frontal passage is detected (`frontalNote: null` is valid)
+- [x] Exits without error
+
+**Notes:** No frontal passage on 2026-05-17 in Cincinnati (quiet weather day, precip 2%, S wind).
+The method hits the NWS hourly forecast API — output will vary by day and weather conditions.
+Re-test on a day with cold front passage to verify `frontalPassage: true` and `frontalNote` populated.
 
 ---
 
