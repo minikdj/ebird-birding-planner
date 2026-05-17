@@ -69,7 +69,10 @@ if (!apiKey) {
 
 const locationName = process.env.BRIEFING_LOCATION_NAME || 'the requested location';
 const timezone = process.env.BRIEFING_TIMEZONE || 'America/New_York';
-const focus = process.env.BRIEFING_FOCUS || '';
+const focusRaw = process.env.BRIEFING_FOCUS || '';
+// Sanitize: strip anything outside alphanumeric, spaces, and common punctuation
+// Prevents prompt injection via the focus field
+const focus = focusRaw.replace(/[^A-Za-z0-9 ,.\-']/g, '').slice(0, 100).trim();
 
 const now = new Date();
 const formattedDate = now.toLocaleDateString('en-US', {

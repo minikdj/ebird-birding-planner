@@ -791,6 +791,16 @@ async function handleSpeciesFinder(args) {
 
   const totalLocations = sightings.length;
   const shown = sightings.slice(0, 20);
+
+  if (shown.length === 0) {
+    return {
+      summary: `No recent sightings of ${speciesName} within ${radius}km of ${location.name} in the last 30 days.`,
+      species: speciesName,
+      speciesCode,
+      sightings: [],
+    };
+  }
+
   const summaryPrefix = capped
     ? `Showing top 20 of ${totalLocations} locations (results capped for common species).`
     : `${speciesName} seen at ${totalLocations} locations near ${location.name} in the last 30 days.`;

@@ -29,6 +29,7 @@
 // them into the HTML body.
 
 import { readFile, mkdir, writeFile } from 'fs/promises';
+import { statSync } from 'fs';
 import { dirname, join, resolve, sep } from 'path';
 import { fileURLToPath } from 'url';
 import { Resend } from 'resend';
@@ -74,6 +75,13 @@ async function main() {
   // --- Read draft file ---
   let draft;
   try {
+    // Warn if draft is stale (older than 30 minutes) — could indicate a previous run's draft
+    const draftStat = statSync(draftPath);
+    const ageMs = Date.now() - draftStat.mtimeMs;
+    if (ageMs > 30 * 60 * 1000) {
+      process.stderr.write(`WARNING: briefing-draft.json is ${Math.round(ageMs/60000)} minutes old — may be from a previous run\n`);
+    }
+
     const raw = await readFile(draftPath, 'utf8');
     draft = JSON.parse(raw);
   } catch (err) {
