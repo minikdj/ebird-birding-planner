@@ -397,14 +397,14 @@ Add these in the GitHub repo → Settings → Secrets → Actions:
 
 ### Implementation checklist
 
-- [ ] Create `.github/workflows/report-on-demand.yml`
-- [ ] Write `scripts/generate-email.js` (Anthropic SDK, reads triage/aggregate output)
-- [ ] Add `ANTHROPIC_API_KEY` to GitHub repo secrets
-- [ ] Copy remaining secrets from Routine to GitHub repo secrets
-- [ ] Create Claude.ai Project "On-Demand Birding Report" with GitHub MCP
-- [ ] Add system prompt to Project
-- [ ] Test from desktop: trigger workflow manually in GitHub Actions UI
-- [ ] Test from mobile: type a request in the Claude.ai Project
+- [x] Create `.github/workflows/report-on-demand.yml` — done 2026-05-17
+- [x] Write `scripts/generate-email.js` (Anthropic SDK, reads triage/aggregate output) — done 2026-05-17
+- [x] Add `ANTHROPIC_API_KEY` to GitHub repo secrets — done 2026-05-17
+- [x] Copy remaining secrets from Routine to GitHub repo secrets — done 2026-05-17
+- [x] Test from desktop: trigger workflow manually in GitHub Actions UI — confirmed working 2026-05-17
+- [x] Test from mobile: `bird-report.html` web app saved to iPhone home screen via Safari → Add to Home Screen; confirmed email delivered 2026-05-17
+- N/A Create Claude.ai Project "On-Demand Birding Report" with GitHub MCP — GitHub MCP cloud connector not available; replaced by `bird-report.html` web app
+- N/A Add system prompt to Project — superseded by web app approach
 
 ### What this does NOT change
 
