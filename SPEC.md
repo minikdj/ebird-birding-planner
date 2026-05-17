@@ -5,7 +5,7 @@
 
 ---
 
-## Current State (as of 2026-05-16)
+## Current State (as of 2026-05-17)
 
 The system is fully implemented and confirmed working end-to-end in three live
 Routine runs. The MCP server exposes 11 tools for Claude Desktop interactive use.
@@ -13,6 +13,11 @@ The Routine agent runs daily at 09:00 UTC, clones the GitHub repo, runs
 `triage.js` → `aggregate.js`, writes a dynamic email, and delivers via Resend.
 The FULL_BRIEFING path is confirmed. QUIET_PERIOD rescheduling and all fallback
 delivery paths still need documented E2E verification (see Section 14).
+
+**New as of 2026-05-17:** Life list lifer flagging (★ LIFER OPPORTUNITY badges),
+moon phase + migration notes, frontal passage / fallout detection from NWS hourly
+data, and Ohio-birds LISTSERV scraper (built, pending accessible archive URL).
+128 unit tests passing.
 
 ---
 
@@ -46,7 +51,9 @@ Build a smart daily birding briefing system that:
 - Sends a rich HTML email when migration is active or notable species are present
 - Goes quiet for several days — and reschedules itself — when nothing is happening
 - Pulls from BirdCast radar, eBird observations, NWS weather, iNaturalist
-  photo-verification, and computed sunrise/sunset times
+  photo-verification, computed sunrise/sunset/moon phase data, and NWS hourly
+  forecasts for frontal passage detection
+- Flags species as lifers against the user's personal eBird life list
 
 The key insight driving the architecture: a rules-based script would require
 hard-coding thresholds for "interesting enough." The agent can reason about
@@ -237,14 +244,19 @@ ebird-birding-planner/
 │   ├── tools.js              ← tool schema definitions (imported by index.js)
 │   ├── ebird-client.js       ← shared by MCP server AND scripts
 │   ├── birdcast-client.js    ← shared by MCP server AND scripts
-│   ├── nws-client.js         ← shared by MCP server AND scripts
+│   ├── nws-client.js         ← shared by MCP server AND scripts; includes detectFrontalPassage()
 │   ├── inaturalist-client.js ← shared by MCP server AND scripts
+│   ├── ohio-birds-client.js  ← Ohio-birds LISTSERV scraper (archive currently unavailable)
 │   └── utils.js              ← Cache, resolveLocation, toYMD, DEFAULTS, RECOMMENDATION, getFavoriteHotspots, …
+├── data/
+│   └── life-list.json        ← pre-processed eBird life list (163 species); regenerate with build-life-list.js
 └── scripts/
     ├── triage.js             ← fast triage check (~10s): FULL_BRIEFING / QUIET_PERIOD / SILENT_SKIP
-    ├── aggregate.js          ← comprehensive data aggregation (~25s): all migration + weather + hotspot data
+    ├── aggregate.js          ← comprehensive data aggregation (~25s): migration + weather + hotspots + moon + lifers
+    ├── build-life-list.js    ← reads ~/Downloads/ebird_world_life_list.csv → data/life-list.json
     ├── send.js               ← email delivery: reads briefing-draft.json, sends via Resend/fallback
-    └── test.js               ← smoke test suite (6 tests)
+    ├── test.js               ← integration smoke test suite (6 tests, requires API keys)
+    └── test-unit.js          ← unit test suite (128 tests, no API keys needed)
 ```
 
 ### Routine execution flow
@@ -825,7 +837,9 @@ PRs for review before merging.
 
 ### Automated smoke tests — [DONE]
 
-`scripts/test.js` — 6 tests, all passing. Run with `node scripts/test.js`.
+`scripts/test-unit.js` — **128 unit tests, all passing.** No API keys required. Run with `node scripts/test-unit.js`. Covers: toYMD, weekIndex, haversine, activityCutoff, wind constants, RECOMMENDATION enum, DEFAULTS, formatNumber, degreesToCardinal, email regex, path traversal guard, BRIEFING_REGION regex, triage scoring, moon phase names, lifer detection, parenthetical stripping, wind shift detection, clearing detection, and fallout potential logic.
+
+`scripts/test.js` — 6 integration smoke tests (require API keys). Run with `node scripts/test.js`.
 
 | Test | What it checks |
 |------|---------------|
@@ -1061,6 +1075,9 @@ Items that are known, tracked, and not yet completed. Ordered roughly by priorit
 | 9 | Verify Resend custom domain (`BRIEFING_FROM_EMAIL`) | Config | Requires domain verification in Resend dashboard; currently using `@resend.dev` test address |
 | 10 | Confirm BirdCast API key is approved for programmatic use | Config | Working in practice; formal status with birdcast.info unverified |
 | 11 | Hotspot micro-habitat knowledge base | Enhancement | A `hotspot-notes.json` file with trail-level notes per park (best spots for Connecticut Warbler, etc.) would let the agent give more specific field directions. Include in `aggregate.js` output. |
+| 19 | Ohio-birds LISTSERV scraper activation | Enhancement | `src/ohio-birds-client.js` is built and wired in. Archive at `listserv.miamioh.edu` currently returns HTTP 404. Investigate correct CGI URL or contact OOS for current archive location. When accessible, rare reports will merge into `notableObservations` automatically. |
+| 20 | Life list auto-refresh | Enhancement | `data/life-list.json` is a static snapshot. Currently requires manual re-export from eBird + `node scripts/build-life-list.js`. Could automate by adding a Routine pre-step that fetches the eBird life list API if one becomes available, or by watching for a new CSV in ~/Downloads. |
+| 21 | Verify frontal passage detection accuracy | Testing | `NWSClient.detectFrontalPassage()` is implemented but untested against live NWS hourly data. Run on a known frontal passage day and verify `frontalPassage: true` and correct `frontalNote`. |
 | 12 | Inline email charts | Enhancement | Section 7 describes 7-day migration bar chart and warbler frequency trend. Implement as `optionalDependencies` (`chart.js`, `chartjs-node-canvas`) if re-added. |
 | 13 | GitHub branch protection on `main` | Security | Require PR review before merge, no force-push, signed commits. Prevents a compromised GitHub account from landing malicious code that runs with live API keys in the next Routine execution. |
 | 14 | Scope Resend/SendGrid API keys | Security | Scope Resend key to a single sending domain so a stolen key can't spam arbitrary addresses under your domain reputation. Set spending alerts on eBird/BirdCast if the providers support it. |
