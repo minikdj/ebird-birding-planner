@@ -441,21 +441,10 @@ async function main() {
     }
   }
 
-  // Merge Ohio-birds listserv sightings — deduplicate by species name, prefer eBird if duplicate
-  for (const sighting of (ohioBirdsSightings || [])) {
-    if (!sighting.species) continue;
-    if (!notableMap.has(sighting.species)) {
-      // Adapt to internal format used by the map
-      notableMap.set(sighting.species, {
-        comName: sighting.species,
-        locName: sighting.location ?? 'Ohio (listserv report)',
-        obsDt: sighting.date ?? today,
-        howMany: null,
-        locId: null,
-        _source: 'ohio-birds-listserv',
-      });
-    }
-  }
+  // NOTE: Ohio-birds LISTSERV sightings are passed through to listservSightings (below)
+  // as raw { subject, url, source } objects rather than merged into notableObservations.
+  // The LISTSERV archive exposes subject lines publicly but message bodies require login,
+  // so we surface thread subjects as community-buzz context in the email, not as species records.
 
   const notableObservations = [...notableMap.values()]
     .sort((a, b) => (b.obsDt ?? '').localeCompare(a.obsDt ?? ''))

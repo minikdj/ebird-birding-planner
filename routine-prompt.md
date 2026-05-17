@@ -94,7 +94,7 @@ The JSON contains:
 - `moon` — phaseName, illuminationPct, migrationNote (non-null when moon phase is significant for migration)
 - `hotspots` — top 5 by 7-day species count (proxy for active birder community)
 - `notableObservations` — deduplicated rare/unusual species, last 14 days, 50km; sorted by recency; each has `isLifer: boolean` (true = not yet on life list)
-- `listservSightings` — raw sightings from Ohio-birds LISTSERV (may be empty if archive unavailable)
+- `listservSightings` — recent thread subjects from Ohio-birds LISTSERV archive, each `{ subject, url, source }`. Subjects are the raw email subject lines from the list — use them to surface what the Ohio birding community is actively discussing (trip reports, notable finds, migration observations). May be empty if archive is unavailable.
 - `lifeList` — `{ totalSpecies, source }` or null if life list not loaded
 - `flags` — `{ highMigrationNight, hasNotables, morningRainLikely, favorableOvernightWind, frontalPassage, falloutPotential, liferOpportunities }`
 
@@ -154,9 +154,11 @@ Structure your email as inline-CSS HTML (mobile-friendly, max-width 600px, table
 
 6. **Notable / Rare Sightings** — Only if `hasNotables` is true. List species, location, date. The most exceptional birds should already have a Chase Target card above — this section is the supporting cast: a table of all notable observations for completeness.
 
-7. **5-Day Outlook** — Table of upcoming days. Call out the single best day explicitly. If today is poor (rain, north winds), tell the birder which day to target instead and why.
+7. **Ohio-birds Community Buzz** — Only if `listservSightings` is non-empty. Show the 4–6 most interesting thread subjects from the Ohio-birds LISTSERV as a compact bulleted list. These are real discussions from Ohio birders — look for trip reports with notable species, migration observations, and rare finds. Briefly interpret the most interesting thread (one sentence) before the list. Link each item to its `url`. Keep this section tight — it's a "what's the community talking about" sidebar, not a full report.
 
-8. **Birding Window** — Civil twilight, sunrise, recommended arrival, activity cutoff.
+8. **5-Day Outlook** — Table of upcoming days. Call out the single best day explicitly. If today is poor (rain, north winds), tell the birder which day to target instead and why.
+
+9. **Birding Window** — Civil twilight, sunrise, recommended arrival, activity cutoff.
 
 Adjust emphasis freely. If rain dominates, lead with that. If a Kirtland's Warbler was just spotted, that's the entire email. If the season is 40% above average and last night was HIGH, open with that excitement.
 

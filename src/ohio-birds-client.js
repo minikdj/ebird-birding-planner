@@ -1,85 +1,72 @@
 // ohio-birds-client.js — Ohio-birds LISTSERV scraper
 // Fetches the public Miami University LISTSERV archive for the Ohio-birds mailing list
-// and extracts recent rare/notable bird reports for the Cincinnati/SW Ohio area.
+// and surfaces notable bird reports for the Cincinnati / SW Ohio area.
 //
-// AVAILABILITY STATUS: UNAVAILABLE
+// Archive index is publicly accessible (no login required):
+//   https://listserv.miamioh.edu/scripts/wa.exe?A0=OHIO-BIRDS
 //
-// The Miami University LISTSERV archive for ohio-birds is not publicly accessible
-// via the standard LISTSERV CGI interface. Tested URLs returned HTTP 404:
-//   - http://listserv.miamioh.edu/archives/ohio-birds.html
-//   - http://listserv.miamioh.edu/cgi-bin/wa?A1=ind2605&L=ohio-birds
-//   - https://listserv.miamioh.edu/cgi-bin/wa?A0=OHIO-BIRDS
+// Month index URL format:  ?A1=ind[YYMM]&L=OHIO-BIRDS   (e.g. ind2605 = May 2026)
 //
-// The archive may require authentication, or the CGI interface may have been
-// disabled/moved. This client returns empty results gracefully so aggregate.js
-// is unaffected. If the archive becomes available in the future, implement
-// _parseMonthIndex() and _parseMessage() to scrape actual content.
+// NOTE: Individual message bodies require LISTSERV login to read. We therefore
+// work entirely from subject lines extracted from the index pages, which are
+// freely visible and rich enough for daily briefing use.
 
 export class OhioBirdsClient {
-  // UNAVAILABLE flag — checked by callers to skip or note the source
-  static UNAVAILABLE = true;
-  static UNAVAILABLE_REASON =
-    'Ohio-birds LISTSERV archive (listserv.miamioh.edu) is not publicly accessible. ' +
-    'The CGI interface returned HTTP 404. The list may require login or have moved.';
+  // Base URL confirmed working 2026-05-17
+  static BASE_URL = 'https://listserv.miamioh.edu/scripts/wa.exe';
 
   constructor() {
-    this.baseUrl = 'http://listserv.miamioh.edu/cgi-bin/wa';
-    this.listName = 'ohio-birds';
+    this.baseUrl = OhioBirdsClient.BASE_URL;
+    this.listName = 'OHIO-BIRDS';
   }
 
   /**
-   * Get recent rare-bird reports from the Ohio-birds listserv.
+   * Get recent notable bird report subjects from the Ohio-birds LISTSERV.
+   * Pulls the last two months' index pages if needed (to cover daysBack near month boundary)
+   * and filters out digest/admin noise.
    *
-   * Currently returns an empty array because the archive is not publicly accessible.
-   * When the archive becomes available, implement actual scraping here.
-   *
-   * @param {number} daysBack - Number of days of history to search
-   * @returns {Promise<Array>} Array of { species, location, date, source }
+   * @param {number} daysBack - Approximate number of recent days to surface (used to decide
+   *   how many messages to include; we have no per-message timestamps from the index).
+   * @returns {Promise<Array<{subject, url, source}>>}
    */
-  async getRecentSightings(daysBack = 3) { // eslint-disable-line no-unused-vars
-    if (OhioBirdsClient.UNAVAILABLE) {
-      process.stderr.write(
-        `OhioBirdsClient: Skipping — ${OhioBirdsClient.UNAVAILABLE_REASON}\n`
-      );
-      return [];
-    }
-
-    // Future implementation: fetch and parse archive
+  async getRecentSightings(daysBack = 3) {
     try {
       const now = new Date();
-      const year = now.getUTCFullYear();
-      const month = String(now.getUTCMonth() + 1).padStart(2, '0');
-      const indexUrl = `${this.baseUrl}?A1=ind${String(year).slice(2)}${month}&L=${this.listName}`;
+      const months = this._monthsToFetch(now, daysBack);
 
-      const response = await fetch(indexUrl, {
-        headers: { 'User-Agent': 'birding-planner/1.0' },
-        signal: AbortSignal.timeout(10_000),
-      });
-
-      if (!response.ok) {
-        process.stderr.write(
-          `OhioBirdsClient: HTTP ${response.status} for ${indexUrl}\n`
-        );
-        return [];
+      const allEntries = [];
+      for (const { yy, mm } of months) {
+        const indexUrl = `${this.baseUrl}?A1=ind${yy}${mm}&L=${this.listName}`;
+        const response = await fetch(indexUrl, {
+          headers: { 'User-Agent': 'birding-planner/1.0' },
+          signal: AbortSignal.timeout(10_000),
+        });
+        if (!response.ok) {
+          process.stderr.write(`OhioBirdsClient: HTTP ${response.status} for ${indexUrl}\n`);
+          continue;
+        }
+        const html = await response.text();
+        const entries = this._parseIndexSubjects(html);
+        allEntries.push(...entries);
       }
 
-      const html = await response.text();
-      const messageUrls = this._parseMonthIndex(html, daysBack);
+      // Take the most recent slice (last N messages; LISTSERV index is oldest-first)
+      const recentCount = Math.max(15, daysBack * 8);
+      const recent = allEntries.slice(-recentCount);
 
+      // Filter to likely bird-report subjects and deduplicate by subject text
+      const seen = new Set();
       const sightings = [];
-      for (const url of messageUrls.slice(0, 20)) { // cap at 20 messages
-        try {
-          const msgResponse = await fetch(url, {
-            headers: { 'User-Agent': 'birding-planner/1.0' },
-            signal: AbortSignal.timeout(10_000),
-          });
-          if (!msgResponse.ok) continue;
-          const msgHtml = await msgResponse.text();
-          const result = this._parseMessage(msgHtml);
-          if (result) sightings.push(result);
-        } catch {
-          // skip individual message failures
-        }
+      for (const entry of recent) {
+        const key = entry.subject.toLowerCase().replace(/^re:\s*/i, '').trim();
+        if (seen.has(key)) continue;
+        if (!this._isBirdingSubject(entry.subject)) continue;
+        seen.add(key);
+        sightings.push({
+          subject: entry.subject,
+          url: entry.url,
+          source: 'ohio-birds-listserv',
+        });
       }
 
       return sightings;
@@ -90,104 +77,106 @@ export class OhioBirdsClient {
   }
 
   /**
-   * Parse a month index page and return message URLs for messages within daysBack days.
-   * @param {string} html - HTML of the month index page
-   * @param {number} daysBack - How many days back to look
-   * @returns {string[]} Array of absolute message URLs
+   * Determine which month index pages to fetch based on daysBack.
+   * Near the start of a month we also fetch the previous month's index.
+   * @param {Date} now
+   * @param {number} daysBack
+   * @returns {Array<{yy: string, mm: string}>}
    */
-  _parseMonthIndex(html, daysBack = 3) {
-    const cutoff = new Date();
-    cutoff.setUTCDate(cutoff.getUTCDate() - daysBack);
+  _monthsToFetch(now, daysBack) {
+    const yy = String(now.getUTCFullYear()).slice(2);
+    const mm = String(now.getUTCMonth() + 1).padStart(2, '0');
+    const months = [{ yy, mm }];
 
-    const urls = [];
-    // LISTSERV archives typically have links like: <a href="?A2=ind2605&L=ohio-birds&P=123">Subject</a>
-    // with date info nearby. This is a placeholder implementation.
-    const linkRe = /href="([^"]*A2=[^"]+)"/gi;
-    let match;
-    while ((match = linkRe.exec(html)) !== null) {
-      const href = match[1];
-      const absUrl = href.startsWith('http') ? href : `${this.baseUrl.replace(/\/[^/]*$/, '')}/${href.replace(/^\//, '')}`;
-      urls.push(absUrl);
+    // If we're early in the month, also pull the previous month
+    if (now.getUTCDate() <= daysBack + 1) {
+      const prev = new Date(now);
+      prev.setUTCMonth(prev.getUTCMonth() - 1);
+      months.unshift({
+        yy: String(prev.getUTCFullYear()).slice(2),
+        mm: String(prev.getUTCMonth() + 1).padStart(2, '0'),
+      });
     }
-    return urls;
+    return months;
   }
 
   /**
-   * Fetch and parse a single listserv message for rare bird content.
-   * @param {string} html - HTML of the message page
-   * @returns {{ species, location, date, observer, source } | null}
+   * Parse a LISTSERV month index page and return all subject+url entries.
+   * The index renders subject lines as anchor text inside table cells:
+   *   <a href="/scripts/wa.exe?A2=OHIO-BIRDS;[hash].2605&S=">Subject text</a>
+   *
+   * @param {string} html - HTML of the month index page
+   * @returns {Array<{subject: string, url: string}>}
    */
-  _parseMessage(html) {
-    // Extract subject
-    const subjectMatch = html.match(/<title>([^<]+)<\/title>/i) ||
-                         html.match(/Subject:\s*([^\n<]+)/i);
-    const subject = subjectMatch ? subjectMatch[1].trim() : '';
-
-    // Extract body text (strip tags)
-    const bodyText = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
-
-    if (!this._isRareBirdReport(subject, bodyText)) return null;
-
-    return {
-      species: this._extractSpecies(subject),
-      location: this._extractLocation(bodyText),
-      date: new Date().toISOString().split('T')[0], // fallback to today
-      observer: null,
-      source: 'ohio-birds-listserv',
-    };
+  _parseIndexSubjects(html) {
+    const entries = [];
+    // Match anchors whose href is a LISTSERV A2 message link
+    const re = /href="(\/scripts\/wa\.exe\?A2=[^"]+)"[^>]*>\s*([^<]{3,200}?)\s*<\/a>/gi;
+    let m;
+    while ((m = re.exec(html)) !== null) {
+      const url = 'https://listserv.miamioh.edu' + m[1];
+      const subject = m[2]
+        .replace(/&#35;/g, '#')
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .replace(/&#\d+;/g, '')
+        .trim();
+      if (subject) entries.push({ subject, url });
+    }
+    return entries;
   }
 
   /**
-   * Determine if a message likely contains a rare bird report.
+   * Determine if a subject line looks like an actual birding report
+   * (not a digest, admin notice, or pure social post).
    * @param {string} subject
-   * @param {string} body
    * @returns {boolean}
    */
-  _isRareBirdReport(subject, body) {
-    const combinedLower = (subject + ' ' + body).toLowerCase();
+  _isBirdingSubject(subject) {
+    const s = subject.toLowerCase();
 
-    // Must mention location context
-    const hasLocation = /county|park|lake|reservoir|refuge|metro|woods|creek|river|preserve/i.test(combinedLower);
+    // Drop digest/admin noise
+    if (/\bohio-birds digest\b/.test(s)) return false;
+    if (/\b(subscribe|unsubscribe|list admin|listserv|off topic|ot:|testing)\b/.test(s)) return false;
+    if (/^re:\s*(ohio-birds digest|re:)/i.test(subject)) return false;
 
-    // Must mention sighting action
-    const hasSighting = /\b(seen|observed|found|reported|present|photographed|at|spotted)\b/i.test(combinedLower);
+    // Accept if the subject mentions a species (no end \b — handles plurals like "Shorebirds")
+    const hasSpecies = /\b(?:warbler|sparrow|flycatcher|thrush|vireo|hawk|falcon|owl|duck|goose|swan|grebe|loon|tern|gull|plover|sandpiper|shorebird|nuthatch|creeper|wren|tanager|grosbeak|bunting|martin|swallow|swift|hummingbird|woodpecker|cuckoo|rail|bittern|heron|egret|ibis|pelican|cormorant|kingfisher|crane|sora|gallinule|coot|nighthawk|nightjar|pipit|waxwing|chat|redstart|ovenbird|waterthrush|migrant)/i.test(s);
 
-    // Must look like a bird report (not an admin message)
-    const isAdmin = /subscribe|unsubscribe|digest|list admin|list-serv/i.test(combinedLower);
+    // Migration / weather signals
+    const hasMigrationNote = /migrat|fallout|irruption|hawkwatch/i.test(s);
 
-    // Subject should contain a capitalized word (likely species name)
-    const hasSpeciesLike = /[A-Z][a-z]+ [A-Z][a-z]+/.test(subject);
+    // Location-based trip report — on the ohio-birds list this is almost always a birding report.
+    // Require a specific named place (park, lake, county, etc.) but no secondary keyword needed.
+    const hasLocationReport = /\b(?:park|lake|reservoir|metro|county|refuge|woods|preserve|creek|river|pond|wetland|nwr|wildlife area|arboretum|nature center)\b/i.test(s);
 
-    return hasLocation && hasSighting && !isAdmin && hasSpeciesLike;
+    return hasSpecies || hasMigrationNote || hasLocationReport;
   }
 
   /**
-   * Extract a likely species name from the message subject.
+   * Extract a likely species name from a subject line.
    * @param {string} subject
    * @returns {string}
    */
   _extractSpecies(subject) {
-    // Remove common prefixes like "Re:", location suffixes, etc.
-    const clean = subject
+    return subject
       .replace(/^Re:\s*/i, '')
-      .replace(/\s*[-–—]\s*(Hamilton|Butler|Warren|Clermont|Hamilton|Ohio|OH).*/i, '')
-      .trim();
-    return clean || subject;
+      .replace(/\s*[-–—]\s*(Hamilton|Butler|Warren|Clermont|Ohio|OH)\b.*/i, '')
+      .trim() || subject;
   }
 
   /**
-   * Extract a location from the message body.
-   * @param {string} bodyText
+   * Extract a location hint from a subject line.
+   * @param {string} subject
    * @returns {string|null}
    */
-  _extractLocation(bodyText) {
-    // Try to find a county or named location
-    const countyMatch = bodyText.match(/([A-Z][a-z]+ County)/);
+  _extractLocation(subject) {
+    const countyMatch = subject.match(/([A-Z][a-z]+ County)/);
     if (countyMatch) return countyMatch[1];
-
-    const parkMatch = bodyText.match(/([A-Z][a-z]+(?: [A-Z][a-z]+)* (?:Park|Lake|Reservoir|Refuge|Woods|Preserve|Metro))/);
+    const parkMatch = subject.match(/([A-Z][a-z]+(?: [A-Z][a-z]+)* (?:Park|Lake|Reservoir|Refuge|Woods|Preserve|Metro|NWR))/);
     if (parkMatch) return parkMatch[1];
-
     return null;
   }
 }

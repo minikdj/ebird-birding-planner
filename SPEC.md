@@ -16,7 +16,8 @@ delivery paths still need documented E2E verification (see Section 14).
 
 **New as of 2026-05-17:** Life list lifer flagging (★ LIFER OPPORTUNITY badges),
 moon phase + migration notes, frontal passage / fallout detection from NWS hourly
-data, and Ohio-birds LISTSERV scraper (built, pending accessible archive URL).
+data, and Ohio-birds LISTSERV scraper (active — `scripts/wa.exe` URL confirmed,
+surfaces community thread subjects as daily email "Community Buzz" section).
 128 unit tests passing.
 
 ---
@@ -246,7 +247,7 @@ ebird-birding-planner/
 │   ├── birdcast-client.js    ← shared by MCP server AND scripts
 │   ├── nws-client.js         ← shared by MCP server AND scripts; includes detectFrontalPassage()
 │   ├── inaturalist-client.js ← shared by MCP server AND scripts
-│   ├── ohio-birds-client.js  ← Ohio-birds LISTSERV scraper (archive currently unavailable)
+│   ├── ohio-birds-client.js  ← Ohio-birds LISTSERV scraper (active, index-based subject scraping)
 │   └── utils.js              ← Cache, resolveLocation, toYMD, DEFAULTS, RECOMMENDATION, getFavoriteHotspots, …
 ├── data/
 │   └── life-list.json        ← pre-processed eBird life list (163 species); regenerate with build-life-list.js
@@ -331,7 +332,7 @@ Special case: high overnight precip + clear morning = potential fallout note.
 | `lifeList` | `{ totalSpecies, source }` or null — summary of the loaded life list (from `data/life-list.json`) |
 | `notableObservations[].isLifer` | boolean — true if the species is NOT in the user's life list |
 | `notableObservations[].source` | `"ebird"` or `"ohio-birds-listserv"` |
-| `listservSightings` | Raw array of Ohio-birds LISTSERV sightings (empty if archive unavailable) |
+| `listservSightings` | Array of recent Ohio-birds LISTSERV thread subjects: `{ subject, url, source }`. Index-based (no login required). |
 | `flags.frontalPassage` | true if cold front passage detected (wind shift + clearing overnight) |
 | `flags.falloutPotential` | true if fallout conditions detected (rain overnight → clearing at dawn) |
 | `flags.liferOpportunities` | count of notableObservations with isLifer === true |
@@ -700,7 +701,7 @@ directly via the standalone scripts.
 | iNaturalist | None | 60 req/min | 6h |
 | `suncalc` | N/A (npm package) | N/A | N/A |
 | Resend | `RESEND_API_KEY` | 10 req/sec | N/A |
-| Ohio-birds LISTSERV | None (public archive) | Unknown | N/A (currently unavailable) |
+| Ohio-birds LISTSERV | None (public index) | Confirmed 2026-05-17 | `https://listserv.miamioh.edu/scripts/wa.exe` — index free, bodies require login |
 
 ### Local data files
 
@@ -1075,7 +1076,7 @@ Items that are known, tracked, and not yet completed. Ordered roughly by priorit
 | 9 | Verify Resend custom domain (`BRIEFING_FROM_EMAIL`) | Config | Requires domain verification in Resend dashboard; currently using `@resend.dev` test address |
 | 10 | Confirm BirdCast API key is approved for programmatic use | Config | Working in practice; formal status with birdcast.info unverified |
 | 11 | Hotspot micro-habitat knowledge base | Enhancement | A `hotspot-notes.json` file with trail-level notes per park (best spots for Connecticut Warbler, etc.) would let the agent give more specific field directions. Include in `aggregate.js` output. |
-| 19 | Ohio-birds LISTSERV scraper activation | Enhancement | `src/ohio-birds-client.js` is built and wired in. Archive at `listserv.miamioh.edu` currently returns HTTP 404. Investigate correct CGI URL or contact OOS for current archive location. When accessible, rare reports will merge into `notableObservations` automatically. |
+| 19 | ~~Ohio-birds LISTSERV scraper activation~~ | ~~Enhancement~~ | **RESOLVED 2026-05-17.** Correct URL confirmed: `https://listserv.miamioh.edu/scripts/wa.exe`. Archive is publicly accessible; message bodies require login but index subject lines are free. Scraper now parses 16 thread subjects/week from the index and surfaces them as `listservSightings` in the daily email's "Community Buzz" section. |
 | 20 | Life list auto-refresh | Enhancement | `data/life-list.json` is a static snapshot. Currently requires manual re-export from eBird + `node scripts/build-life-list.js`. Could automate by adding a Routine pre-step that fetches the eBird life list API if one becomes available, or by watching for a new CSV in ~/Downloads. |
 | 21 | Verify frontal passage detection accuracy | Testing | `NWSClient.detectFrontalPassage()` is implemented but untested against live NWS hourly data. Run on a known frontal passage day and verify `frontalPassage: true` and correct `frontalNote`. |
 | 12 | Inline email charts | Enhancement | Section 7 describes 7-day migration bar chart and warbler frequency trend. Implement as `optionalDependencies` (`chart.js`, `chartjs-node-canvas`) if re-added. |
@@ -1126,3 +1127,4 @@ Items that are known, tracked, and not yet completed. Ordered roughly by priorit
 | 2026-05-16 | Three parallel code reviews plus a dedicated public-repo security audit. Implemented all actionable findings: URLSearchParams for BirdCast API key; NWS URL domain assertion; path traversal guard in send.js; lat/lng validation in all MCP handlers; batched eBird calls (5 at a time); staggered NWS calls (300ms); BRIEFING_REGION rejects invalid format; draft.emailTo/emailFrom overrides removed from send.js; npm ci --ignore-scripts in Routine prompt; HTML-escape rule added to Routine agent RULES; path validation for EBIRD_LIFE_LIST_CSV; legacy scripts/briefing.js deleted. |
 | 2026-05-16 | SPEC.md comprehensive review and cleanup: removed all references to deleted scripts/briefing.js; updated Section 4 to document TOOL_HANDLERS Map and RECOMMENDATION enum; corrected Section 7 rendering description (agent writes dynamically, not via briefing.js); added BRIEFING_LOCATION_NAME to Section 9 secrets table; fixed L9 to note briefing.js deleted; resolved Open Question 6 (cron update chosen); removed duplicate Open Questions table; fixed TOC to correctly list sections 14 (Still To Do) and 15 (Open Questions); added briefing-draft.json to .gitignore list; clarified dotenv situation; added resend to dependencies table; added Current State summary box. |
 | 2026-05-17 | Four new aggregate.js features: (1) Life list integration — `scripts/build-life-list.js` pre-processes eBird life list CSV to `data/life-list.json`; `notableObservations[].isLifer` flags species not on life list; `liferOpportunities` count in flags; lifer-aware Chase Target cards in routine-prompt.md. (2) Moon phase — `buildMoonInfo()` adds `moon` field with phase name, illumination %, and migration note for full/new moon conditions. (3) Ohio-birds LISTSERV scraper — `src/ohio-birds-client.js` created; archive currently unavailable (HTTP 404), returns empty array gracefully; `listservSightings` field added to output. (4) Frontal passage / fallout detection — `NWSClient.detectFrontalPassage()` analyses NWS hourly forecast for wind shifts and overnight clearing; `frontalPassage`, `falloutPotential`, and `frontalNote` fields added to `weather.today` and `flags`. Unit tests added for all 4 features (moon phase names, lifer detection, strip-parenthetical, wind shift, clearing, fallout logic). |
+| 2026-05-17 | Ohio-birds LISTSERV scraper fully activated. Correct base URL confirmed (`https://listserv.miamioh.edu/scripts/wa.exe`). Approach revised: message bodies require LISTSERV login, but the monthly index pages are public. `OhioBirdsClient.getRecentSightings()` now parses subject lines from the index (no individual message fetches), filters with a species/location/migration keyword matcher (11/11 test cases pass), and returns `{ subject, url, source }` objects. Deduplicates normalized thread subjects. Verified live: 16 notable thread subjects extracted from May 2026 archive. `aggregate.js` dead merge loop removed; `listservSightings` passed through as community-buzz context. `routine-prompt.md` updated with Section 7 "Ohio-birds Community Buzz" email block. SPEC.md item 19 marked resolved. |
