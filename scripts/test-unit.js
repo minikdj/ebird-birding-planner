@@ -375,3 +375,303 @@ describe('triage scoring thresholds', () => {
     assert.strictEqual(RECOMMENDATION.SILENT_SKIP, 'SILENT_SKIP');
   });
 });
+
+// ---------------------------------------------------------------------------
+// 15. buildMoonInfo — phase name mapping
+// ---------------------------------------------------------------------------
+
+// Inline buildMoonInfo for unit testing (pure function, no external deps beyond suncalc)
+import suncalc from 'suncalc';
+
+function buildMoonInfo(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00Z');
+  const moon = suncalc.getMoonIllumination(d);
+  const fraction = moon.fraction;
+  const phase = moon.phase;
+
+  let phaseName;
+  if (phase < 0.0625 || phase >= 0.9375) phaseName = 'New Moon';
+  else if (phase < 0.1875) phaseName = 'Waxing Crescent';
+  else if (phase < 0.3125) phaseName = 'First Quarter';
+  else if (phase < 0.4375) phaseName = 'Waxing Gibbous';
+  else if (phase < 0.5625) phaseName = 'Full Moon';
+  else if (phase < 0.6875) phaseName = 'Waning Gibbous';
+  else if (phase < 0.8125) phaseName = 'Last Quarter';
+  else phaseName = 'Waning Crescent';
+
+  const illuminationPct = Math.round(fraction * 100);
+
+  let migrationNote = null;
+  if (fraction > 0.85) {
+    migrationNote = `Full moon (${illuminationPct}% illuminated) — bright nights enhance nocturnal migration; birds can fly longer into the night.`;
+  } else if (fraction < 0.15) {
+    migrationNote = `New moon (${illuminationPct}% illuminated) — dark nights may concentrate migration in shorter windows around midnight.`;
+  }
+
+  return { phaseName, illuminationPct, phase: Math.round(phase * 100) / 100, migrationNote };
+}
+
+describe('buildMoonInfo — phase name mapping', () => {
+  it('returns an object with phaseName, illuminationPct, phase, migrationNote', () => {
+    const result = buildMoonInfo('2026-05-17');
+    assert.ok('phaseName' in result, 'has phaseName');
+    assert.ok('illuminationPct' in result, 'has illuminationPct');
+    assert.ok('phase' in result, 'has phase');
+    assert.ok('migrationNote' in result, 'has migrationNote');
+  });
+
+  it('illuminationPct is an integer 0–100', () => {
+    const result = buildMoonInfo('2026-05-17');
+    assert.ok(Number.isInteger(result.illuminationPct), 'illuminationPct is integer');
+    assert.ok(result.illuminationPct >= 0 && result.illuminationPct <= 100, 'in range 0-100');
+  });
+
+  it('phaseName is a non-empty string', () => {
+    const result = buildMoonInfo('2026-05-17');
+    assert.ok(typeof result.phaseName === 'string' && result.phaseName.length > 0);
+  });
+
+  it('phase value is rounded to 2 decimal places', () => {
+    const result = buildMoonInfo('2026-05-17');
+    const asString = String(result.phase);
+    const decimalPart = asString.includes('.') ? asString.split('.')[1] : '';
+    assert.ok(decimalPart.length <= 2, `phase should have ≤2 decimal places, got ${result.phase}`);
+  });
+
+  it('New Moon phase (phase ~0) → "New Moon" or "Waxing Crescent"', () => {
+    // 2026-01-19 is a verified new moon (phase: 0.009, fraction: 0.001)
+    const result = buildMoonInfo('2026-01-19');
+    assert.ok(
+      result.phaseName === 'New Moon' || result.phaseName === 'Waxing Crescent',
+      `expected New Moon or Waxing Crescent near new moon, got: ${result.phaseName}`
+    );
+  });
+
+  it('Full Moon phase (phase ~0.5) → "Full Moon" or adjacent gibbous phase', () => {
+    // 2026-02-02 is a verified full moon (phase: 0.510, fraction: 0.999)
+    const result = buildMoonInfo('2026-02-02');
+    assert.ok(
+      result.phaseName === 'Full Moon' || result.phaseName === 'Waxing Gibbous' || result.phaseName === 'Waning Gibbous',
+      `expected near-full phase, got: ${result.phaseName}`
+    );
+  });
+
+  it('migrationNote is non-null when illumination > 85%', () => {
+    // 2026-02-02 is a verified full moon (fraction: 0.999 = 100% illuminated)
+    const result = buildMoonInfo('2026-02-02');
+    assert.ok(result.illuminationPct > 85, `expected >85% illumination on full moon, got ${result.illuminationPct}%`);
+    assert.ok(result.migrationNote !== null, 'migrationNote should be non-null for >85% illumination');
+    assert.ok(result.migrationNote.includes('Full moon'), 'migrationNote mentions Full moon');
+  });
+
+  it('migrationNote is null for moderate illumination (40–60%)', () => {
+    // 2026-01-25 has phase: 0.210, fraction: 0.377 — well within moderate range
+    const result = buildMoonInfo('2026-01-25');
+    assert.ok(result.illuminationPct >= 15 && result.illuminationPct <= 85,
+      `expected moderate illumination (15-85%), got ${result.illuminationPct}%`);
+    assert.strictEqual(result.migrationNote, null, 'migrationNote should be null for moderate illumination');
+  });
+
+  it('phase boundaries: phase names are always one of the 8 valid values', () => {
+    const validNames = new Set([
+      'New Moon', 'Waxing Crescent', 'First Quarter', 'Waxing Gibbous',
+      'Full Moon', 'Waning Gibbous', 'Last Quarter', 'Waning Crescent',
+    ]);
+    // Sample dates across the year — we don't prescribe which name, just that it's a valid one
+    const testDates = [
+      '2026-01-01', '2026-01-19', '2026-02-02', '2026-02-18',
+      '2026-03-03', '2026-03-19', '2026-04-17', '2026-05-17',
+      '2026-06-11', '2026-07-25', '2026-09-07', '2026-12-04',
+    ];
+    for (const date of testDates) {
+      const result = buildMoonInfo(date);
+      assert.ok(validNames.has(result.phaseName), `${date}: unexpected phaseName "${result.phaseName}"`);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 16. Life list loading and lifer detection
+// ---------------------------------------------------------------------------
+
+// Inline the normalize and isLiferOpportunity logic for unit testing
+function stripParenthetical(name) {
+  return name.replace(/\s*\([^)]*\)\s*$/, '').trim();
+}
+
+function normalizeSpecies(name) {
+  return stripParenthetical(name).toLowerCase().trim();
+}
+
+function isLiferOpportunityFn(speciesName, lifeListSet) {
+  if (!lifeListSet) return false;
+  const normalized = normalizeSpecies(speciesName);
+  return !lifeListSet.has(normalized);
+}
+
+describe('life list — lifer detection logic', () => {
+  const sampleLifeList = new Set([
+    'american robin',
+    'canada goose',
+    'yellow-rumped warbler',  // normalized (no parenthetical)
+    'baltimore oriole',
+  ]);
+
+  it('species on life list → isLifer = false', () => {
+    assert.strictEqual(isLiferOpportunityFn('American Robin', sampleLifeList), false);
+  });
+
+  it('species NOT on life list → isLifer = true', () => {
+    assert.strictEqual(isLiferOpportunityFn('Connecticut Warbler', sampleLifeList), true);
+  });
+
+  it('case-insensitive matching', () => {
+    assert.strictEqual(isLiferOpportunityFn('AMERICAN ROBIN', sampleLifeList), false);
+    assert.strictEqual(isLiferOpportunityFn('american robin', sampleLifeList), false);
+  });
+
+  it('strips parenthetical before matching — "Canada Goose (interior)" matches "Canada Goose"', () => {
+    assert.strictEqual(isLiferOpportunityFn('Canada Goose (interior)', sampleLifeList), false);
+  });
+
+  it('strips parenthetical — "Yellow-rumped Warbler (Myrtle)" matches "Yellow-rumped Warbler"', () => {
+    assert.strictEqual(isLiferOpportunityFn('Yellow-rumped Warbler (Myrtle)', sampleLifeList), false);
+  });
+
+  it('null lifeListSet → returns false (graceful handling)', () => {
+    assert.strictEqual(isLiferOpportunityFn('Connecticut Warbler', null), false);
+  });
+
+  it('empty lifeListSet → every species is a lifer', () => {
+    const emptySet = new Set();
+    assert.strictEqual(isLiferOpportunityFn('American Robin', emptySet), true);
+  });
+});
+
+describe('life list — stripParenthetical', () => {
+  it('plain name → unchanged', () => {
+    assert.strictEqual(stripParenthetical('American Robin'), 'American Robin');
+  });
+
+  it('name with subspecies → stripped', () => {
+    assert.strictEqual(stripParenthetical('Canada Goose (interior)'), 'Canada Goose');
+  });
+
+  it('name with Myrtle → stripped', () => {
+    assert.strictEqual(stripParenthetical('Yellow-rumped Warbler (Myrtle)'), 'Yellow-rumped Warbler');
+  });
+
+  it('no extra whitespace in result', () => {
+    const result = stripParenthetical('Canada Goose (interior)');
+    assert.strictEqual(result, result.trim());
+  });
+
+  it('multiple parentheticals — only trailing one stripped', () => {
+    // Edge case: "Foo (bar) (baz)" — strip last parenthetical
+    const result = stripParenthetical('Foo (bar) (baz)');
+    assert.strictEqual(result, 'Foo (bar)');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 17. Frontal passage detection logic
+// ---------------------------------------------------------------------------
+
+// Inline the key detection logic for unit testing
+const SOUTHERLY_TEST = new Set(['S', 'SE', 'SW', 'SSE', 'SSW', 'ESE', 'WSW']);
+const NORTHERLY_TEST = new Set(['N', 'NE', 'NW', 'NNE', 'NNW', 'ENE', 'WNW']);
+
+function detectWindShift(eveningWindDirs, dawnWindDirs) {
+  const eveningIsSoutherly = eveningWindDirs.length > 0 &&
+    eveningWindDirs.some(d => SOUTHERLY_TEST.has(d));
+  const dawnIsNortherly = dawnWindDirs.length > 0 &&
+    dawnWindDirs.some(d => NORTHERLY_TEST.has(d));
+  return eveningIsSoutherly && dawnIsNortherly;
+}
+
+function detectClearing(nightMaxPrecip, dawnMaxPrecip) {
+  return nightMaxPrecip > 40 && dawnMaxPrecip < 20;
+}
+
+function detectFallout(nightMaxPrecip, dawnMaxPrecip) {
+  // Fallout = rain overnight then clearing at dawn
+  return nightMaxPrecip > 40 && dawnMaxPrecip < 20;
+}
+
+describe('frontal passage detection — wind shift', () => {
+  it('S evening + N dawn → wind shift detected', () => {
+    assert.strictEqual(detectWindShift(['S'], ['N']), true);
+  });
+
+  it('SW evening + NW dawn → wind shift detected', () => {
+    assert.strictEqual(detectWindShift(['SW'], ['NW']), true);
+  });
+
+  it('SSW evening + NNE dawn → wind shift detected', () => {
+    assert.strictEqual(detectWindShift(['SSW'], ['NNE']), true);
+  });
+
+  it('N evening + N dawn → NO wind shift (already northerly)', () => {
+    assert.strictEqual(detectWindShift(['N'], ['N']), false);
+  });
+
+  it('S evening + S dawn → NO wind shift (no shift occurred)', () => {
+    assert.strictEqual(detectWindShift(['S'], ['S']), false);
+  });
+
+  it('empty evening dirs → NO wind shift', () => {
+    assert.strictEqual(detectWindShift([], ['N']), false);
+  });
+
+  it('empty dawn dirs → NO wind shift', () => {
+    assert.strictEqual(detectWindShift(['S'], []), false);
+  });
+
+  it('E is not southerly → no wind shift', () => {
+    assert.strictEqual(detectWindShift(['E'], ['N']), false);
+  });
+});
+
+describe('frontal passage detection — clearing', () => {
+  it('50% night precip + 10% dawn precip → clearing detected', () => {
+    assert.strictEqual(detectClearing(50, 10), true);
+  });
+
+  it('80% night precip + 5% dawn precip → clearing detected', () => {
+    assert.strictEqual(detectClearing(80, 5), true);
+  });
+
+  it('30% night precip + 10% dawn precip → NO clearing (night not >40%)', () => {
+    assert.strictEqual(detectClearing(30, 10), false);
+  });
+
+  it('50% night precip + 25% dawn precip → NO clearing (dawn not <20%)', () => {
+    assert.strictEqual(detectClearing(50, 25), false);
+  });
+
+  it('40% night precip (boundary) + 10% dawn → NO clearing (not strictly > 40)', () => {
+    assert.strictEqual(detectClearing(40, 10), false);
+  });
+
+  it('50% night + 20% dawn (boundary) → NO clearing (not strictly < 20)', () => {
+    assert.strictEqual(detectClearing(50, 20), false);
+  });
+});
+
+describe('frontal passage detection — fallout potential', () => {
+  it('rain overnight + clearing at dawn → fallout potential', () => {
+    assert.strictEqual(detectFallout(60, 10), true);
+  });
+
+  it('no rain overnight → no fallout potential', () => {
+    assert.strictEqual(detectFallout(20, 10), false);
+  });
+
+  it('rain overnight + still raining at dawn → no fallout potential', () => {
+    assert.strictEqual(detectFallout(70, 50), false);
+  });
+
+  it('threshold: exactly 41% night + 19% dawn → fallout', () => {
+    assert.strictEqual(detectFallout(41, 19), true);
+  });
+});

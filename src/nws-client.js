@@ -251,6 +251,165 @@ export class NWSClient {
   }
 
   /**
+   * Detect cold front passage and fallout conditions from NWS hourly forecast.
+   *
+   * Fetches the hourly forecast for the given location and date, then analyses
+   * the overnight window (10pm–8am) for:
+   *   - Wind shift: southerly winds early evening → northerly winds by dawn
+   *   - Clearing: precip probability drops from >40% to <20%
+   *   - Frontal passage: both wind shift + clearing detected
+   *   - Fallout potential: rain/clouds during 10pm–2am, then clearing by 5–7am
+   *
+   * @param {number} lat
+   * @param {number} lng
+   * @param {string} dateStr - YYYY-MM-DD
+   * @returns {Promise<{frontalPassage, falloutPotential, windShiftDetected, clearingDetected, frontalNote}>}
+   */
+  async detectFrontalPassage(lat, lng, dateStr) {
+    const nullResult = {
+      frontalPassage: false,
+      falloutPotential: false,
+      windShiftDetected: false,
+      clearingDetected: false,
+      frontalNote: null,
+    };
+
+    try {
+      const latRounded = Math.round(lat * 10000) / 10000;
+      const lngRounded = Math.round(lng * 10000) / 10000;
+
+      // Use cache key distinct from getBirdingWeather
+      const cacheKey = `frontal:${latRounded},${lngRounded},${dateStr}`;
+      if (this.cache.has(cacheKey)) {
+        return this.cache.get(cacheKey);
+      }
+
+      // Step 1: Get gridpoints metadata
+      const pointsUrl = `${NWSClient.BASE_URL}/points/${latRounded},${lngRounded}`;
+      const pointsData = await this._get(pointsUrl);
+
+      if (!pointsData?.properties?.forecastHourly) {
+        process.stderr.write('NWSClient.detectFrontalPassage: No forecastHourly URL\n');
+        return nullResult;
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, NWSClient.POINTS_FORECAST_DELAY_MS));
+
+      // Step 2: Fetch hourly forecast
+      const forecastUrl = pointsData.properties.forecastHourly;
+      if (!forecastUrl.startsWith('https://api.weather.gov/')) {
+        throw new Error('Unexpected forecastHourly URL domain: ' + forecastUrl);
+      }
+      const forecastData = await this._get(forecastUrl);
+      const periods = forecastData?.properties?.periods;
+
+      if (!Array.isArray(periods) || periods.length === 0) {
+        process.stderr.write('NWSClient.detectFrontalPassage: No periods in forecast\n');
+        return nullResult;
+      }
+
+      // Step 3: Categorise periods into evening (22–23), deep night (0–2), and dawn (5–7)
+      // We look at the full overnight window: evening of dateStr through morning of dateStr.
+      // NWS returns UTC times; we compare against dateStr UTC dates.
+      const [yr, mo, dy] = dateStr.split('-').map(Number);
+
+      // Build next-day string for 0–8am periods
+      const nextDay = new Date(Date.UTC(yr, mo - 1, dy + 1));
+      const nextDateStr = nextDay.toISOString().split('T')[0];
+
+      const eveningPeriods = [];  // 22–23 UTC on dateStr (pre-frontal)
+      const nightPeriods = [];    // 0–2 UTC on dateStr (peak migration / rain window)
+      const dawnPeriods = [];     // 5–8 UTC on dateStr (post-frontal clearing check)
+
+      for (const period of periods) {
+        const startTime = new Date(period.startTime);
+        const periodDate = startTime.toISOString().split('T')[0];
+        const hour = startTime.getUTCHours();
+
+        if (periodDate === dateStr && hour >= 22) {
+          eveningPeriods.push(period);
+        }
+        if (periodDate === dateStr && hour >= 0 && hour <= 2) {
+          nightPeriods.push(period);
+        }
+        if ((periodDate === dateStr && hour >= 5) ||
+            (periodDate === nextDateStr && hour <= 8)) {
+          dawnPeriods.push(period);
+        }
+      }
+
+      // Step 4: Wind shift detection — evening southerly → dawn northerly
+      const SOUTHERLY = new Set(['S', 'SE', 'SW', 'SSE', 'SSW', 'ESE', 'WSW']);
+      const NORTHERLY = new Set(['N', 'NE', 'NW', 'NNE', 'NNW', 'ENE', 'WNW']);
+
+      const eveningWindDirs = eveningPeriods
+        .map(p => (p.windDirection ?? '').toUpperCase())
+        .filter(Boolean);
+      const dawnWindDirs = dawnPeriods
+        .map(p => (p.windDirection ?? '').toUpperCase())
+        .filter(Boolean);
+
+      const eveningIsSoutherly = eveningWindDirs.length > 0 &&
+        eveningWindDirs.some(d => SOUTHERLY.has(d));
+      const dawnIsNortherly = dawnWindDirs.length > 0 &&
+        dawnWindDirs.some(d => NORTHERLY.has(d));
+
+      const windShiftDetected = eveningIsSoutherly && dawnIsNortherly;
+
+      // Step 5: Clearing detection — precip drops from >40% to <20%
+      const nightMaxPrecip = Math.max(
+        0,
+        ...nightPeriods.map(p => p.probabilityOfPrecipitation?.value ?? 0)
+      );
+      const dawnMaxPrecip = Math.max(
+        0,
+        ...dawnPeriods.map(p => p.probabilityOfPrecipitation?.value ?? 0)
+      );
+
+      const clearingDetected = nightMaxPrecip > 40 && dawnMaxPrecip < 20;
+
+      // Step 6: Frontal passage = both signals
+      const frontalPassage = windShiftDetected && clearingDetected;
+
+      // Step 7: Fallout potential = rain or clouds during 10pm–2am, clearing by dawn
+      // We use nightMaxPrecip > 40% as the rain proxy
+      const falloutPotential = nightMaxPrecip > 40 && dawnMaxPrecip < 20;
+
+      // Step 8: Compose plain-English note
+      let frontalNote = null;
+      if (frontalPassage) {
+        frontalNote =
+          `Cold front passage detected: southerly winds in the evening shift to northerly by dawn, ` +
+          `with clearing after overnight rain (${Math.round(nightMaxPrecip)}% → ${Math.round(dawnMaxPrecip)}% precip). ` +
+          `Expect concentrated migrants at dawn hotspots.`;
+      } else if (falloutPotential) {
+        frontalNote =
+          `Fallout conditions possible: rain overnight (${Math.round(nightMaxPrecip)}% precip) ` +
+          `clearing by dawn (${Math.round(dawnMaxPrecip)}%). ` +
+          `Birds grounded during the night may concentrate at dawn. Check hotspots early.`;
+      } else if (windShiftDetected) {
+        frontalNote =
+          `Wind shift detected (southerly evening → northerly dawn) suggesting frontal passage. ` +
+          `Migration activity may be suppressed but watch for concentrated birds at shelter edges.`;
+      }
+
+      const result = {
+        frontalPassage,
+        falloutPotential,
+        windShiftDetected,
+        clearingDetected,
+        frontalNote,
+      };
+
+      this.cache.set(cacheKey, result, NWSClient.CACHE_TTL_MS);
+      return result;
+    } catch (err) {
+      process.stderr.write(`NWSClient.detectFrontalPassage: ${err.message}\n`);
+      return nullResult;
+    }
+  }
+
+  /**
    * Helper: return a standardized "unavailable" response object.
    * @returns {object}
    */

@@ -86,11 +86,17 @@ The JSON contains:
 - `weather.today.migrationInterpretation` — plain-English migration weather interpretation
 - `weather.today.rainImpactNote` — non-null when rain materially affects birding; includes practical advice
 - `weather.today.weatherUnavailable` — true if NWS was unreachable
+- `weather.today.frontalPassage` — true if a cold front passage is detected (wind shift + clearing)
+- `weather.today.falloutPotential` — true if rain overnight then clearing at dawn (grounded birds may concentrate)
+- `weather.today.frontalNote` — plain-English description of frontal passage or fallout conditions (non-null when either flag is true)
 - `weather.outlook` — 5-day array: wind, precip, migration intensity, rain impact note, birding window per day
 - `birdingWindow` — civil twilight, sunrise, golden hour end, activity cutoff (temp-adjusted)
+- `moon` — phaseName, illuminationPct, migrationNote (non-null when moon phase is significant for migration)
 - `hotspots` — top 5 by 7-day species count (proxy for active birder community)
-- `notableObservations` — deduplicated rare/unusual species, last 14 days, 50km; sorted by recency
-- `flags` — `{ highMigrationNight, hasNotables, morningRainLikely, favorableOvernightWind }`
+- `notableObservations` — deduplicated rare/unusual species, last 14 days, 50km; sorted by recency; each has `isLifer: boolean` (true = not yet on life list)
+- `listservSightings` — raw sightings from Ohio-birds LISTSERV (may be empty if archive unavailable)
+- `lifeList` — `{ totalSpecies, source }` or null if life list not loaded
+- `flags` — `{ highMigrationNight, hasNotables, morningRainLikely, favorableOvernightWind, frontalPassage, falloutPotential, liferOpportunities }`
 
 Some fields may be null if data sources were unavailable. Write the email using whatever data is present and briefly note any unavailable sections ("Weather data unavailable today").
 
@@ -104,10 +110,12 @@ Consider:
 - Is migration exceptional (very high or very low for the season)?
 - Does `weather.today.rainImpactNote` exist? If so, this must be prominently mentioned — rain directly affects whether it's worth going out.
 - Are there genuine **prize birds** in `notableObservations`? For each notable species, ask yourself: Is this rare for the county? Is this a species at peak passage that requires effort to find? Is this a vagrant that almost never appears here? If yes → it deserves a dedicated Chase Target card. Use your knowledge of species rarity and status — the data only tells you a bird was seen, you tell the birder why it matters and how to find it.
+- Does `weather.today.falloutPotential === true`? This is the **highest-priority weather signal in the entire briefing** — it means birds that were flying last night got grounded by rain and are concentrated at dawn hotspots RIGHT NOW. If falloutPotential is true, make this the first bullet in the executive summary and the first section of the email, regardless of migration score.
 - Is the overnight wind pattern creating a fallout opportunity (rain overnight + clearing at dawn)?
 - Does the 5-day outlook show a much better day coming up soon? If so, say so.
 - Is the season running significantly above or below historical average? Check `migration.season.comparisonNote` and `weeklyTrend`.
 - Are the top hotspots showing strong 7-day activity, or is birding unusually slow?
+- Are any notable species LIFERS for this birder? Check `notableObservations[].isLifer` — if true, this species is not yet on the life list. A lifer opportunity ALWAYS warrants a Chase Target card, regardless of rarity score. Flag it prominently in the card with "★ LIFER OPPORTUNITY" in red (#c0392b).
 
 The goal: write an email that a serious birder would find genuinely useful — not a slot-filled template, but an intelligent synthesis that highlights what actually matters today.
 
@@ -127,6 +135,7 @@ Structure your email as inline-CSS HTML (mobile-friendly, max-width 600px, table
 2. **★ Today's Chase Targets** — Only include this section if there are genuine prize birds worth making a special effort for. A "prize bird" is one that is: rare or unusual for the county/region, at a particularly meaningful moment in its migration window (peak passage for a hard-to-find species), a species that takes real effort to locate, or a genuine vagrant/rarity. **Do not include common migrants here just because they appear in `notableObservations`.**
 
    For each chase target (1–3 max), write a dedicated card styled with a red left border (`#c0392b`). Each card must include:
+   - If `isLifer` is true for this species: add a prominent **"★ LIFER OPPORTUNITY"** badge at the top of the card in red (#c0392b).
    - **Species name** (prominent, in red) + location + date last seen
    - **Why it's a prize** (1 sentence on county rarity, state status, or significance — use your knowledge, not just the data)
    - **Where to look** within the hotspot: specific habitat, trail section, time of day (e.g., "dense shrubby understory near the north trail edge at Otto Armleder")
@@ -137,7 +146,7 @@ Structure your email as inline-CSS HTML (mobile-friendly, max-width 600px, table
 
    If there are no genuine prize birds today, **omit this section entirely** — do not include a "Chase Targets" section with common or moderately unusual birds.
 
-3. **Migration Last Night** — BirdCast birds aloft, isHigh flag, flight direction/speed if available, season total vs historical average with weekly trend. Use `migration.narrativeSummary` as a starting point.
+3. **Migration Last Night** — BirdCast birds aloft, isHigh flag, flight direction/speed if available, season total vs historical average with weekly trend. Use `migration.narrativeSummary` as a starting point. Include moon phase if `moon.migrationNote` is non-null — one sentence noting the lunar conditions and their migration implication.
 
 4. **Weather & Birding Conditions** — Overnight wind, morning forecast, `migrationInterpretation`, and critically: if `rainImpactNote` is not null, include it prominently with practical advice.
 
