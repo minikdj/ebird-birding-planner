@@ -51,6 +51,7 @@ jobs:
           BRIEFING_LOCATION_NAME: ${{ inputs.location }}
           BRIEFING_TIMEZONE: ${{ secrets.BRIEFING_TIMEZONE || 'America/New_York' }}
           NWS_CONTACT_EMAIL: ${{ secrets.NWS_CONTACT_EMAIL }}
+          BRIEFING_SKIP_BIRDCAST: ${{ secrets.BRIEFING_SKIP_BIRDCAST }}
         run: |
           node scripts/triage.js > triage-output.json
           RECOMMENDATION=$(node -e "const t=JSON.parse(require('fs').readFileSync('triage-output.json','utf8')); console.log(t.recommendation)")
@@ -67,6 +68,7 @@ jobs:
           BRIEFING_LOCATION_NAME: ${{ inputs.location }}
           BRIEFING_TIMEZONE: ${{ secrets.BRIEFING_TIMEZONE || 'America/New_York' }}
           NWS_CONTACT_EMAIL: ${{ secrets.NWS_CONTACT_EMAIL }}
+          BRIEFING_SKIP_BIRDCAST: ${{ secrets.BRIEFING_SKIP_BIRDCAST }}
         run: node scripts/aggregate.js > aggregate-output.json
 
       - name: Generate email
