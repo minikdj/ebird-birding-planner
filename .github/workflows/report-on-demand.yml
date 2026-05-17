@@ -1,0 +1,88 @@
+name: On-Demand Birding Report
+on:
+  workflow_dispatch:
+    inputs:
+      location:
+        description: 'Location name (e.g. Cape May, NJ)'
+        required: true
+        type: string
+      region:
+        description: 'eBird region code (e.g. US-NJ-009)'
+        required: true
+        type: string
+      lat:
+        description: 'Latitude (decimal, e.g. 38.93)'
+        required: true
+        type: string
+      lng:
+        description: 'Longitude (decimal, e.g. -74.96)'
+        required: true
+        type: string
+      focus:
+        description: 'Optional focus (e.g. shorebirds, warblers, any rarity)'
+        required: false
+        type: string
+        default: ''
+
+jobs:
+  generate-report:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Run triage
+        id: triage
+        env:
+          EBIRD_API_KEY: ${{ secrets.EBIRD_API_KEY }}
+          BIRDCAST_API_KEY: ${{ secrets.BIRDCAST_API_KEY }}
+          BRIEFING_REGION: ${{ inputs.region }}
+          BRIEFING_LAT: ${{ inputs.lat }}
+          BRIEFING_LNG: ${{ inputs.lng }}
+          BRIEFING_LOCATION_NAME: ${{ inputs.location }}
+          BRIEFING_TIMEZONE: ${{ secrets.BRIEFING_TIMEZONE || 'America/New_York' }}
+          NWS_CONTACT_EMAIL: ${{ secrets.NWS_CONTACT_EMAIL }}
+        run: |
+          node scripts/triage.js > triage-output.json
+          RECOMMENDATION=$(node -e "const t=JSON.parse(require('fs').readFileSync('triage-output.json','utf8')); console.log(t.recommendation)")
+          echo "recommendation=${RECOMMENDATION}" >> "$GITHUB_OUTPUT"
+
+      - name: Run aggregate
+        if: steps.triage.outputs.recommendation != 'SILENT_SKIP'
+        env:
+          EBIRD_API_KEY: ${{ secrets.EBIRD_API_KEY }}
+          BIRDCAST_API_KEY: ${{ secrets.BIRDCAST_API_KEY }}
+          BRIEFING_REGION: ${{ inputs.region }}
+          BRIEFING_LAT: ${{ inputs.lat }}
+          BRIEFING_LNG: ${{ inputs.lng }}
+          BRIEFING_LOCATION_NAME: ${{ inputs.location }}
+          BRIEFING_TIMEZONE: ${{ secrets.BRIEFING_TIMEZONE || 'America/New_York' }}
+          NWS_CONTACT_EMAIL: ${{ secrets.NWS_CONTACT_EMAIL }}
+        run: node scripts/aggregate.js > aggregate-output.json
+
+      - name: Generate email
+        # Always runs — generate-email.js handles SILENT_SKIP internally (writes minimal draft)
+        # so the user always receives a response to their on-demand request.
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          BRIEFING_LOCATION_NAME: ${{ inputs.location }}
+          BRIEFING_TIMEZONE: ${{ secrets.BRIEFING_TIMEZONE || 'America/New_York' }}
+          BRIEFING_FOCUS: ${{ inputs.focus }}
+        run: node scripts/generate-email.js
+
+      - name: Send email
+        env:
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          SENDGRID_API_KEY: ${{ secrets.SENDGRID_API_KEY }}
+          BRIEFING_EMAIL_TO: ${{ secrets.BRIEFING_EMAIL_TO }}
+          BRIEFING_FROM_EMAIL: ${{ secrets.BRIEFING_FROM_EMAIL }}
+        run: node scripts/send.js briefing-draft.json

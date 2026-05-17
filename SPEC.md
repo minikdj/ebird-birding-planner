@@ -18,7 +18,7 @@ delivery paths still need documented E2E verification (see Section 14).
 moon phase + migration notes, frontal passage / fallout detection from NWS hourly
 data, and Ohio-birds LISTSERV scraper (active — `scripts/wa.exe` URL confirmed,
 surfaces community thread subjects as daily email "Community Buzz" section).
-128 unit tests passing.
+163 unit tests passing.
 
 ---
 
@@ -27,9 +27,11 @@ surfaces community thread subjects as daily email "Community Buzz" section).
 1. [Project Goal](#1-project-goal)
 2. [Infrastructure Decision](#2-infrastructure-decision)
 3. [Routine Agent Design](#3-routine-agent-design)
+3B. [On-Demand Report — Mobile Trigger](#3b-on-demand-report--mobile-trigger)
 4. [MCP Server](#4-mcp-server)
 5. [New Tools — Phase 2](#5-new-tools--phase-2)
 6. [Enrichments to Existing Tools](#6-enrichments-to-existing-tools)
+6B. [Bird Photo Integration](#6b-bird-photo-integration)
 7. [Email Design](#7-email-design)
 8. [API Reference & Rate Limits](#8-api-reference--rate-limits)
 9. [Configuration & Secrets](#9-configuration--secrets)
@@ -180,6 +182,244 @@ improved (score ≥ 5), sends full briefing and reverts to daily cadence.
 
 ---
 
+## 3B. On-Demand Report — Mobile Trigger
+
+### Goal
+
+Generate a birding report for **any location, any time**, triggered from the Claude
+mobile app with a natural-language request. Example:
+
+> "Generate a birding report for Cape May, NJ this weekend — I want to know what
+> warblers are moving through."
+
+The user never opens a terminal. A single message in Claude.ai → report appears in
+their email within ~60 seconds.
+
+### Architecture: GitHub Actions + Claude.ai Project + GitHub MCP
+
+```
+Mobile (Claude.ai)
+  │  User types natural language
+  ▼
+Claude.ai Project (On-Demand Birding)
+  │  System prompt: resolve location, call GitHub API
+  │  GitHub MCP cloud connector → POST /repos/.../actions/workflows/report-on-demand.yml/dispatches
+  ▼
+GitHub Actions: .github/workflows/report-on-demand.yml
+  │  workflow_dispatch with inputs: location, region, lat, lng, focus
+  ├─ npm ci --ignore-scripts
+  ├─ node scripts/triage.js       (with BRIEFING_REGION / LAT / LNG overrides)
+  ├─ node scripts/aggregate.js    (same overrides)
+  ├─ node scripts/generate-email.js  (calls Anthropic API → writes briefing-draft.json)
+  └─ node scripts/send.js briefing-draft.json   → EMAIL SENT
+```
+
+No always-on server required. GitHub Actions is free for public repos; the
+Anthropic API call costs ~$0.02 per report at Haiku pricing.
+
+### Workflow file: `.github/workflows/report-on-demand.yml`
+
+```yaml
+name: On-Demand Birding Report
+on:
+  workflow_dispatch:
+    inputs:
+      location:
+        description: 'Location name (e.g. Cape May, NJ)'
+        required: true
+        type: string
+      region:
+        description: 'eBird region code (e.g. US-NJ-009)'
+        required: true
+        type: string
+      lat:
+        description: 'Latitude (decimal, e.g. 38.93)'
+        required: true
+        type: string
+      lng:
+        description: 'Longitude (decimal, e.g. -74.96)'
+        required: true
+        type: string
+      focus:
+        description: 'Optional focus or context (e.g. shorebirds, warblers, any rarity)'
+        required: false
+        type: string
+        default: ''
+
+jobs:
+  generate-report:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci --ignore-scripts
+      - name: Run triage
+        env:
+          EBIRD_API_KEY: ${{ secrets.EBIRD_API_KEY }}
+          BIRDCAST_API_KEY: ${{ secrets.BIRDCAST_API_KEY }}
+          BRIEFING_REGION: ${{ inputs.region }}
+          BRIEFING_LAT: ${{ inputs.lat }}
+          BRIEFING_LNG: ${{ inputs.lng }}
+          BRIEFING_LOCATION_NAME: ${{ inputs.location }}
+          BRIEFING_TIMEZONE: America/New_York
+          NWS_CONTACT_EMAIL: ${{ secrets.NWS_CONTACT_EMAIL }}
+        run: node scripts/triage.js
+      - name: Run aggregate
+        env:
+          EBIRD_API_KEY: ${{ secrets.EBIRD_API_KEY }}
+          BIRDCAST_API_KEY: ${{ secrets.BIRDCAST_API_KEY }}
+          BRIEFING_REGION: ${{ inputs.region }}
+          BRIEFING_LAT: ${{ inputs.lat }}
+          BRIEFING_LNG: ${{ inputs.lng }}
+          BRIEFING_LOCATION_NAME: ${{ inputs.location }}
+          BRIEFING_TIMEZONE: America/New_York
+          NWS_CONTACT_EMAIL: ${{ secrets.NWS_CONTACT_EMAIL }}
+        run: node scripts/aggregate.js
+      - name: Generate email with Claude
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          BRIEFING_LOCATION_NAME: ${{ inputs.location }}
+          BRIEFING_FOCUS: ${{ inputs.focus }}
+          BRIEFING_TIMEZONE: America/New_York
+        run: node scripts/generate-email.js
+      - name: Send email
+        env:
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          SENDGRID_API_KEY: ${{ secrets.SENDGRID_API_KEY }}
+          BRIEFING_EMAIL_TO: ${{ secrets.BRIEFING_EMAIL_TO }}
+          BRIEFING_FROM_EMAIL: ${{ secrets.BRIEFING_FROM_EMAIL }}
+        run: node scripts/send.js briefing-draft.json
+```
+
+### New script: `scripts/generate-email.js`
+
+This script replaces the Routine agent's Step 5 email-writing task for the
+on-demand path. It:
+
+1. Reads `triage-output.json` and `aggregate-output.json` from disk (written by
+   the preceding steps)
+2. Reads `routine-prompt.md` (reused — same design system, same email rules)
+3. Calls the Anthropic Messages API with `claude-haiku-4-5` (fast + cheap):
+   - System prompt: the agent instructions from `routine-prompt.md` Steps 4–5
+   - User message: triage JSON + aggregate JSON + optional focus note from
+     `BRIEFING_FOCUS` env var
+4. Parses `{ subject, htmlBody }` from Claude's response
+5. Writes `briefing-draft.json` for `send.js` to consume
+
+**Model choice**: Haiku is sufficient for the email-rendering step (structured
+output with a clear spec). The reasoning step that the daily Routine uses
+(`claude-sonnet-4-5`) is not needed here — the data is already fully structured
+by `aggregate.js`.
+
+**Triage gate**: `generate-email.js` reads `triage-output.json`. If
+`recommendation === "SILENT_SKIP"`, it writes a minimal `briefing-draft.json`
+with a short "nothing notable today" note and the workflow completes without
+sending a full report. This preserves the same gate logic as the daily Routine.
+
+### `triage.js` and `aggregate.js` — output files
+
+Both scripts need a small change: in addition to printing JSON to stdout (for
+the Routine path), they should write their output to disk when running in the
+GitHub Actions context (`GITHUB_ACTIONS=true` env var, set automatically):
+
+```js
+// At the end of triage.js and aggregate.js:
+if (process.env.GITHUB_ACTIONS) {
+  const outFile = process.argv[1].includes('triage') ? 'triage-output.json' : 'aggregate-output.json';
+  fs.writeFileSync(outFile, JSON.stringify(output, null, 2));
+}
+```
+
+Alternatively, the workflow steps can redirect stdout:
+```yaml
+run: node scripts/triage.js > triage-output.json
+```
+
+Either approach works; the redirect approach requires no code change.
+
+### Claude.ai Project setup
+
+1. Go to **claude.ai → Projects → New Project**
+2. Name it: **On-Demand Birding Report**
+3. Under **Integrations**, add the **GitHub** connector (cloud MCP — no local setup)
+4. Authorize the connector to access the `minikdj/ebird-birding-planner` repo
+5. Add this system prompt to the Project:
+
+```
+You are a birding report dispatcher. When the user asks for a birding report
+for any location, your job is to:
+
+1. Identify the location name, eBird region code, and coordinates.
+   - Use your knowledge of eBird region codes (e.g. US-NJ-009 for Cape May County, NJ).
+   - If unsure of the region code, use the state-level code (e.g. US-NJ).
+   - Coordinates: look up approximate lat/lng for the city/area.
+
+2. Ask for any specific focus if not mentioned (shorebirds, warblers, raptors, etc.)
+   — but default to "any notable species" if not specified.
+
+3. Trigger the GitHub Actions workflow using the GitHub tool:
+   - Repo: minikdj/ebird-birding-planner
+   - Workflow file: report-on-demand.yml
+   - Inputs: { location, region, lat, lng, focus }
+
+4. Tell the user: "Report triggered for [location] — you'll receive an email
+   within 60 seconds."
+
+Do not try to look up bird data yourself. Your only job is to dispatch the
+workflow with the correct inputs and confirm it was triggered.
+```
+
+### User workflow from Claude mobile
+
+1. Open Claude.ai → tap the **On-Demand Birding Report** Project
+2. Type naturally:
+   > "Birding report for Magee Marsh, OH — spring warbler fallout conditions?"
+3. Claude resolves location → triggers the GitHub workflow via GitHub MCP
+4. Email arrives within ~60 seconds
+
+### GitHub secrets required
+
+Add these in the GitHub repo → Settings → Secrets → Actions:
+
+| Secret | Source |
+|--------|--------|
+| `EBIRD_API_KEY` | Same key as in Routine |
+| `BIRDCAST_API_KEY` | Same key as in Routine |
+| `ANTHROPIC_API_KEY` | Anthropic console — create a separate key for this |
+| `RESEND_API_KEY` | Same key as in Routine |
+| `SENDGRID_API_KEY` | Optional fallback |
+| `BRIEFING_EMAIL_TO` | Your email address |
+| `BRIEFING_FROM_EMAIL` | Same verified sender as in Routine |
+| `NWS_CONTACT_EMAIL` | Your real email (NWS User-Agent) |
+
+### Implementation checklist
+
+- [ ] Create `.github/workflows/report-on-demand.yml`
+- [ ] Write `scripts/generate-email.js` (Anthropic SDK, reads triage/aggregate output)
+- [ ] Add `ANTHROPIC_API_KEY` to GitHub repo secrets
+- [ ] Copy remaining secrets from Routine to GitHub repo secrets
+- [ ] Create Claude.ai Project "On-Demand Birding Report" with GitHub MCP
+- [ ] Add system prompt to Project
+- [ ] Test from desktop: trigger workflow manually in GitHub Actions UI
+- [ ] Test from mobile: type a request in the Claude.ai Project
+
+### What this does NOT change
+
+- The daily Routine continues to run on its own schedule unchanged
+- The MCP server for Claude Desktop is unchanged
+- No new npm dependencies required (only `@anthropic-ai/sdk`, already available in
+  the GitHub Actions environment via `npm ci`)
+
+> **Note:** `@anthropic-ai/sdk` must be added to `package.json` `dependencies` for
+> `generate-email.js` to import it. It is not currently listed. Add it:
+> `npm install @anthropic-ai/sdk` — this is the only code change needed to
+> existing files.
+
+---
+
 ## 4. MCP Server
 
 All 11 tools are implemented and working.
@@ -257,7 +497,7 @@ ebird-birding-planner/
     ├── build-life-list.js    ← reads ~/Downloads/ebird_world_life_list.csv → data/life-list.json
     ├── send.js               ← email delivery: reads briefing-draft.json, sends via Resend/fallback
     ├── test.js               ← integration smoke test suite (6 tests, requires API keys)
-    └── test-unit.js          ← unit test suite (128 tests, no API keys needed)
+    └── test-unit.js          ← unit test suite (163 tests, no API keys needed)
 ```
 
 ### Routine execution flow
@@ -621,6 +861,74 @@ Cap at 3 verify calls per compare request (iNaturalist rate limit + latency).
 
 ---
 
+## 6B. Bird Photo Integration
+
+### Overview
+
+Bird photos appear in Chase Target cards (hero image) and the Notable Sightings table (thumbnail column). Photos are sourced automatically by `aggregate.js` — no configuration required.
+
+### Sources (in priority order)
+
+| Source | Coverage | Quality | License |
+|--------|----------|---------|---------|
+| **Macaulay Library** (Cornell/eBird) | Most species with eBird data | Top-rated community photos, curated scores | "Any Lab Use=eBird" — non-commercial use as part of eBird ecosystem tools |
+| **Wikipedia REST API** | Near-universal (any species with a Wikipedia article) | Wikimedia Commons thumbnails — good quality, CC-licensed | Creative Commons (varies by image) |
+
+### Implementation
+
+**New file: `src/media-client.js`**
+
+- `MediaClient.getTopPhoto(speciesCode, commonName)` — primary lookup method. Tries Macaulay first (using eBird species code), falls back to Wikipedia by common name.
+- `MediaClient.getPhotosForSpecies(speciesArray)` — batch lookup, 3 concurrent max, 250ms between batches. Returns `Record<commonName, photo | null>`.
+- In-memory cache (7-day TTL) — photos fetched once per session, not per email.
+- 6-second timeout per request — media fetches are non-critical path.
+
+**Response schema** (`photo` field on each `notableObservations[]` entry):
+
+```js
+{
+  url: string,           // 640px wide — fits 600px max-width email container
+  thumbnailUrl: string,  // 320px — for Notable Sightings table rows
+  photographer: string | null,  // null for Wikipedia (not surfaced in summary API)
+  attribution: string,          // Full attribution line for display below photo
+  source: 'macaulay' | 'wikipedia',
+  rating: number | null,        // Macaulay rating 0–5 (null for Wikipedia)
+}
+```
+
+**`aggregate.js` integration:**
+- Photo lookup runs after notable observations are assembled
+- Capped at first 10 species (bound latency — typically <3s for 10 batch lookups)
+- `photo` field is `null` if both sources fail — email renders without an `<img>` tag
+
+### Macaulay Library API details
+
+No API key required. Public endpoint:
+```
+GET https://search.macaulaylibrary.org/api/v1/search?taxonCode={speciesCode}&count=1&sort=rating_rank_desc&mediaType=p
+```
+CDN image URL: `https://cdn.download.ams.birds.cornell.edu/api/v1/asset/{assetId}/{size}`
+
+Valid sizes: `320` `480` `640` `900` `1200` `1800` `2400` — all confirmed working (HTTP 200).
+For emails: use `640` (url) and `320` (thumbnailUrl).
+
+### Wikipedia REST API details
+
+No API key required. Public endpoint:
+```
+GET https://en.wikipedia.org/api/rest_v1/page/summary/{Species_Name}
+```
+Returns `thumbnail.source` (resizeable via pixel-width substitution in URL) and `originalimage.source`.
+
+### Email rendering rules (defined in `routine-prompt.md` Design System)
+
+- **Chase Target hero**: `<img>` at top of card, `width:100%; max-width:560px; height:200px; object-fit:cover` — covers the full card width, cropped to 200px height
+- **Notable Sightings thumbnail**: 48×48 first column in the table, `object-fit:cover; border-radius:4px`
+- **Attribution**: `font-size:10px; color:#999` — displayed below each photo
+- **Null handling**: if `photo` is null, omit `<img>` entirely — never render a broken image or placeholder
+
+---
+
 ## 7. Email Design
 
 ### Sending infrastructure
@@ -702,6 +1010,8 @@ directly via the standalone scripts.
 | `suncalc` | N/A (npm package) | N/A | N/A |
 | Resend | `RESEND_API_KEY` | 10 req/sec | N/A |
 | Ohio-birds LISTSERV | None (public index) | Confirmed 2026-05-17 | `https://listserv.miamioh.edu/scripts/wa.exe` — index free, bodies require login |
+| Macaulay Library (Cornell) | None | ~1 req/sec soft limit | `https://search.macaulaylibrary.org/api/v1/search` — top-rated bird photos by species code. CDN: `cdn.download.ams.birds.cornell.edu`. 3 concurrent max. |
+| Wikipedia REST API | None | Generous | `https://en.wikipedia.org/api/rest_v1/page/summary/{title}` — species thumbnails from Wikimedia Commons. |
 
 ### Local data files
 
@@ -843,7 +1153,7 @@ PRs for review before merging.
 
 ### Automated smoke tests — [DONE]
 
-`scripts/test-unit.js` — **128 unit tests, all passing.** No API keys required. Run with `node scripts/test-unit.js`. Covers: toYMD, weekIndex, haversine, activityCutoff, wind constants, RECOMMENDATION enum, DEFAULTS, formatNumber, degreesToCardinal, email regex, path traversal guard, BRIEFING_REGION regex, triage scoring, moon phase names, lifer detection, parenthetical stripping, wind shift detection, clearing detection, and fallout potential logic.
+`scripts/test-unit.js` — **163 unit tests, all passing.** No API keys required. Run with `node scripts/test-unit.js`. Covers: toYMD, weekIndex, haversine, activityCutoff, wind constants, RECOMMENDATION enum, DEFAULTS, formatNumber, degreesToCardinal, email regex, path traversal guard, BRIEFING_REGION regex, triage scoring, moon phase names, lifer detection, parenthetical stripping, wind shift detection, clearing detection, and fallout potential logic.
 
 `scripts/test.js` — 6 integration smoke tests (require API keys). Run with `node scripts/test.js`.
 
@@ -1073,6 +1383,7 @@ Resolved items are struck through and kept for historical reference.
 
 | # | Item | Category | Notes |
 |---|------|----------|-------|
+| 22 | ~~Build on-demand report system (Section 3B) — code complete~~ | Feature | `.github/workflows/report-on-demand.yml` and `scripts/generate-email.js` built 2026-05-17. GitHub secrets + Claude.ai Project setup remain as user-action items (see Section 3B checklist). |
 | 1 | Run full E2E tests for all 11 MCP tools in Claude Desktop | Testing | Run each tool from `TESTING.md` Section 3 in Claude Desktop with the local MCP server running. |
 | 2 | Test QUIET_PERIOD Routine path end-to-end | Testing | Requires a real Routine run on a low-migration night. See `TESTING.md` Test B. |
 | 3 | Test SILENT_SKIP Routine path | Testing | Requires a real Routine run on a very quiet night. See `TESTING.md` Test C. |
@@ -1086,6 +1397,15 @@ Resolved items are struck through and kept for historical reference.
 | 14 | Scope Resend API key | Security | In Resend dashboard, scope the key to your sending domain only. Set a spend alert. Limits blast radius if the key leaks. |
 | 16 | ~~Test `BRIEFING_FAVORITE_HOTSPOTS` env var~~ | Testing | Verified 2026-05-17 — `getFavoriteHotspots()` returns 3-item array with correct `locId` fields when env var set to `L123456,L789012,L345678`. |
 | 17 | ~~Test vacation-to-new-region flow~~ | Testing | Verified 2026-05-17 — `BRIEFING_REGION=US-NY-061 BRIEFING_LAT=40.7 BRIEFING_LNG=-74.0` produces FULL_BRIEFING score 11, 76 notable species. Region override works correctly. |
+
+### Bug Fixes Identified in Testing
+
+| # | Bug | Category | Status | Tracked in | Notes |
+|---|-----|----------|--------|------------|-------|
+| B1 | ~~`species_finder` crashes on common species~~ | Code fix | Fixed 2026-05-17 | TESTING.md Bug #1 | Cap at 500 obs before dedup; try/catch with user-friendly error; summary notes when capped |
+| B2 | ~~`plan_vacation_birding` "City, ST" format fails~~ | Code fix | Fixed 2026-05-17 | TESTING.md Bug #2 | Strip trailing `, ST` suffix and retry resolveDestination if first attempt returns null |
+| B3 | ~~`plan_vacation_birding` nearby-destination returns 0 target species~~ | Code fix | Fixed 2026-05-17 | TESTING.md Bug #3 | Final fallback: home < 0.05 AND dest > 0.10 with "significant overlap" note |
+| B4 | ~~`verify_sighting` ambiguous "data unavailable" message~~ | Code fix | Fixed 2026-05-17 | TESTING.md Bug #8 | Zero results → "No photo-verified observations found…"; API errors keep error wording |
 
 ### Resolved
 
@@ -1147,4 +1467,8 @@ Resolved items are struck through and kept for historical reference.
 | 2026-05-17 | Four new aggregate.js features: (1) Life list integration — `scripts/build-life-list.js` pre-processes eBird life list CSV to `data/life-list.json`; `notableObservations[].isLifer` flags species not on life list; `liferOpportunities` count in flags; lifer-aware Chase Target cards in routine-prompt.md. (2) Moon phase — `buildMoonInfo()` adds `moon` field with phase name, illumination %, and migration note for full/new moon conditions. (3) Ohio-birds LISTSERV scraper — `src/ohio-birds-client.js` created; archive currently unavailable (HTTP 404), returns empty array gracefully; `listservSightings` field added to output. (4) Frontal passage / fallout detection — `NWSClient.detectFrontalPassage()` analyses NWS hourly forecast for wind shifts and overnight clearing; `frontalPassage`, `falloutPotential`, and `frontalNote` fields added to `weather.today` and `flags`. Unit tests added for all 4 features (moon phase names, lifer detection, strip-parenthetical, wind shift, clearing, fallout logic). |
 | 2026-05-17 | Ohio-birds LISTSERV scraper: full body access discovered — no login required. IIS blocks non-browser User-Agents with 403; browser UA reveals A3 iframe endpoint serving email body parts publicly. Pipeline upgraded to index → A2 page → A3 iframe → body text (`<pre>` block). Species parser extracts up to 12 species per report. Verified live: Blacklick Metro Park report yielded 12 species including Canada, Blackburnian, Tennessee, Bay-breasted, Cape May, Hooded warblers. `listservSightings` now returns `{subject, body, species[], location, url, source}`. Community Buzz section updated to write per-report summaries using real species data. |
 | 2026-05-17 | Email redesign: new Design System baked into `routine-prompt.md` — 2-color palette (#1a3a2a + #c0392b only), universal ◉ LIFER badge on every occurrence of lifer species, section structure (2–4 bullets → visual → narrative), four HTML/CSS visual types (bar chart, forecast strip, condition tiles, timeline bar). All 4 scenario test emails regenerated and verified on iPhone. |
+| 2026-05-17 | Bird photo integration: added `src/media-client.js` (`MediaClient`) pulling top-rated photos from Macaulay Library (primary, by eBird species code, no API key) with Wikipedia REST API fallback. `aggregate.js` now fetches photos for first 10 notable observations in parallel; `photo` field added to each `notableObservations[]` entry. `routine-prompt.md` Design System updated: Chase Target cards get hero photo (640px, object-fit cover), Notable Sightings table gets 48×48 thumbnail column. Section 6B added to SPEC. 163 unit tests still passing. |
+| 2026-05-17 | Added Section 3B: On-Demand Report — Mobile Trigger. Architecture: GitHub Actions `workflow_dispatch` + `scripts/generate-email.js` (Anthropic Haiku) + Claude.ai Project with GitHub MCP cloud connector. User types natural language on mobile → Claude resolves location + triggers workflow → triage → aggregate → Haiku writes email → Resend sends. Implementation checklist in Section 3B; item #22 added to Section 14. |
+| 2026-05-17 | Option A on-demand reports built: `scripts/generate-email.js` (reads triage/aggregate JSON, calls claude-3-5-haiku-20241022, three-stage JSON parse fallback, SILENT_SKIP fast-path writes minimal draft so user always gets a response); `.github/workflows/report-on-demand.yml` (workflow_dispatch with 5 inputs, triage gates aggregate/generate steps, generate+send always run so SILENT_SKIP yields a "nothing notable" email rather than silence); `@anthropic-ai/sdk` added to package.json. Item #22 code complete — GitHub secrets + Claude.ai Project remain as user-action steps. |
+| 2026-05-17 | Four MCP bugs fixed in src/index.js (171 unit tests, 0 failures): B1 species_finder — cap at 500 obs before dedup + try/catch + capped-results summary; B2 plan_vacation_birding — strip ", ST" state suffix before resolveDestination lookup; B3 plan_vacation_birding — final fallback (home<0.05, dest>0.10) for nearby destinations + "significant overlap" note; B4 verify_sighting — distinguishes zero-results ("No photo-verified observations found") from API errors. SPEC Section 14 bug table updated to resolved. |
 | 2026-05-17 | Batch completion: (1) Hotspot notes — `data/hotspot-notes.json` built for 9 Cincinnati-area hotspots with trail-level habitat notes; wired into `aggregate.js` and Chase Target cards. (2) Configurable triage thresholds — 5 env vars added (`BRIEFING_SCORE_HIGH_BIRDS`, `BRIEFING_SCORE_MED_BIRDS`, `BRIEFING_SCORE_LOW_BIRDS`, `BRIEFING_FULL_THRESHOLD`, `BRIEFING_QUIET_THRESHOLD`). (3) Life list auto-refresh — `aggregate.js` auto-rebuilds `data/life-list.json` when `~/Downloads/ebird_world_life_list.csv` is newer. (4) Automated test results documented for items 5, 15, 21. Section 14 (Still To Do) restructured into user-action / resolved / deferred tables. |

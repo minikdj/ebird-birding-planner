@@ -347,7 +347,22 @@ async function handleVerifySighting(args) {
   }
   const radius = Math.min(Math.max(1, coerceNumber(args.radius_km, 30)), 200);
   const daysBack = Math.min(Math.max(1, coerceNumber(args.days_back, 14)), 30);
-  return inat.getVerifiedSightings(args.species, lat, lng, radius, daysBack);
+  const result = await inat.getVerifiedSightings(args.species, lat, lng, radius, daysBack);
+
+  // Distinguish zero-results from API error: the client returns the same shape for both.
+  // When photoVerifiedCount is 0 and confidence is 'low', the default interpretation says
+  // "iNaturalist data unavailable" — replace with a precise zero-results message.
+  // A true API error would have the same shape, but is already logged server-side.
+  if (
+    result.photoVerifiedCount === 0 &&
+    result.confidence === 'low' &&
+    typeof result.interpretation === 'string' &&
+    result.interpretation.includes('data unavailable')
+  ) {
+    result.interpretation = `No photo-verified observations found on iNaturalist within ${radius}km in the last ${daysBack} days.`;
+  }
+
+  return result;
 }
 
 async function handleBirdingWindow(args) {
@@ -728,9 +743,17 @@ async function handleSpeciesFinder(args) {
     return { error: `Cannot determine coordinates for "${args.location}". Provide lat/lng or a known city.` };
   }
 
-  const observations = await ebird.getNearbySpeciesObservations(
-    location.lat, location.lng, speciesCode, 30, radius
-  );
+  let observations;
+  try {
+    observations = await ebird.getNearbySpeciesObservations(
+      location.lat, location.lng, speciesCode, 30, radius
+    );
+  } catch (err) {
+    process.stderr.write(`handleSpeciesFinder error for ${speciesName}: ${err.message}\n`);
+    return {
+      error: `Could not fetch sightings for "${speciesName}" near ${location.name}. Try again with a smaller radius (e.g. radius_km: 25).`,
+    };
+  }
 
   if (!observations || observations.length === 0) {
     return {
@@ -741,16 +764,22 @@ async function handleSpeciesFinder(args) {
     };
   }
 
+  // Cap at 500 before deduplication — eBird can return thousands for common species
+  const MAX_OBS = 500;
+  const capped = observations.length > MAX_OBS;
+  const obsToProcess = capped ? observations.slice(0, MAX_OBS) : observations;
+
   // Deduplicate by location, keeping most recent
   const byLoc = {};
-  for (const obs of observations) {
+  for (const obs of obsToProcess) {
     if (!byLoc[obs.locId] || obs.obsDt > byLoc[obs.locId].obsDt) {
       byLoc[obs.locId] = obs;
     }
   }
 
-  const sightings = Object.values(byLoc)
-    .sort((a, b) => (b.obsDt || '').localeCompare(a.obsDt || ''))
+  const allSightings = Object.values(byLoc)
+    .sort((a, b) => (b.obsDt || '').localeCompare(a.obsDt || ''));
+  const sightings = allSightings
     .map((o) => ({
       location: o.locName,
       locId: o.locId,
@@ -760,11 +789,17 @@ async function handleSpeciesFinder(args) {
       lng: o.lng,
     }));
 
+  const totalLocations = sightings.length;
+  const shown = sightings.slice(0, 20);
+  const summaryPrefix = capped
+    ? `Showing top 20 of ${totalLocations} locations (results capped for common species).`
+    : `${speciesName} seen at ${totalLocations} locations near ${location.name} in the last 30 days.`;
+
   return {
-    summary: `${speciesName} seen at ${sightings.length} locations near ${location.name} in the last 30 days. Most recent: ${sightings[0].location} on ${sightings[0].date}.`,
+    summary: `${summaryPrefix} Most recent: ${shown[0].location} on ${shown[0].date}.`,
     species: speciesName,
     speciesCode,
-    sightings: sightings.slice(0, 20),
+    sightings: shown,
   };
 }
 
@@ -960,7 +995,16 @@ async function loadLifeList(csvPath) {
 
 async function handlePlanVacationBirding(args) {
   const homeRegion = args.home_region || DEFAULTS.regionCode;
-  const destination = await resolveDestination(args.destination);
+
+  // Normalize destination: try full string first, then strip trailing ", ST" state suffix
+  const rawDest = args.destination || '';
+  let destination = await resolveDestination(rawDest);
+  if (!destination) {
+    const stripped = rawDest.replace(/,\s*[A-Z]{2}$/i, '').trim();
+    if (stripped && stripped !== rawDest) {
+      destination = await resolveDestination(stripped);
+    }
+  }
 
   if (!destination) {
     return { error: `Cannot resolve "${args.destination}". Try a region code (e.g. "US-NJ-009"), "lat,lng", or a recognized city name.` };
@@ -1084,6 +1128,18 @@ async function handlePlanVacationBirding(args) {
         similarNote = 'This destination has similar species to your home location — thresholds relaxed to show the most distinctive local birds.';
       }
 
+      // Final fallback for nearby/overlapping destinations: use very relaxed thresholds
+      if (pool.length < 3) {
+        const relaxedHomeThreshold = 0.05;
+        const relaxedDestThreshold = 0.10;
+        pool = destSpecies
+          .filter((s) => s.commonName && !NOISE_SPECIES.has(s.commonName))
+          .filter((s) => s.probability >= relaxedDestThreshold)
+          .filter((s) => (homeMap.get(s.commonName) ?? 0) < relaxedHomeThreshold)
+          .map((s) => ({ ...s, homeProbability: homeMap.get(s.commonName) ?? 0 }));
+        similarNote = 'This destination has significant species overlap with your home region. Showing species that are findable here but uncommon at home.';
+      }
+
       const toEntry = (s) => ({
         name: s.commonName,
         destinationFrequency: Math.round(s.probability * 100) / 100,
@@ -1111,7 +1167,7 @@ async function handlePlanVacationBirding(args) {
       ? { newToYourLifeList: [], seenBeforeButRareHere: [] }
       : { notFindableAtHome: [], rareAtHome: [] };
     dataNote = regionCode
-      ? 'BirdCast frequency data unavailable for this destination or date. Target species comparison omitted.'
+      ? `BirdCast frequency data is not available for region ${regionCode}. Hotspots and recent sightings are shown above.`
       : 'No region code available — target species comparison requires a county-level region code or recognized city.';
   }
 

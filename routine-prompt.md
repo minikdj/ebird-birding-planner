@@ -135,7 +135,7 @@ Any time a species with `isLifer: true` appears anywhere in the email (chase car
 **Section structure — apply to every section:**
 Every section (except Executive Summary, which IS the bullets) follows this three-part pattern:
 1. **2–4 bullet points** — the key facts a reader needs if they have 10 seconds. Bold the critical number or fact in each bullet. Place these immediately after the section heading, before any visual or prose.
-2. **Visual element** — a chart, diagram, or structured graphic (see per-section specs below). Build these from HTML tables and inline CSS only — no images, no JavaScript, no external resources.
+2. **Visual element** — a chart, diagram, structured graphic, or bird photo (see per-section specs below). Charts/diagrams: HTML tables + inline CSS only — no JavaScript, no external chart libraries. Bird photos: use the `photo` field from `notableObservations[]` when available — see Photo rules below.
 3. **Narrative / detail** — prose, directions, or additional data for readers who want depth.
 
 Bullet format: plain `•` prefix, one line each, no nesting.
@@ -166,9 +166,17 @@ A 1×4 or 2×2 table of simple tiles. All tiles use the same `#f5f5f5` backgroun
 *Timeline bar* (use for Birding Window):
 A single-row table with 4 cells representing: Civil Twilight → Sunrise → Golden Hour End → Activity Cutoff. Color progression: `#1a3a2a` → `#2d6a4f` → `#52796f` → `#888` (or `#c0392b` if cutoff is unusually early due to rain). Time displayed large inside each cell, label below in small caps. Width proportional to duration of each interval.
 
+*Bird photo* (use in Chase Target cards and Notable Sightings):
+When `notableObservations[i].photo` is non-null, include the photo. Rules:
+- Chase Target card hero: `<img src="{photo.url}" alt="{species}" style="width:100%;max-width:560px;height:200px;object-fit:cover;border-radius:4px 4px 0 0;display:block">` — place it at the very top of the card, above the header text.
+- Notable Sightings table: add a 48×48 thumbnail column as the first column: `<img src="{photo.thumbnailUrl}" alt="{species}" style="width:48px;height:48px;object-fit:cover;border-radius:4px">`. If no photo, use an empty 48px cell so columns stay aligned.
+- Photo attribution: small gray text `font-size:10px;color:#999` below each photo — use `photo.photographer` if present (Macaulay) or omit photographer for Wikipedia photos. Always include `photo.attribution` as a single line.
+- If `photo` is null: omit the `<img>` element entirely — do NOT use placeholder images or broken img tags.
+
 *Chase card* (use for Chase Targets):
 White background, `border-left: 4px solid #c0392b`, no tinted background. Inside:
-- Top line: `◉ LIFER` badge (if applicable) + species name in large bold dark text (NOT red) + location in gray
+- Hero photo (if `photo` non-null): full-width image at top of card, before any text (see Bird photo spec above)
+- Header line: `◉ LIFER` badge (if applicable) + species name in large bold dark text (NOT red) + location in gray
 - Body: prose with **bold inline labels** for `Where to look:` and `Field ID:` — NO nested boxes, NO sub-cards, NO colored inner containers
 - Bottom: a single full-width red bar (`background:#c0392b; color:#fff; padding:8px; border-radius:0 0 2px 2px`) if time-sensitive, with the departure time or urgency note
 
@@ -212,7 +220,7 @@ Structure your email as inline-CSS HTML (mobile-friendly, max-width 600px, table
 
 6. **Notable / Rare Sightings** — Only if `hasNotables`. Bullets first, then table.
    - Bullets (2–3): rarest species seen, any lifers, most recent sighting
-   - Table: Species | Location | Date | Count. For any species with `isLifer: true`, prepend the `◉ LIFER` badge to the species name cell. No row background colors — alternating thin `#e8e8e8` bottom borders only. Dark green header row.
+   - Table: Photo | Species | Location | Date | Count. Photo column: 48×48 thumbnail from `notableObservations[].photo.thumbnailUrl` if available (see Bird photo spec). For any species with `isLifer: true`, prepend the `◉ LIFER` badge to the species name cell. No row background colors — alternating thin `#e8e8e8` bottom borders only. Dark green header row.
 
 7. **Community Buzz** — Only if `listservSightings` non-empty. Bullets first, then report cards.
    - Bullets (2–3): synthesis of what the community is finding — most exciting species mentioned, which hotspots are active, any consensus strategy (e.g. "community consensus: go early, Spring Grove is the pick")

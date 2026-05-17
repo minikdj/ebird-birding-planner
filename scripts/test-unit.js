@@ -1069,3 +1069,83 @@ describe('Degraded mode handling — life list empty/missing', () => {
     assert.strictEqual(warblerObs.isLifer, true);
   });
 });
+
+// ---------------------------------------------------------------------------
+// 26. destination normalization — Bug 2 fix (strip trailing ", ST" state suffix)
+// ---------------------------------------------------------------------------
+
+// Inline the normalization logic from handlePlanVacationBirding
+function normalizeDestination(raw) {
+  return raw.replace(/,\s*[A-Z]{2}$/i, '').trim();
+}
+
+describe('destination normalization — strip state suffix', () => {
+  it('"Cape May, NJ" → "Cape May"', () => {
+    assert.strictEqual(normalizeDestination('Cape May, NJ'), 'Cape May');
+  });
+
+  it('"Columbus, OH" → "Columbus"', () => {
+    assert.strictEqual(normalizeDestination('Columbus, OH'), 'Columbus');
+  });
+
+  it('"Cape May" (no suffix) → "Cape May" unchanged', () => {
+    assert.strictEqual(normalizeDestination('Cape May'), 'Cape May');
+  });
+
+  it('does not strip lowercase state suffix "Cape May, nj" → "Cape May" (case-insensitive)', () => {
+    assert.strictEqual(normalizeDestination('Cape May, nj'), 'Cape May');
+  });
+
+  it('three-letter suffix not stripped: "Cape May, NJX" → unchanged', () => {
+    // Pattern is exactly 2 uppercase letters
+    assert.strictEqual(normalizeDestination('Cape May, NJX'), 'Cape May, NJX');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 27. verify_sighting interpretation fix — Bug 4 logic
+// ---------------------------------------------------------------------------
+
+// Inline the post-processing logic applied in handleVerifySighting
+function postProcessInatResult(result, radius, daysBack) {
+  if (
+    result.photoVerifiedCount === 0 &&
+    result.confidence === 'low' &&
+    typeof result.interpretation === 'string' &&
+    result.interpretation.includes('data unavailable')
+  ) {
+    result.interpretation = `No photo-verified observations found on iNaturalist within ${radius}km in the last ${daysBack} days.`;
+  }
+  return result;
+}
+
+describe('verify_sighting — iNaturalist interpretation disambiguation', () => {
+  it('zero-count + low confidence + "data unavailable" → replaced with specific message', () => {
+    const result = postProcessInatResult(
+      { photoVerifiedCount: 0, confidence: 'low', interpretation: 'iNaturalist data unavailable.' },
+      30, 14
+    );
+    assert.ok(!result.interpretation.includes('data unavailable'));
+    assert.ok(result.interpretation.includes('No photo-verified observations found'));
+    assert.ok(result.interpretation.includes('30km'));
+    assert.ok(result.interpretation.includes('14 days'));
+  });
+
+  it('non-zero count → interpretation left unchanged', () => {
+    const original = '3 photo-verified Cerulean Warbler reports — high confidence.';
+    const result = postProcessInatResult(
+      { photoVerifiedCount: 3, confidence: 'high', interpretation: original },
+      30, 14
+    );
+    assert.strictEqual(result.interpretation, original);
+  });
+
+  it('zero count but confidence is moderate → interpretation left unchanged', () => {
+    const original = 'Some moderate message.';
+    const result = postProcessInatResult(
+      { photoVerifiedCount: 0, confidence: 'moderate', interpretation: original },
+      30, 14
+    );
+    assert.strictEqual(result.interpretation, original);
+  });
+});

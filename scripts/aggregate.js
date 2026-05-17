@@ -18,6 +18,7 @@ import { BirdCastClient, degreesToCardinal } from '../src/birdcast-client.js';
 import { NWSClient } from '../src/nws-client.js';
 import { EBirdClient } from '../src/ebird-client.js';
 import { OhioBirdsClient } from '../src/ohio-birds-client.js';
+import { MediaClient } from '../src/media-client.js';
 import { DEFAULTS, formatNumber, toYMD, computeActivityCutoff, FAVORABLE_WINDS, POOR_WINDS } from '../src/utils.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -444,6 +445,7 @@ async function main() {
   const nws = new NWSClient();
   const ebird = new EBirdClient(ebirdKey);
   const ohioBirds = new OhioBirdsClient();
+  const media = new MediaClient();
 
   const today = toYMD(new Date());
 
@@ -504,10 +506,11 @@ async function main() {
   // The LISTSERV archive exposes subject lines publicly but message bodies require login,
   // so we surface thread subjects as community-buzz context in the email, not as species records.
 
-  const notableObservations = [...notableMap.values()]
+  const notableObservationsRaw = [...notableMap.values()]
     .sort((a, b) => (b.obsDt ?? '').localeCompare(a.obsDt ?? ''))
     .map((o) => ({
       species: o.comName,
+      speciesCode: o.speciesCode ?? null,
       location: o.locName,
       date: o.obsDt,
       count: o.howMany ?? null,
@@ -515,6 +518,18 @@ async function main() {
       source: o._source ?? 'ebird',
       isLifer: isLiferOpportunity(o.comName, lifeList),
     }));
+
+  // Fetch top-rated photos for notable species (Macaulay Library primary, Wikipedia fallback).
+  // Cap at 10 photo lookups to bound latency — prioritize lifers and then by order.
+  const photoTargets = notableObservationsRaw
+    .slice(0, 10)
+    .map(o => ({ speciesCode: o.speciesCode, commonName: o.species }));
+  const speciesPhotos = await media.getPhotosForSpecies(photoTargets).catch(() => ({}));
+
+  const notableObservations = notableObservationsRaw.map(o => ({
+    ...o,
+    photo: speciesPhotos[o.species] ?? null,
+  }));
 
   // BirdCast plain-English migration summary
   const migrationNarrativeSummary = birdcast.summarizeMigration(live, season);
@@ -532,6 +547,10 @@ async function main() {
   //   weather.today.weatherUnavailable, weather.outlook[], birdingWindow,
   //   hotspots[], notableObservations[], flags, moon, lifeList, listservSightings,
   //   hotspotNotes (keyed by locId)
+  //
+  // notableObservations[].photo — { url, thumbnailUrl, photographer, attribution, source }
+  //   or null if no photo found. Macaulay Library (primary) → Wikipedia (fallback).
+  //   url = 640px wide (email-safe); thumbnailUrl = 320px (table row thumbnails).
 
   const liferOpportunities = notableObservations.filter(o => o.isLifer).length;
 

@@ -17,6 +17,7 @@
 6. [Degraded / Failure Mode Tests](#6-degraded--failure-mode-tests)
 7. [Email Rendering Tests](#7-email-rendering-tests)
 8. [How to Run Tests](#8-how-to-run-tests)
+   - [Section 5F: On-Demand Report](#test-f-on-demand-report-github-actions-)
 
 ---
 
@@ -524,6 +525,50 @@ Re-test on a day with cold front passage to verify `frontalPassage: true` and `f
 
 ---
 
+### MediaClient — photo lookup (unit smoke test)
+
+```bash
+node --input-type=module <<'EOF'
+import { MediaClient } from './src/media-client.js';
+const media = new MediaClient();
+const photo = await media.getTopPhoto('conwar', 'Connecticut Warbler');
+console.log('source:', photo?.source);
+console.log('url present:', !!photo?.url);
+console.log('photographer:', photo?.photographer);
+EOF
+```
+
+**Expected output checklist:**
+- [ ] `source: macaulay` (primary source works)
+- [ ] `url present: true`
+- [ ] `photographer:` a non-empty name
+- [ ] No crash, exits 0
+
+**Fallback test — null speciesCode (forces Wikipedia path):**
+
+```bash
+node --input-type=module <<'EOF'
+import { MediaClient } from './src/media-client.js';
+const media = new MediaClient();
+const photo = await media.getTopPhoto(null, 'Connecticut Warbler');
+console.log('source:', photo?.source);
+console.log('url present:', !!photo?.url);
+EOF
+```
+
+**Expected:** `source: wikipedia`, `url present: true`
+
+---
+
+### aggregate.js — photo field verification
+
+When running `node scripts/aggregate.js`, verify in the output:
+
+- [ ] `notableObservations[0].photo` is either null or an object with keys: `url`, `thumbnailUrl`, `source`
+- [ ] `notableObservations[0].speciesCode` is present and non-null
+
+---
+
 ### briefing.js (legacy)
 
 ```bash
@@ -607,6 +652,48 @@ Simulate by temporarily running aggregate.js with a bad BIRDCAST_API_KEY.
 - [ ] aggregate.js outputs `{ "error": "..." }`
 - [ ] Agent outputs: `"Data aggregation failed: {error}"`
 - [ ] Agent stops; no email sent
+
+---
+
+### Test F: On-Demand Report (GitHub Actions) ❌
+
+#### Prerequisites
+- [ ] `.github/workflows/report-on-demand.yml` exists in the repo
+- [ ] `scripts/generate-email.js` exists
+- [ ] GitHub repo secrets configured: `ANTHROPIC_API_KEY`, `EBIRD_API_KEY`, `BIRDCAST_API_KEY`, `RESEND_API_KEY`, `BRIEFING_EMAIL_TO`, `BRIEFING_FROM_EMAIL`, `NWS_CONTACT_EMAIL`
+- [ ] Claude.ai Project "On-Demand Birding Report" created with GitHub MCP connector
+
+#### Test F1: Manual workflow trigger via GitHub UI
+
+1. Go to github.com/minikdj/ebird-birding-planner → Actions → On-Demand Birding Report → Run workflow
+2. Fill in: location="Cape May, NJ", region="US-NJ-009", lat="38.93", lng="-74.96", focus="shorebirds"
+3. Watch the run complete
+
+**Verify:**
+- [ ] All 4 steps complete (triage, aggregate, generate-email, send)
+- [ ] Email arrives within 90 seconds
+- [ ] Subject references "Cape May"
+- [ ] Chase Target cards include bird photos (img tags present in HTML)
+- [ ] No step fails with exit code 1
+
+#### Test F2: SILENT_SKIP path
+
+Trigger with a region that has no current activity (e.g. a winter month or low-activity region). Or temporarily set BRIEFING_FULL_THRESHOLD to a very high value in the workflow.
+
+**Verify:**
+- [ ] Workflow completes without error
+- [ ] Minimal "nothing notable" email sent (not a full briefing)
+
+#### Test F3: Claude.ai mobile trigger
+
+1. Open Claude.ai mobile → On-Demand Birding Report project
+2. Type: "Birding report for Magee Marsh, OH — what warblers are moving through?"
+
+**Verify:**
+- [ ] Claude identifies correct region code (US-OH-043 or similar)
+- [ ] Claude triggers the GitHub workflow via GitHub MCP
+- [ ] Claude responds with "Report triggered for Magee Marsh, OH — you'll receive an email within 60 seconds"
+- [ ] Email arrives
 
 ---
 

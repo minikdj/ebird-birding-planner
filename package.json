@@ -28,6 +28,7 @@
   ],
   "license": "MIT",
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.52.0",
     "@modelcontextprotocol/sdk": "1.29.0",
     "resend": "^6.12.3",
     "suncalc": "^1.9.0"
