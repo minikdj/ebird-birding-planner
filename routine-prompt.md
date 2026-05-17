@@ -168,8 +168,8 @@ A single-row table with 4 cells representing: Civil Twilight → Sunrise → Gol
 
 *Bird photo* (use in Chase Target cards and Notable Sightings):
 When `notableObservations[i].photo` is non-null, include the photo. Rules:
-- Chase Target card hero: `<img src="{photo.url}" alt="{species}" style="width:100%;max-width:560px;height:200px;object-fit:cover;border-radius:4px 4px 0 0;display:block">` — place it at the very top of the card, above the header text.
-- Notable Sightings table: add a 48×48 thumbnail column as the first column: `<img src="{photo.thumbnailUrl}" alt="{species}" style="width:48px;height:48px;object-fit:cover;border-radius:4px">`. If no photo, use an empty 48px cell so columns stay aligned.
+- Chase Target card hero: `<img src="{photo.url}" alt="{species}" style="width:100%;max-width:560px;height:200px;object-fit:cover;border-radius:4px 4px 0 0;display:block">` — place it at the very top of the card, above the header text. IMPORTANT: `photo.url` is the direct CDN image URL (starts with `cdn.download.ams.birds.cornell.edu` or `upload.wikimedia.org`). Never use `photo.detailPageUrl` as an img src — that is a webpage link only.
+- Notable Sightings table: add a 48×48 thumbnail column as the first column: `<img src="{photo.thumbnailUrl}" alt="{species}" style="width:48px;height:48px;object-fit:cover;border-radius:4px">`. `photo.thumbnailUrl` is also a direct CDN image URL. If no photo, use an empty 48px cell so columns stay aligned.
 - Photo attribution: small gray text `font-size:10px;color:#999` below each photo — use `photo.photographer` if present (Macaulay) or omit photographer for Wikipedia photos. Always include `photo.attribution` as a single line.
 - If `photo` is null: omit the `<img>` element entirely — do NOT use placeholder images or broken img tags.
 

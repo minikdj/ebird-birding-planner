@@ -59,7 +59,7 @@ jobs:
           [[ "$REG" =~ ^[A-Z]{2}(-[A-Z0-9]{1,3}){0,2}$ ]] || { echo "ERROR: invalid region code (expected e.g. US-OH-061)"; exit 1; }
           [[ "$LAT" =~ ^-?[0-9]{1,3}(\.[0-9]+)?$ ]] || { echo "ERROR: invalid lat"; exit 1; }
           [[ "$LNG" =~ ^-?[0-9]{1,3}(\.[0-9]+)?$ ]] || { echo "ERROR: invalid lng"; exit 1; }
-          [[ ${#FOC} -le 300 ]] || { echo "ERROR: focus too long (max 300 chars)"; exit 1; }
+          [[ ${#FOC} -le 1000 ]] || { echo "ERROR: focus too long (max 1000 chars)"; exit 1; }
           echo "Inputs valid: location=$LOC region=$REG lat=$LAT lng=$LNG"
 
       - name: Run triage

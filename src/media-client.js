@@ -147,7 +147,7 @@ export class MediaClient {
       source: 'macaulay',
       assetId,
       rating,
-      macaulayUrl: asset.specimenUrl || `https://macaulaylibrary.org/asset/${assetId}`,
+      detailPageUrl: asset.specimenUrl || `https://macaulaylibrary.org/asset/${assetId}`,
     };
   }
 
