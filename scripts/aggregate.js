@@ -9,10 +9,17 @@
 // Exit 0 always — errors are captured inside the JSON.
 
 import suncalc from 'suncalc';
+import { readFileSync } from 'fs';
+import { fileURLToPath } from 'url';
+import path from 'path';
 import { BirdCastClient, degreesToCardinal } from '../src/birdcast-client.js';
 import { NWSClient } from '../src/nws-client.js';
 import { EBirdClient } from '../src/ebird-client.js';
+import { OhioBirdsClient } from '../src/ohio-birds-client.js';
 import { DEFAULTS, formatNumber, toYMD, computeActivityCutoff, FAVORABLE_WINDS, POOR_WINDS } from '../src/utils.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -79,6 +86,77 @@ function buildBirdingWindow(dateStr, lat, lng) {
     sunset: formatTime(times.sunset),
     _sunriseDate: times.sunrise, // raw Date for computeActivityCutoff; stripped from output below
   };
+}
+
+/**
+ * Compute moon phase and migration relevance for the given date.
+ * @param {string} dateStr - YYYY-MM-DD
+ * @returns {{ phaseName, illuminationPct, phase, migrationNote }}
+ */
+function buildMoonInfo(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00Z');
+  const moon = suncalc.getMoonIllumination(d);
+  // moon.phase: 0=new, 0.25=first quarter, 0.5=full, 0.75=last quarter
+  const fraction = moon.fraction; // 0-1 illumination
+  const phase = moon.phase;
+
+  let phaseName;
+  if (phase < 0.0625 || phase >= 0.9375) phaseName = 'New Moon';
+  else if (phase < 0.1875) phaseName = 'Waxing Crescent';
+  else if (phase < 0.3125) phaseName = 'First Quarter';
+  else if (phase < 0.4375) phaseName = 'Waxing Gibbous';
+  else if (phase < 0.5625) phaseName = 'Full Moon';
+  else if (phase < 0.6875) phaseName = 'Waning Gibbous';
+  else if (phase < 0.8125) phaseName = 'Last Quarter';
+  else phaseName = 'Waning Crescent';
+
+  const illuminationPct = Math.round(fraction * 100);
+
+  // Migration note: full/nearly full moon + clear conditions = favorable for nocturnal migration
+  let migrationNote = null;
+  if (fraction > 0.85) {
+    migrationNote = `Full moon (${illuminationPct}% illuminated) — bright nights enhance nocturnal migration; birds can fly longer into the night.`;
+  } else if (fraction < 0.15) {
+    migrationNote = `New moon (${illuminationPct}% illuminated) — dark nights may concentrate migration in shorter windows around midnight.`;
+  }
+
+  return { phaseName, illuminationPct, phase: Math.round(phase * 100) / 100, migrationNote };
+}
+
+/**
+ * Load the user's life list from data/life-list.json.
+ * Returns a Set of normalized species names (lowercase, parentheticals stripped).
+ * Returns null if the file is missing or unreadable.
+ */
+function loadLifeList() {
+  try {
+    const lifeListPath = new URL('../data/life-list.json', import.meta.url);
+    const raw = readFileSync(fileURLToPath(lifeListPath), 'utf8');
+    const data = JSON.parse(raw);
+    if (!Array.isArray(data.species)) {
+      process.stderr.write('aggregate.js: life-list.json has no species array\n');
+      return { set: null, total: 0, source: 'data/life-list.json' };
+    }
+    const normalizedSet = new Set(
+      data.species.map(name => name.replace(/\s*\([^)]*\)\s*$/, '').toLowerCase().trim())
+    );
+    return { set: normalizedSet, total: data.totalSpecies, source: 'data/life-list.json' };
+  } catch (err) {
+    process.stderr.write(`aggregate.js: Could not load life list — ${err.message}\n`);
+    return null;
+  }
+}
+
+/**
+ * Check if a species name is NOT in the life list (i.e., it would be a lifer).
+ * @param {string} speciesName - common name of the species
+ * @param {{ set: Set<string> } | null} lifeList
+ * @returns {boolean} true if this species is NOT on the life list
+ */
+function isLiferOpportunity(speciesName, lifeList) {
+  if (!lifeList || !lifeList.set) return false;
+  const normalized = speciesName.replace(/\s*\([^)]*\)\s*$/, '').toLowerCase().trim();
+  return !lifeList.set.has(normalized);
 }
 
 /**
@@ -310,17 +388,26 @@ async function main() {
   const birdcast = new BirdCastClient(birdcastKey);
   const nws = new NWSClient();
   const ebird = new EBirdClient(ebirdKey);
+  const ohioBirds = new OhioBirdsClient();
 
   const today = toYMD(new Date());
 
+  // Load life list (try/catch inside loadLifeList; returns null if missing)
+  const lifeList = loadLifeList();
+  if (!lifeList) {
+    process.stderr.write('aggregate.js: Life list not loaded — lifer flags will be unavailable\n');
+  }
+
   // --- Phase 1: Fast parallel fetches ---
-  const [live, season, expectedSpecies, weather, notableObs, nearbyHotspots] = await Promise.all([
+  const [live, season, expectedSpecies, weather, notableObs, nearbyHotspots, frontalPassageData, ohioBirdsSightings] = await Promise.all([
     birdcast.getLiveMigration(config.region, today).catch(() => null),
     birdcast.getSeasonHistorical(config.region, today).catch(() => null),
     birdcast.getExpectedSpecies(config.region, today, { ignoreSeasonCheck: false }).catch(() => null),
     nws.getBirdingWeather(config.lat, config.lng, today).catch(() => null),
     ebird.getNearbyNotableObservations(config.lat, config.lng, 14, 50).catch(() => []),
     ebird.getNearbyHotspots(config.lat, config.lng, 50).catch(() => []),
+    nws.detectFrontalPassage(config.lat, config.lng, today).catch(() => null),
+    ohioBirds.getRecentSightings(3).catch(() => []),
   ]);
 
   // --- Phase 2: Sequential/slower fetches ---
@@ -353,6 +440,23 @@ async function main() {
       notableMap.set(obs.comName, obs);
     }
   }
+
+  // Merge Ohio-birds listserv sightings — deduplicate by species name, prefer eBird if duplicate
+  for (const sighting of (ohioBirdsSightings || [])) {
+    if (!sighting.species) continue;
+    if (!notableMap.has(sighting.species)) {
+      // Adapt to internal format used by the map
+      notableMap.set(sighting.species, {
+        comName: sighting.species,
+        locName: sighting.location ?? 'Ohio (listserv report)',
+        obsDt: sighting.date ?? today,
+        howMany: null,
+        locId: null,
+        _source: 'ohio-birds-listserv',
+      });
+    }
+  }
+
   const notableObservations = [...notableMap.values()]
     .sort((a, b) => (b.obsDt ?? '').localeCompare(a.obsDt ?? ''))
     .map((o) => ({
@@ -360,7 +464,9 @@ async function main() {
       location: o.locName,
       date: o.obsDt,
       count: o.howMany ?? null,
-      locId: o.locId,
+      locId: o.locId ?? null,
+      source: o._source ?? 'ebird',
+      isLifer: isLiferOpportunity(o.comName, lifeList),
     }));
 
   // BirdCast plain-English migration summary
@@ -377,7 +483,10 @@ async function main() {
   //   migration.narrativeSummary, weather.today.overnight, weather.today.morning,
   //   weather.today.rainImpactNote, weather.today.migrationInterpretation,
   //   weather.today.weatherUnavailable, weather.outlook[], birdingWindow,
-  //   hotspots[], notableObservations[], flags
+  //   hotspots[], notableObservations[], flags, moon, lifeList, listservSightings
+
+  const liferOpportunities = notableObservations.filter(o => o.isLifer).length;
+
   const output = {
     date: today,
     region: config.region,
@@ -397,6 +506,11 @@ async function main() {
         migrationInterpretation: weather?.migrationInterpretation ?? null,
         rainImpactNote,
         weatherUnavailable: weather?.weatherUnavailable ?? true,
+        frontalPassage: frontalPassageData?.frontalPassage ?? false,
+        falloutPotential: frontalPassageData?.falloutPotential ?? false,
+        windShiftDetected: frontalPassageData?.windShiftDetected ?? false,
+        clearingDetected: frontalPassageData?.clearingDetected ?? false,
+        frontalNote: frontalPassageData?.frontalNote ?? null,
       },
       outlook,
     },
@@ -409,9 +523,18 @@ async function main() {
       note: `Arrive by ${birdingWindow.civilTwilight ?? 'civil twilight'} for peak dawn chorus.`,
     },
 
+    moon: buildMoonInfo(today),
+
     hotspots,
 
     notableObservations,
+
+    listservSightings: ohioBirdsSightings ?? [],
+
+    // Life list summary (null if not loaded)
+    lifeList: lifeList
+      ? { totalSpecies: lifeList.total, source: lifeList.source }
+      : null,
 
     // Convenience flags for the agent
     flags: {
@@ -421,6 +544,9 @@ async function main() {
       favorableOvernightWind: FAVORABLE_WINDS.has(
         weather?.overnight?.windDirection?.toUpperCase() ?? ''
       ),
+      frontalPassage: frontalPassageData?.frontalPassage ?? false,
+      falloutPotential: frontalPassageData?.falloutPotential ?? false,
+      liferOpportunities,
     },
   };
 
