@@ -1,0 +1,159 @@
+{
+  "date": "2026-05-17",
+  "region": "US-OH-061",
+  "location": { "lat": 39.1, "lng": -84.5 },
+
+  "migration": {
+    "lastNight": {
+      "cumulativeBirds": 780000,
+      "formattedCount": "780K",
+      "isHigh": false,
+      "peakDirection": "NE",
+      "peakSpeedMph": 22,
+      "peakAltitudeFt": 2100
+    },
+    "season": {
+      "status": "above average by 11%",
+      "weeklyTrend": "steady",
+      "comparisonNote": "Season tracking 11% above the multi-year average — a solid spring, though migration intensity has plateaued this week.",
+      "peakWeekLabel": "Week of May 18"
+    },
+    "topExpectedSpecies": [
+      { "name": "Yellow Warbler", "speciesCode": "yelwar", "probability": 94 },
+      { "name": "Mourning Warbler", "speciesCode": "mouwar", "probability": 44 },
+      { "name": "Yellow-bellied Flycatcher", "speciesCode": "yebfly", "probability": 38 },
+      { "name": "Olive-sided Flycatcher", "speciesCode": "olsfly", "probability": 29 }
+    ],
+    "narrativeSummary": "Good movement last night — 780K birds aloft — but steady rain arriving this morning will ground activity quickly. Birds that landed overnight will be hunkered down and difficult to find in the downpour. The better birding opportunity may be after the rain passes, when birds resume feeding in the afternoon."
+  },
+
+  "weather": {
+    "today": {
+      "overnight": { "windDirection": "SW", "windSpeedMph": 14, "precipProbability": 25, "cloudCoverPct": 70 },
+      "morning": { "precipProbability": 75, "tempF": 52, "cloudCoverPct": 95 },
+      "migrationInterpretation": "Good migration last night undermined by morning rain. Species are present but activity will be suppressed — birds sit tight in rain.",
+      "rainImpactNote": "Steady rain arriving by 7 AM and persisting through noon — open-field hotspots like Gilmore Ponds will be miserable and unproductive. Your best bet: wooded parks with canopy cover where birds shelter during rain (Spring Grove Cemetery, Shawnee Lookout woodland trails). Check feeders too — migrants often drop into yards during rain. Afternoon clearing 1–3 PM may trigger a brief burst of activity as birds resume feeding before roosting.",
+      "weatherUnavailable": false,
+      "frontalPassage": false,
+      "falloutPotential": false,
+      "windShiftDetected": false,
+      "clearingDetected": false,
+      "frontalNote": null
+    },
+    "outlook": [
+      { "date": "2026-05-17", "windDirection": "SW", "windSpeedMph": 14, "precipProbability": 75, "migrationIntensity": "MODERATE", "rainImpactNote": "Rain all morning. Best birding under canopy cover or late afternoon.", "birdingWindow": "Poor AM / possible PM window 1–3 PM" },
+      { "date": "2026-05-18", "windDirection": "SW", "windSpeedMph": 9, "precipProbability": 20, "migrationIntensity": "HIGH", "rainImpactNote": null, "birdingWindow": "Very good — clearing, SW wind resumes push" },
+      { "date": "2026-05-19", "windDirection": "S", "windSpeedMph": 11, "precipProbability": 15, "migrationIntensity": "HIGH", "rainImpactNote": null, "birdingWindow": "Excellent" },
+      { "date": "2026-05-20", "windDirection": "NW", "windSpeedMph": 20, "precipProbability": 50, "migrationIntensity": "LOW", "rainImpactNote": "Another front arriving.", "birdingWindow": "Poor" },
+      { "date": "2026-05-21", "windDirection": "NW", "windSpeedMph": 18, "precipProbability": 15, "migrationIntensity": "LOW", "rainImpactNote": null, "birdingWindow": "Slow post-frontal" }
+    ]
+  },
+
+  "birdingWindow": {
+    "civilTwilight": "5:47 AM",
+    "sunrise": "6:12 AM",
+    "goldenHourEnd": "7:05 AM",
+    "activityCutoff": "8:30 AM",
+    "note": "Rain arrives ~7 AM — arrive by civil twilight (5:47 AM) to catch the dry window. Activity cutoff will be earlier than usual due to rain suppressing movement."
+  },
+
+  "moon": {
+    "phaseName": "First Quarter",
+    "illuminationPct": 52,
+    "phase": 0.25,
+    "migrationNote": null
+  },
+
+  "hotspots": [
+    { "locId": "L285760", "name": "Spring Grove Cemetery & Arboretum", "speciesCount7d": 91, "county": "Hamilton" },
+    { "locId": "L285901", "name": "Shawnee Lookout Park", "speciesCount7d": 88, "county": "Hamilton" },
+    { "locId": "L298164", "name": "Otto Armleder Memorial Park", "speciesCount7d": 84, "county": "Hamilton" },
+    { "locId": "L285827", "name": "Gilmore Ponds Preserve", "speciesCount7d": 72, "county": "Butler" },
+    { "locId": "L285844", "name": "Caesar Creek State Park", "speciesCount7d": 68, "county": "Warren" }
+  ],
+
+  "notableObservations": [
+    {
+      "species": "Yellow-bellied Flycatcher",
+      "location": "Spring Grove Cemetery & Arboretum",
+      "date": "2026-05-16",
+      "count": 2,
+      "locId": "L285760",
+      "source": "ebird",
+      "isLifer": false
+    },
+    {
+      "species": "Mourning Warbler",
+      "location": "Shawnee Lookout Park",
+      "date": "2026-05-16",
+      "count": 1,
+      "locId": "L285901",
+      "source": "ebird",
+      "isLifer": false
+    },
+    {
+      "species": "Olive-sided Flycatcher",
+      "location": "Spring Grove Cemetery & Arboretum",
+      "date": "2026-05-15",
+      "count": 1,
+      "locId": "L285760",
+      "source": "ebird",
+      "isLifer": false
+    }
+  ],
+
+  "listservSightings": [
+    {
+      "subject": "Spring Grove — Olive-sided Flycatcher + warblers",
+      "body": "The Olive-sided Flycatcher is still present at Spring Grove near the main chapel — calling from the treetops. Also: Yellow-bellied Flycatcher (2), Mourning Warbler (heard, pond edge thicket), Canada Warbler (4), Blackburnian Warbler. Rain arriving — get there early if you want this.",
+      "species": ["Olive-sided Flycatcher", "Yellow-bellied Flycatcher", "Mourning Warbler", "Canada Warbler", "Blackburnian Warbler"],
+      "location": "Spring Grove Cemetery & Arboretum",
+      "url": "https://listserv.miamioh.edu/scripts/wa.exe?A2=OHIO-BIRDS;rain1.2605&S=",
+      "source": "ohio-birds-listserv"
+    },
+    {
+      "subject": "Migration today — rain strategy",
+      "body": "For those thinking about going out today with rain incoming: wooded parks are your friend. Birds will be sheltering under canopy rather than moving. Spring Grove and Shawnee woodland trails usually productive even in light rain. Skip the open-water spots until the afternoon window.",
+      "species": [],
+      "location": null,
+      "url": "https://listserv.miamioh.edu/scripts/wa.exe?A2=OHIO-BIRDS;rain2.2605&S=",
+      "source": "ohio-birds-listserv"
+    }
+  ],
+
+  "hotspotNotes": {
+    "L285760": {
+      "name": "Spring Grove Cemetery & Arboretum",
+      "county": "Hamilton",
+      "habitatSummary": "184-acre Victorian garden cemetery with mature deciduous trees, ornamental conifers, and small ponds. The tree canopy provides excellent shelter during rain events, making this one of the best rainy-day birding spots in the region.",
+      "trails": [
+        {
+          "name": "Chapel area / Section 1–10 loop",
+          "habitat": "Mature oak, beech, maple canopy; ornamental conifers",
+          "targetSpecies": ["Olive-sided Flycatcher", "Yellow-bellied Flycatcher", "Mourning Warbler"],
+          "directions": "Enter via the main gate (Section 1). Walk toward the main chapel and check the large conifers in sections 3–6 for flycatchers. The pond in section 8 has a dense thicket edge — check for Mourning Warbler and Canada Warbler.",
+          "bestTime": "Early May–late May, especially in light rain",
+          "notes": "During rain events, migrants shelter in the dense tree canopy and are often easier to observe than on clear days — they sit lower and move less."
+        }
+      ],
+      "parkingCoords": [39.1671, -84.5218],
+      "peakSeason": "May 5–25 (spring migration)",
+      "rareSpeciesPotential": ["Olive-sided Flycatcher", "Yellow-bellied Flycatcher", "Mourning Warbler", "Connecticut Warbler"]
+    }
+  },
+
+  "lifeList": {
+    "totalSpecies": 163,
+    "source": "ebird_world_life_list.csv"
+  },
+
+  "flags": {
+    "highMigrationNight": false,
+    "hasNotables": true,
+    "morningRainLikely": true,
+    "favorableOvernightWind": true,
+    "frontalPassage": false,
+    "falloutPotential": false,
+    "liferOpportunities": 0
+  }
+}

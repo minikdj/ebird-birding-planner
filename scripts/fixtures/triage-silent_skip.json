@@ -1,0 +1,21 @@
+{
+  "date": "2026-05-17",
+  "region": "US-OH-061",
+  "migrationScore": 0,
+  "lastNight": {
+    "cumulativeBirds": 8000,
+    "formattedCount": "8K",
+    "isHigh": false,
+    "peakDirection": "NW",
+    "peakSpeedMph": 4
+  },
+  "notableSpecies": [],
+  "notableCount": 0,
+  "weather": {
+    "overnight": { "windDirection": "NW", "windSpeedMph": 22, "precipProbability": 0 },
+    "morning": { "precipProbability": 0, "tempF": 38 },
+    "migrationInterpretation": "Dead night. Strong NW winds all night with near-zero bird movement. Poorest migration conditions of the spring so far."
+  },
+  "recommendation": "SILENT_SKIP",
+  "recommendationReason": "Low migration score (0/10) — near-zero movement, strong NW winds, no notables"
+}

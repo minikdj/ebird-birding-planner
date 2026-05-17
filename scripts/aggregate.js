@@ -395,6 +395,20 @@ async function buildHotspots(nearbyHotspots, ebird, lat, lng) {
 // ---------------------------------------------------------------------------
 
 async function main() {
+  // TEST FIXTURE MODE — bypass all API calls with pre-baked scenario data.
+  // Usage: BRIEFING_TEST_FIXTURE=full_lifer node scripts/aggregate.js
+  // Scenarios: full_lifer  full_rain  full_fallout  quiet_period  silent_skip
+  const fixture = (process.env.BRIEFING_TEST_FIXTURE || '').trim();
+  if (fixture) {
+    try {
+      const data = readFileSync(new URL(`./fixtures/aggregate-${fixture}.json`, import.meta.url), 'utf8');
+      process.stdout.write(data + '\n');
+    } catch {
+      process.stdout.write(JSON.stringify({ error: `Unknown test fixture: "${fixture}". Valid: full_lifer, full_rain, full_fallout, quiet_period` }) + '\n');
+    }
+    return;
+  }
+
   const ebirdKey = (process.env.EBIRD_API_KEY || '').trim();
   const birdcastKey = (process.env.BIRDCAST_API_KEY || '').trim();
 

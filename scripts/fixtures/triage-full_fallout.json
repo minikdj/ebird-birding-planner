@@ -1,0 +1,21 @@
+{
+  "date": "2026-05-17",
+  "region": "US-OH-061",
+  "migrationScore": 10,
+  "lastNight": {
+    "cumulativeBirds": 920000,
+    "formattedCount": "920K",
+    "isHigh": true,
+    "peakDirection": "N",
+    "peakSpeedMph": 19
+  },
+  "notableSpecies": ["Connecticut Warbler", "Yellow-bellied Flycatcher", "Cape May Warbler", "Bay-breasted Warbler", "Blackpoll Warbler"],
+  "notableCount": 5,
+  "weather": {
+    "overnight": { "windDirection": "NW", "windSpeedMph": 18, "precipProbability": 65 },
+    "morning": { "precipProbability": 12, "tempF": 49 },
+    "migrationInterpretation": "Classic fallout setup — heavy rain overnight stopped migrating birds in their tracks. Cold front has now cleared. Grounded birds concentrating in shrubby cover right now."
+  },
+  "recommendation": "FULL_BRIEFING",
+  "recommendationReason": "Fallout potential — heavy overnight rain + clearing at dawn + 920K birds aloft + 5 notable species"
+}

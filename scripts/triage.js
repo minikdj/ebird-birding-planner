@@ -3,12 +3,27 @@
 // Fetches BirdCast + NWS data and prints a JSON decision summary to stdout.
 // Exit 0 always (errors are captured in the JSON).
 
+import { readFileSync } from 'fs';
 import { BirdCastClient, degreesToCardinal } from '../src/birdcast-client.js';
 import { NWSClient } from '../src/nws-client.js';
 import { EBirdClient } from '../src/ebird-client.js';
 import { DEFAULTS, formatNumber, toYMD, FAVORABLE_WINDS, POOR_WINDS, RECOMMENDATION } from '../src/utils.js';
 
 async function main() {
+  // TEST FIXTURE MODE — bypass all API calls with pre-baked scenario data.
+  // Usage: BRIEFING_TEST_FIXTURE=full_lifer node scripts/triage.js
+  // Scenarios: full_lifer  full_rain  full_fallout  quiet_period  silent_skip
+  const fixture = (process.env.BRIEFING_TEST_FIXTURE || '').trim();
+  if (fixture) {
+    try {
+      const data = readFileSync(new URL(`./fixtures/triage-${fixture}.json`, import.meta.url), 'utf8');
+      process.stdout.write(data + '\n');
+    } catch {
+      process.stdout.write(JSON.stringify({ error: `Unknown test fixture: "${fixture}". Valid: full_lifer, full_rain, full_fallout, quiet_period, silent_skip` }) + '\n');
+    }
+    return;
+  }
+
   const ebirdKey = (process.env.EBIRD_API_KEY || '').trim();
   const birdcastKey = (process.env.BIRDCAST_API_KEY || '').trim();
 

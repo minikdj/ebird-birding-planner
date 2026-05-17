@@ -1,0 +1,103 @@
+{
+  "date": "2026-05-17",
+  "region": "US-OH-061",
+  "location": { "lat": 39.1, "lng": -84.5 },
+
+  "migration": {
+    "lastNight": {
+      "cumulativeBirds": 38000,
+      "formattedCount": "38K",
+      "isHigh": false,
+      "peakDirection": "NW",
+      "peakSpeedMph": 8,
+      "peakAltitudeFt": 800
+    },
+    "season": {
+      "status": "below average by 8%",
+      "weeklyTrend": "declining",
+      "comparisonNote": "7-day rolling average is declining — we're 8% below the historical average for mid-May. Dominant NW winds this week have been the main suppressor.",
+      "peakWeekLabel": "Week of May 14 (past)"
+    },
+    "topExpectedSpecies": [
+      { "name": "Yellow Warbler", "speciesCode": "yelwar", "probability": 88 },
+      { "name": "Common Yellowthroat", "speciesCode": "comyel", "probability": 84 },
+      { "name": "American Redstart", "speciesCode": "amered", "probability": 76 }
+    ],
+    "narrativeSummary": "A quiet night — only 38K birds aloft over the region, well below the seasonal average. NW winds at 16 mph kept most birds on the ground. The peak of spring migration appears to have passed for the season; movement is now declining week over week."
+  },
+
+  "weather": {
+    "today": {
+      "overnight": { "windDirection": "NW", "windSpeedMph": 16, "precipProbability": 10, "cloudCoverPct": 30 },
+      "morning": { "precipProbability": 5, "tempF": 44, "cloudCoverPct": 25 },
+      "migrationInterpretation": "Clear and cool with NW winds — pleasant conditions for a walk, but don't expect migration activity. Resident breeders will be singing. A good morning for local patch work.",
+      "rainImpactNote": null,
+      "weatherUnavailable": false,
+      "frontalPassage": false,
+      "falloutPotential": false,
+      "windShiftDetected": false,
+      "clearingDetected": false,
+      "frontalNote": null
+    },
+    "outlook": [
+      { "date": "2026-05-17", "windDirection": "NW", "windSpeedMph": 16, "precipProbability": 5, "migrationIntensity": "LOW", "rainImpactNote": null, "birdingWindow": "Pleasant but quiet migration" },
+      { "date": "2026-05-18", "windDirection": "NW", "windSpeedMph": 14, "precipProbability": 10, "migrationIntensity": "LOW", "rainImpactNote": null, "birdingWindow": "Still quiet" },
+      { "date": "2026-05-19", "windDirection": "W", "windSpeedMph": 10, "precipProbability": 20, "migrationIntensity": "LOW", "rainImpactNote": null, "birdingWindow": "Slow improvement" },
+      { "date": "2026-05-20", "windDirection": "SW", "windSpeedMph": 10, "precipProbability": 25, "migrationIntensity": "MODERATE", "rainImpactNote": null, "birdingWindow": "Better — SW winds return" },
+      { "date": "2026-05-21", "windDirection": "S", "windSpeedMph": 14, "precipProbability": 30, "migrationIntensity": "MODERATE", "rainImpactNote": null, "birdingWindow": "Good — best day of the week" }
+    ]
+  },
+
+  "birdingWindow": {
+    "civilTwilight": "5:47 AM",
+    "sunrise": "6:12 AM",
+    "goldenHourEnd": "7:05 AM",
+    "activityCutoff": "10:30 AM",
+    "note": "Arrive by 5:47 AM for peak dawn chorus. Cool temps mean good activity through mid-morning."
+  },
+
+  "moon": {
+    "phaseName": "Waning Gibbous",
+    "illuminationPct": 68,
+    "phase": 0.62,
+    "migrationNote": null
+  },
+
+  "hotspots": [
+    { "locId": "L298164", "name": "Otto Armleder Memorial Park", "speciesCount7d": 67, "county": "Hamilton" },
+    { "locId": "L285901", "name": "Shawnee Lookout Park", "speciesCount7d": 61, "county": "Hamilton" },
+    { "locId": "L285760", "name": "Spring Grove Cemetery & Arboretum", "speciesCount7d": 58, "county": "Hamilton" },
+    { "locId": "L285827", "name": "Gilmore Ponds Preserve", "speciesCount7d": 54, "county": "Butler" },
+    { "locId": "L285844", "name": "Caesar Creek State Park", "speciesCount7d": 49, "county": "Warren" }
+  ],
+
+  "notableObservations": [],
+
+  "listservSightings": [
+    {
+      "subject": "Hamilton county musings",
+      "body": "Things have slowed down noticeably this week with the NW winds. Still getting a trickle of late warblers — Canada, Mourning, Wilson's. The shorebird windows at Gilmore Ponds should be opening up as fields drain. Patience — May 20 SW wind looks promising on the models.",
+      "species": ["Canada Warbler", "Mourning Warbler", "Wilson's Warbler"],
+      "location": null,
+      "url": "https://listserv.miamioh.edu/scripts/wa.exe?A2=OHIO-BIRDS;quiet1.2605&S=",
+      "source": "ohio-birds-listserv"
+    }
+  ],
+
+  "hotspotNotes": {},
+
+  "lifeList": {
+    "totalSpecies": 163,
+    "source": "ebird_world_life_list.csv"
+  },
+
+  "flags": {
+    "highMigrationNight": false,
+    "hasNotables": false,
+    "morningRainLikely": false,
+    "favorableOvernightWind": false,
+    "frontalPassage": false,
+    "falloutPotential": false,
+    "liferOpportunities": 0
+  }
+}

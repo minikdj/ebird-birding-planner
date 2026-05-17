@@ -1,0 +1,180 @@
+{
+  "date": "2026-05-17",
+  "region": "US-OH-061",
+  "location": { "lat": 39.1, "lng": -84.5 },
+
+  "migration": {
+    "lastNight": {
+      "cumulativeBirds": 920000,
+      "formattedCount": "920K",
+      "isHigh": true,
+      "peakDirection": "N",
+      "peakSpeedMph": 19,
+      "peakAltitudeFt": 1900
+    },
+    "season": {
+      "status": "above average by 18%",
+      "weeklyTrend": "building",
+      "comparisonNote": "Season running 18% above the multi-year average. The overnight flight pushes the season total to its highest point so far.",
+      "peakWeekLabel": "Week of May 18"
+    },
+    "topExpectedSpecies": [
+      { "name": "Yellow Warbler", "speciesCode": "yelwar", "probability": 94 },
+      { "name": "Common Yellowthroat", "speciesCode": "comyel", "probability": 91 },
+      { "name": "American Redstart", "speciesCode": "amered", "probability": 89 },
+      { "name": "Connecticut Warbler", "speciesCode": "conwar", "probability": 18 },
+      { "name": "Cape May Warbler", "speciesCode": "camwar", "probability": 74 },
+      { "name": "Bay-breasted Warbler", "speciesCode": "babwar", "probability": 68 },
+      { "name": "Blackpoll Warbler", "speciesCode": "bkpwar", "probability": 82 }
+    ],
+    "narrativeSummary": "Heavy migration last night — 920K birds aloft — ran straight into a rain band that swept through SW Ohio between midnight and 4 AM. Classic fallout conditions: birds were forced down mid-flight by the precipitation. The rain cleared before dawn, and right now there are almost certainly dense concentrations of grounded migrants in wooded parks across Hamilton County. Get out NOW."
+  },
+
+  "weather": {
+    "today": {
+      "overnight": { "windDirection": "NW", "windSpeedMph": 18, "precipProbability": 70, "cloudCoverPct": 90 },
+      "morning": { "precipProbability": 12, "tempF": 49, "cloudCoverPct": 35 },
+      "migrationInterpretation": "Textbook fallout morning. Rain stopped at 4:30 AM, skies clearing rapidly, NW wind 18 mph. Dense concentrations of exhausted migrants should be visible in any wooded shelter.",
+      "rainImpactNote": null,
+      "weatherUnavailable": false,
+      "frontalPassage": true,
+      "falloutPotential": true,
+      "windShiftDetected": true,
+      "clearingDetected": true,
+      "frontalNote": "Cold front passed 4:30 AM — rain stopped, winds shifted NW. Heavy overnight rain (70% precip) grounded migrants mid-flight. Conditions now clearing rapidly. This is a fallout event — birds concentrated in any wooded or shrubby cover, often in numbers 5-10× normal. Act now: this window closes by mid-morning as birds resume movement."
+    },
+    "outlook": [
+      { "date": "2026-05-17", "windDirection": "NW", "windSpeedMph": 18, "precipProbability": 12, "migrationIntensity": "LOW", "rainImpactNote": null, "birdingWindow": "FALLOUT — get out immediately, window closing mid-morning" },
+      { "date": "2026-05-18", "windDirection": "NW", "windSpeedMph": 22, "precipProbability": 10, "migrationIntensity": "LOW", "rainImpactNote": null, "birdingWindow": "Poor — NW winds suppress movement" },
+      { "date": "2026-05-19", "windDirection": "W", "windSpeedMph": 14, "precipProbability": 20, "migrationIntensity": "LOW", "rainImpactNote": null, "birdingWindow": "Slow — winds improving" },
+      { "date": "2026-05-20", "windDirection": "SW", "windSpeedMph": 10, "precipProbability": 25, "migrationIntensity": "MODERATE", "rainImpactNote": null, "birdingWindow": "Good — SW winds return" },
+      { "date": "2026-05-21", "windDirection": "S", "windSpeedMph": 13, "precipProbability": 30, "migrationIntensity": "HIGH", "rainImpactNote": null, "birdingWindow": "Very good — next push" }
+    ]
+  },
+
+  "birdingWindow": {
+    "civilTwilight": "5:47 AM",
+    "sunrise": "6:12 AM",
+    "goldenHourEnd": "7:05 AM",
+    "activityCutoff": "10:00 AM",
+    "note": "Arrive by 5:47 AM for peak dawn chorus. Fallout window closes ~10 AM as birds resume flight."
+  },
+
+  "moon": {
+    "phaseName": "Waxing Crescent",
+    "illuminationPct": 34,
+    "phase": 0.18,
+    "migrationNote": null
+  },
+
+  "hotspots": [
+    { "locId": "L298164", "name": "Otto Armleder Memorial Park", "speciesCount7d": 108, "county": "Hamilton" },
+    { "locId": "L285901", "name": "Shawnee Lookout Park", "speciesCount7d": 103, "county": "Hamilton" },
+    { "locId": "L285760", "name": "Spring Grove Cemetery & Arboretum", "speciesCount7d": 97, "county": "Hamilton" },
+    { "locId": "L285827", "name": "Gilmore Ponds Preserve", "speciesCount7d": 88, "county": "Butler" },
+    { "locId": "L285844", "name": "Caesar Creek State Park", "speciesCount7d": 79, "county": "Warren" }
+  ],
+
+  "notableObservations": [
+    {
+      "species": "Connecticut Warbler",
+      "location": "Otto Armleder Memorial Park",
+      "date": "2026-05-17",
+      "count": 2,
+      "locId": "L298164",
+      "source": "ebird",
+      "isLifer": false
+    },
+    {
+      "species": "Yellow-bellied Flycatcher",
+      "location": "Spring Grove Cemetery & Arboretum",
+      "date": "2026-05-17",
+      "count": 3,
+      "locId": "L285760",
+      "source": "ebird",
+      "isLifer": false
+    },
+    {
+      "species": "Cape May Warbler",
+      "location": "Shawnee Lookout Park",
+      "date": "2026-05-17",
+      "count": 4,
+      "locId": "L285901",
+      "source": "ebird",
+      "isLifer": false
+    },
+    {
+      "species": "Bay-breasted Warbler",
+      "location": "Otto Armleder Memorial Park",
+      "date": "2026-05-17",
+      "count": 6,
+      "locId": "L298164",
+      "source": "ebird",
+      "isLifer": false
+    },
+    {
+      "species": "Blackpoll Warbler",
+      "location": "Shawnee Lookout Park",
+      "date": "2026-05-17",
+      "count": 11,
+      "locId": "L285901",
+      "source": "ebird",
+      "isLifer": false
+    }
+  ],
+
+  "listservSightings": [
+    {
+      "subject": "Fallout at Otto Armleder — unreal this morning",
+      "body": "Got there at 6 AM and immediately knew something was different. Every shrub had birds. Connecticut Warblers (2!), Bay-breasted Warblers everywhere, Cape May Warblers in the treetops, Blackpoll Warblers calling from every direction. Counted 28 warbler species in 2 hours. This is the fallout we've been waiting for. The thicket along the mud trail to the bean field had 50+ birds packed into 100 feet of shrubs. Get there NOW.",
+      "species": ["Connecticut Warbler", "Bay-breasted Warbler", "Cape May Warbler", "Blackpoll Warbler"],
+      "location": "Otto Armleder Memorial Park",
+      "url": "https://listserv.miamioh.edu/scripts/wa.exe?A2=OHIO-BIRDS;fallout1.2605&S=",
+      "source": "ohio-birds-listserv"
+    },
+    {
+      "subject": "Shawnee Lookout — dense fallout, multiple rare birds",
+      "body": "Shawnee is absolutely loaded. Yellow-bellied Flycatcher, Olive-sided Flycatcher (rare!), multiple Connecticut Warblers, Cape May Warblers, Blackpoll everywhere. Every trail is productive. The rain last night stopped everything in its tracks.",
+      "species": ["Yellow-bellied Flycatcher", "Olive-sided Flycatcher", "Connecticut Warbler", "Cape May Warbler", "Blackpoll Warbler"],
+      "location": "Shawnee Lookout Park",
+      "url": "https://listserv.miamioh.edu/scripts/wa.exe?A2=OHIO-BIRDS;fallout2.2605&S=",
+      "source": "ohio-birds-listserv"
+    }
+  ],
+
+  "hotspotNotes": {
+    "L298164": {
+      "name": "Otto Armleder Memorial Park",
+      "county": "Hamilton",
+      "habitatSummary": "Riparian cottonwood forest, shrubby thickets, agricultural edge. During fallout events, the wooded areas and shrub edge concentrate extraordinary numbers of migrants.",
+      "trails": [
+        {
+          "name": "Paved loop / mud trail to bean field",
+          "habitat": "Dense shrubby thicket, overgrown field edge, wet tangles",
+          "targetSpecies": ["Connecticut Warbler", "Bay-breasted Warbler", "Alder Flycatcher"],
+          "directions": "From the main parking lot, take the paved trail east. At the junction where pavement ends and a muddy path continues toward the bean field, check the dense shrubby thicket on both sides. During fallout events, this 100-foot stretch can hold dozens of warblers packed into the shrubs.",
+          "bestTime": "First 3 hours of daylight during fallout events",
+          "notes": "During fallout conditions, walk slowly and look into every shrub at eye level. Birds will be exhausted and easy to approach."
+        }
+      ],
+      "parkingCoords": [39.1231, -84.4059],
+      "peakSeason": "May 5–25 (spring migration)",
+      "rareSpeciesPotential": ["Connecticut Warbler", "Mourning Warbler", "Olive-sided Flycatcher", "Yellow-bellied Flycatcher"]
+    }
+  },
+
+  "lifeList": {
+    "totalSpecies": 163,
+    "source": "ebird_world_life_list.csv"
+  },
+
+  "flags": {
+    "highMigrationNight": true,
+    "hasNotables": true,
+    "morningRainLikely": false,
+    "favorableOvernightWind": false,
+    "frontalPassage": true,
+    "falloutPotential": true,
+    "liferOpportunities": 0
+  }
+}

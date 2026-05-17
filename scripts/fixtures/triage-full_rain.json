@@ -1,0 +1,21 @@
+{
+  "date": "2026-05-17",
+  "region": "US-OH-061",
+  "migrationScore": 6,
+  "lastNight": {
+    "cumulativeBirds": 780000,
+    "formattedCount": "780K",
+    "isHigh": false,
+    "peakDirection": "NE",
+    "peakSpeedMph": 22
+  },
+  "notableSpecies": ["Yellow-bellied Flycatcher", "Mourning Warbler", "Olive-sided Flycatcher"],
+  "notableCount": 3,
+  "weather": {
+    "overnight": { "windDirection": "SW", "windSpeedMph": 14, "precipProbability": 25 },
+    "morning": { "precipProbability": 75, "tempF": 52 },
+    "migrationInterpretation": "Good migration last night but steady rain moving in this morning — birds will be grounded and harder to observe at open sites."
+  },
+  "recommendation": "FULL_BRIEFING",
+  "recommendationReason": "Migration score 6/10 + 3 notable species + morning rain dominates birding conditions today"
+}

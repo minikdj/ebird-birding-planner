@@ -1,0 +1,193 @@
+{
+  "date": "2026-05-17",
+  "region": "US-OH-061",
+  "location": { "lat": 39.1, "lng": -84.5 },
+
+  "migration": {
+    "lastNight": {
+      "cumulativeBirds": 1450000,
+      "formattedCount": "1.45M",
+      "isHigh": true,
+      "peakDirection": "NNE",
+      "peakSpeedMph": 31,
+      "peakAltitudeFt": 2800
+    },
+    "season": {
+      "status": "above average by 23%",
+      "weeklyTrend": "building",
+      "comparisonNote": "Season total is running 23% above the multi-year average for this date — one of the strongest springs on record for SW Ohio.",
+      "peakWeekLabel": "Week of May 18"
+    },
+    "topExpectedSpecies": [
+      { "name": "Yellow Warbler", "speciesCode": "yelwar", "probability": 94 },
+      { "name": "Common Yellowthroat", "speciesCode": "comyel", "probability": 91 },
+      { "name": "American Redstart", "speciesCode": "amered", "probability": 89 },
+      { "name": "Magnolia Warbler", "speciesCode": "magwar", "probability": 87 },
+      { "name": "Blackpoll Warbler", "speciesCode": "bkpwar", "probability": 82 },
+      { "name": "Tennessee Warbler", "speciesCode": "tenwar", "probability": 79 },
+      { "name": "Canada Warbler", "speciesCode": "canwar", "probability": 71 },
+      { "name": "Bay-breasted Warbler", "speciesCode": "babwar", "probability": 68 },
+      { "name": "Blackburnian Warbler", "speciesCode": "blawar", "probability": 65 },
+      { "name": "Mourning Warbler", "speciesCode": "mouwar", "probability": 44 },
+      { "name": "Connecticut Warbler", "speciesCode": "conwar", "probability": 18 },
+      { "name": "Alder Flycatcher", "speciesCode": "aldfly", "probability": 22 }
+    ],
+    "narrativeSummary": "Last night was one of the top 5 migration nights of 2026 for SW Ohio — 1.45 million birds aloft at peak, with movement concentrated between 11 PM and 3 AM. Flight direction was NNE at 31 mph, meaning birds that departed from Kentucky and Tennessee landed right in Hamilton County. The season is tracking 23% above the historical average, putting this in elite company for spring passage volume."
+  },
+
+  "weather": {
+    "today": {
+      "overnight": { "windDirection": "SW", "windSpeedMph": 11, "precipProbability": 4, "cloudCoverPct": 15 },
+      "morning": { "precipProbability": 8, "tempF": 57, "cloudCoverPct": 20 },
+      "migrationInterpretation": "Nearly perfect conditions — light SW winds, clear skies, mild temperature. Birds that landed last night will be active and singing through mid-morning.",
+      "rainImpactNote": null,
+      "weatherUnavailable": false,
+      "frontalPassage": false,
+      "falloutPotential": false,
+      "windShiftDetected": false,
+      "clearingDetected": false,
+      "frontalNote": null
+    },
+    "outlook": [
+      { "date": "2026-05-17", "windDirection": "SW", "windSpeedMph": 10, "precipProbability": 8, "migrationIntensity": "HIGH", "rainImpactNote": null, "birdingWindow": "Excellent — SW wind, clear, mild" },
+      { "date": "2026-05-18", "windDirection": "S", "windSpeedMph": 12, "precipProbability": 15, "migrationIntensity": "HIGH", "rainImpactNote": null, "birdingWindow": "Very good — S wind continues push" },
+      { "date": "2026-05-19", "windDirection": "SSW", "windSpeedMph": 8, "precipProbability": 30, "migrationIntensity": "MODERATE", "rainImpactNote": null, "birdingWindow": "Good — slight chance of afternoon showers" },
+      { "date": "2026-05-20", "windDirection": "NW", "windSpeedMph": 19, "precipProbability": 55, "migrationIntensity": "LOW", "rainImpactNote": "Rain and NW winds will suppress birding activity — expect quiet conditions.", "birdingWindow": "Poor — front arriving" },
+      { "date": "2026-05-21", "windDirection": "NW", "windSpeedMph": 24, "precipProbability": 20, "migrationIntensity": "LOW", "rainImpactNote": null, "birdingWindow": "Slow — post-frontal, NW winds" }
+    ]
+  },
+
+  "birdingWindow": {
+    "civilTwilight": "5:47 AM",
+    "sunrise": "6:12 AM",
+    "goldenHourEnd": "7:05 AM",
+    "activityCutoff": "10:30 AM",
+    "note": "Arrive by 5:47 AM for peak dawn chorus. Activity cutoff ~10:30 AM as temperature rises."
+  },
+
+  "moon": {
+    "phaseName": "Waxing Gibbous",
+    "illuminationPct": 71,
+    "phase": 0.38,
+    "migrationNote": null
+  },
+
+  "hotspots": [
+    { "locId": "L298164", "name": "Otto Armleder Memorial Park", "speciesCount7d": 112, "county": "Hamilton" },
+    { "locId": "L285901", "name": "Shawnee Lookout Park", "speciesCount7d": 98, "county": "Hamilton" },
+    { "locId": "L285760", "name": "Spring Grove Cemetery & Arboretum", "speciesCount7d": 94, "county": "Hamilton" },
+    { "locId": "L285827", "name": "Gilmore Ponds Preserve", "speciesCount7d": 87, "county": "Butler" },
+    { "locId": "L285844", "name": "Caesar Creek State Park", "speciesCount7d": 81, "county": "Warren" }
+  ],
+
+  "notableObservations": [
+    {
+      "species": "Connecticut Warbler",
+      "location": "Otto Armleder Memorial Park",
+      "date": "2026-05-17",
+      "count": 1,
+      "locId": "L298164",
+      "source": "ebird",
+      "isLifer": true
+    },
+    {
+      "species": "Alder Flycatcher",
+      "location": "Otto Armleder Memorial Park",
+      "date": "2026-05-17",
+      "count": 1,
+      "locId": "L298164",
+      "source": "ebird",
+      "isLifer": true
+    },
+    {
+      "species": "Tennessee Warbler",
+      "location": "Otto Armleder Memorial Park",
+      "date": "2026-05-16",
+      "count": 3,
+      "locId": "L298164",
+      "source": "ebird",
+      "isLifer": true
+    },
+    {
+      "species": "Mourning Warbler",
+      "location": "Shawnee Lookout Park",
+      "date": "2026-05-16",
+      "count": 1,
+      "locId": "L285901",
+      "source": "ebird",
+      "isLifer": false
+    },
+    {
+      "species": "Yellow-bellied Flycatcher",
+      "location": "Spring Grove Cemetery & Arboretum",
+      "date": "2026-05-15",
+      "count": 2,
+      "locId": "L285760",
+      "source": "ebird",
+      "isLifer": false
+    }
+  ],
+
+  "listservSightings": [
+    {
+      "subject": "Otto Armleder — Connecticut Warbler still present + Alder Flycatcher",
+      "body": "Arrived at 6:15 AM. The CT Warbler was singing strongly from the dense thicket just east of where the paved trail meets the mud path to the bean field. Heard it for 45 minutes. Also had an Alder Flycatcher calling from the same shrubby edge — fee-BEE-o loud and clear. Full list: Connecticut Warbler, Alder Flycatcher, Tennessee Warbler (3), Canada Warbler (2), Mourning Warbler (1 heard), Yellow Warbler (6+), Common Yellowthroat (many), American Redstart (8+), Magnolia Warbler (4), Blackburnian Warbler (2). Outstanding morning.",
+      "species": ["Connecticut Warbler", "Alder Flycatcher", "Tennessee Warbler", "Canada Warbler", "Mourning Warbler", "Yellow Warbler", "American Redstart", "Magnolia Warbler", "Blackburnian Warbler"],
+      "location": "Otto Armleder Memorial Park",
+      "url": "https://listserv.miamioh.edu/scripts/wa.exe?A2=OHIO-BIRDS;abc123.2605&S=",
+      "source": "ohio-birds-listserv"
+    },
+    {
+      "subject": "Blacklick Metro Park — migration wave still rolling",
+      "body": "Blacklick still going strong. Canada Warblers everywhere this morning. Ovenbirds singing from multiple territories. Black-throated Blue Warbler (2 males, 1 female). Blackburnian Warblers high in the canopy. Bay-breasted Warblers. Chestnut-sided Warblers. Northern Waterthrush at the creek edge. Cape May Warbler. Tennessee Warblers (6+). Absolute peak conditions right now.",
+      "species": ["Canada Warbler", "Ovenbird", "Black-throated Blue Warbler", "Blackburnian Warbler", "Bay-breasted Warbler", "Chestnut-sided Warbler", "Northern Waterthrush", "Cape May Warbler", "Tennessee Warbler"],
+      "location": "Blacklick Metro Park",
+      "url": "https://listserv.miamioh.edu/scripts/wa.exe?A2=OHIO-BIRDS;def456.2605&S=",
+      "source": "ohio-birds-listserv"
+    },
+    {
+      "subject": "Hamilton county — migration surge last night",
+      "body": "What a night on BirdCast. Over 1.4 million birds over Ohio. Went out at first light to Gilmore Ponds — Baird's Sandpiper, White-rumped Sandpiper, and a late American Golden-Plover. Shorebirding is exceptional right now with the recent rains keeping fields flooded.",
+      "species": ["Baird's Sandpiper", "White-rumped Sandpiper", "American Golden-Plover"],
+      "location": "Gilmore Ponds Preserve",
+      "url": "https://listserv.miamioh.edu/scripts/wa.exe?A2=OHIO-BIRDS;ghi789.2605&S=",
+      "source": "ohio-birds-listserv"
+    }
+  ],
+
+  "hotspotNotes": {
+    "L298164": {
+      "name": "Otto Armleder Memorial Park",
+      "county": "Hamilton",
+      "habitatSummary": "Riparian cottonwood forest, shrubby thickets, agricultural edge (bean field), and mowed lawns along the Little Miami River. The bean-field thicket edge is the key habitat for Connecticut Warbler and secretive migrants.",
+      "trails": [
+        {
+          "name": "Paved loop / mud trail to bean field",
+          "habitat": "Dense shrubby thicket, overgrown field edge, wet tangles",
+          "targetSpecies": ["Connecticut Warbler", "Alder Flycatcher", "Mourning Warbler", "Yellow Warbler"],
+          "directions": "From the main parking lot, take the paved trail east toward the river. After ~0.3 miles, where the pavement ends and a muddy path continues toward the bean field, stop and check the dense shrubby thicket on BOTH sides of the trail. The CT Warbler has been heard consistently from this thicket — stand still, listen for the loud 'beecher-beecher-beecher' song. Walk the mud trail slowly toward the field edge for Alder Flycatcher.",
+          "bestTime": "Dawn to 9 AM, May 10–25",
+          "notes": "CT Warbler confirmed here May 9–17 2026. Observers report the bird is heard far more than seen — walk slowly and stop frequently. Best access is via the main east parking lot (GPS: 39.1231, -84.4059)."
+        }
+      ],
+      "parkingCoords": [39.1231, -84.4059],
+      "peakSeason": "May 5–25 (spring migration)",
+      "rareSpeciesPotential": ["Connecticut Warbler", "Mourning Warbler", "Alder Flycatcher", "Kentucky Warbler"]
+    }
+  },
+
+  "lifeList": {
+    "totalSpecies": 163,
+    "source": "ebird_world_life_list.csv"
+  },
+
+  "flags": {
+    "highMigrationNight": true,
+    "hasNotables": true,
+    "morningRainLikely": false,
+    "favorableOvernightWind": true,
+    "frontalPassage": false,
+    "falloutPotential": false,
+    "liferOpportunities": 3
+  }
+}

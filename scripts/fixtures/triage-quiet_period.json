@@ -1,0 +1,21 @@
+{
+  "date": "2026-05-17",
+  "region": "US-OH-061",
+  "migrationScore": 2,
+  "lastNight": {
+    "cumulativeBirds": 38000,
+    "formattedCount": "38K",
+    "isHigh": false,
+    "peakDirection": "NW",
+    "peakSpeedMph": 8
+  },
+  "notableSpecies": [],
+  "notableCount": 0,
+  "weather": {
+    "overnight": { "windDirection": "NW", "windSpeedMph": 16, "precipProbability": 10 },
+    "morning": { "precipProbability": 5, "tempF": 44 },
+    "migrationInterpretation": "NW winds suppressed migration last night. Cold front passed 2 days ago — conditions are clearing but birds have yet to resume movement."
+  },
+  "recommendation": "QUIET_PERIOD",
+  "recommendationReason": "Migration score 2/10, NW winds, no notable species"
+}

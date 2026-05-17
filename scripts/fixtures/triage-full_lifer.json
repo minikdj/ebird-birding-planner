@@ -1,0 +1,21 @@
+{
+  "date": "2026-05-17",
+  "region": "US-OH-061",
+  "migrationScore": 9,
+  "lastNight": {
+    "cumulativeBirds": 1450000,
+    "formattedCount": "1.45M",
+    "isHigh": true,
+    "peakDirection": "NNE",
+    "peakSpeedMph": 31
+  },
+  "notableSpecies": ["Connecticut Warbler", "Alder Flycatcher", "Tennessee Warbler"],
+  "notableCount": 3,
+  "weather": {
+    "overnight": { "windDirection": "SW", "windSpeedMph": 11, "precipProbability": 4 },
+    "morning": { "precipProbability": 8, "tempF": 57 },
+    "migrationInterpretation": "Exceptional night — sustained SW winds at 11 mph with clear skies drove one of the heaviest flights of the season."
+  },
+  "recommendation": "FULL_BRIEFING",
+  "recommendationReason": "High migration intensity (isHigh flag) + Migration score 9/10 + 3 notable species including rare Connecticut Warbler + favorable SW winds"
+}
