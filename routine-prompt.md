@@ -120,59 +120,125 @@ Consider:
 
 The goal: write an email that a serious birder would find genuinely useful — not a slot-filled template, but an intelligent synthesis that highlights what actually matters today.
 
+━━━ DESIGN SYSTEM ━━━
+
+Apply these rules to every email you write. They are not optional.
+
+**Colors — two only:**
+- `#1a3a2a` dark green — header background, section borders, stat blocks, bar chart fills
+- `#c0392b` red — urgency only: FALLOUT/RAIN alert banners, LIFER badges, time-sensitive callouts, "Chase Targets" section header
+- Everything else: gray scale (`#333` body text, `#666` secondary, `#999` metadata, `#f5f5f5` light backgrounds, `#e8e8e8` dividers). No amber, no purple, no blue, no multi-colored notable sightings borders.
+
+**Lifer badge — universal:**
+Any time a species with `isLifer: true` appears anywhere in the email (chase card header, sightings table row, community buzz species list), attach the badge: a small inline pill — `background:#c0392b; color:#fff; font-size:10px; padding:2px 6px; border-radius:10px; font-family:Arial` — containing the text `◉ LIFER`. Never omit it if `isLifer: true`.
+
+**Section structure — apply to every section:**
+Every section (except Executive Summary, which IS the bullets) follows this three-part pattern:
+1. **2–4 bullet points** — the key facts a reader needs if they have 10 seconds. Bold the critical number or fact in each bullet. Place these immediately after the section heading, before any visual or prose.
+2. **Visual element** — a chart, diagram, or structured graphic (see per-section specs below). Build these from HTML tables and inline CSS only — no images, no JavaScript, no external resources.
+3. **Narrative / detail** — prose, directions, or additional data for readers who want depth.
+
+Bullet format: plain `•` prefix, one line each, no nesting.
+
+**Visual library — what to use where:**
+
+*Bar chart* (use for Migration and Hotspots):
+A table where each row = one data point. Columns: label (80px) | bar (`<div>` with colored background, width as % of max) | value (50px right-aligned). Use `#1a3a2a` fill for the primary bar, `#d0d8d0` for comparison bars. Calculate width: `Math.round((value / maxValue) * 100)` — cap at 100%. Example two-row migration chart:
+```
+Last night  ████████████████████████████████████  1.45M
+Avg (May)   ██████████████████████████░░░░░░░░░░   1.18M
+```
+Rendered as table rows with colored `<div>` elements at proportional widths.
+
+*Forecast strip* (use for 5-Day Outlook):
+A single-row table with 5 equal cells (20% width each). Each cell contains: day abbreviation (Mon), a unicode weather icon (☀ ⛅ 🌧 etc.), and a 1–2 word rating. Cell background color encodes quality — use ONLY these:
+- Excellent / Fallout: `#1a3a2a` (dark green), white text
+- Very Good: `#2d6a4f`, white text
+- Good: `#52796f`, white text
+- Moderate: `#888`, white text
+- Poor / Slow: `#bbb`, `#555` text
+- RAIN alert / FALLOUT alert: `#c0392b`, white text
+Below the strip: one sentence naming the single best day and why.
+
+*Condition tiles* (use for Weather):
+A 1×4 or 2×2 table of simple tiles. All tiles use the same `#f5f5f5` background — no color coding within tiles (the color is in the value text only if extreme). Each tile: small all-caps label on top, large bold value, small unit below.
+
+*Timeline bar* (use for Birding Window):
+A single-row table with 4 cells representing: Civil Twilight → Sunrise → Golden Hour End → Activity Cutoff. Color progression: `#1a3a2a` → `#2d6a4f` → `#52796f` → `#888` (or `#c0392b` if cutoff is unusually early due to rain). Time displayed large inside each cell, label below in small caps. Width proportional to duration of each interval.
+
+*Chase card* (use for Chase Targets):
+White background, `border-left: 4px solid #c0392b`, no tinted background. Inside:
+- Top line: `◉ LIFER` badge (if applicable) + species name in large bold dark text (NOT red) + location in gray
+- Body: prose with **bold inline labels** for `Where to look:` and `Field ID:` — NO nested boxes, NO sub-cards, NO colored inner containers
+- Bottom: a single full-width red bar (`background:#c0392b; color:#fff; padding:8px; border-radius:0 0 2px 2px`) if time-sensitive, with the departure time or urgency note
+
 ━━━ STEP 5 — WRITE THE EMAIL ━━━
 
 Based on your reasoning in Step 4, write the email.
 
 **For FULL_BRIEFING:**
 
-Structure your email as inline-CSS HTML (mobile-friendly, max-width 600px, table-based layout, dark green `#1a3a2a` header). Include these sections, but adapt their content and emphasis based on what's actually interesting today:
+Structure your email as inline-CSS HTML (mobile-friendly, max-width 600px, table-based layout, dark green `#1a3a2a` header). Apply the Design System above to every section. Include these sections, adapt content and emphasis based on what's actually interesting today:
 
-1. **Executive summary** (3 bullets at top, fits email preview pane):
-   - Migration intensity last night
-   - Rain / weather impact on this morning's birding (if `rainImpactNote` is present, make this bullet 2)
-   - Top chase target species OR best upcoming day if today is poor
+1. **Executive Summary** — This section IS the bullets. Write exactly 3 bullets (no visual, no prose block) covering:
+   - Migration intensity last night (number + context)
+   - Rain / weather impact if `rainImpactNote` is non-null (always bullet 1 or 2 — it's the most actionable)
+   - Top chase target or best upcoming day if today is poor
+   These three bullets must fit in the email preview pane. They are the only thing a reader who opens this on their phone at 5 AM needs to see before deciding whether to get out of bed.
 
-2. **★ Today's Chase Targets** — Only include this section if there are genuine prize birds worth making a special effort for. A "prize bird" is one that is: rare or unusual for the county/region, at a particularly meaningful moment in its migration window (peak passage for a hard-to-find species), a species that takes real effort to locate, or a genuine vagrant/rarity. **Do not include common migrants here just because they appear in `notableObservations`.**
+2. **Chase Targets** — Only include if there are genuine prize birds (rare, vagrant, or lifer). Do not include common migrants.
+   - Each card (1–3 max) uses the Chase Card format from the Design System.
+   - `◉ LIFER` badge is mandatory if `isLifer: true` — in the card header AND in the Notable Sightings table row for the same species.
+   - **Where to look:** uses `hotspotNotes[locId].trails[].directions` if available — exact trail names, GPS, landmarks.
+   - **Field ID:** the clincher song, call, or visual mark (1–2 sentences).
+   - If `migration.lastNight.isHigh`, note that additional individuals of the target species are likely present.
+   - Omit entirely if no genuine prize birds exist.
 
-   For each chase target (1–3 max), write a dedicated card styled with a red left border (`#c0392b`). Each card must include:
-   - If `isLifer` is true for this species: add a prominent **"★ LIFER OPPORTUNITY"** badge at the top of the card in red (#c0392b).
-   - **Species name** (prominent, in red) + location + date last seen
-   - **Why it's a prize** (1 sentence on county rarity, state status, or significance — use your knowledge, not just the data)
-   - **Where to look** within the hotspot: specific habitat, trail section, time of day (e.g., "dense shrubby understory near the north trail edge at Otto Armleder"). If `hotspotNotes[locId]` exists, use the matching trail's `directions` and `habitat` fields verbatim or paraphrased.
-   - **Field ID** (1–2 sentences): the key song, behavior, or visual that will help find it ("listen for a loud emphatic *beecher-beecher-beecher*; it walks on the ground with a bobbing gait")
-   - **Time-sensitivity**: is it likely to linger (e.g., a lingering waterbird) or must be checked today (e.g., a warbler at peak passage)?
+3. **Migration Last Night** — Bullets first, then bar chart, then narrative.
+   - Bullets (2–3): birds aloft count + whether HIGH, season % vs average, weekly trend direction
+   - Bar chart: "Last night" bar vs "Season avg for this week" bar. Use `migration.lastNight.cumulativeBirds` for last night; derive avg from `season.status` percentage (e.g. if +23% above avg, avg = lastNight / 1.23).
+   - Narrative: `migration.narrativeSummary`. Add moon note if `moon.migrationNote` is non-null.
 
-   Cross-reference `migration.lastNight`: if it was a HIGH night, note that there may be additional individuals of target species present beyond the known bird.
+4. **Weather & Birding Conditions** — Bullets first, then condition tiles, then narrative (or rain callout if applicable).
+   - Bullets (2–3): overnight wind + migration quality, morning temp + rain risk, birding window cutoff
+   - Condition tiles: temp | wind | cloud% | rain% — four tiles, consistent `#f5f5f5` background
+   - If `rainImpactNote` is non-null: show it as a single amber-bordered callout box (border-left: 4px solid #c0392b) with the practical advice. This is the only place amber/orange appears — only when rain is the dominant story.
+   - Narrative: `migrationInterpretation`
 
-   If there are no genuine prize birds today, **omit this section entirely** — do not include a "Chase Targets" section with common or moderately unusual birds.
+5. **Top Hotspots** — Bullets first, then bar chart, then featured hotspot detail.
+   - Bullets (2–3): top pick + species count, any rain-strategy note (skip open water / prefer canopy), notable species confirmed at which hotspot
+   - Bar chart: one row per hotspot (top 5), proportional to 7-day species count. Featured/best hotspot bar in `#1a3a2a`, others in `#52796f`.
+   - Featured hotspot (the one most relevant today): name, county, trail note from `hotspotNotes` if available. Other hotspots listed compactly below the chart.
 
-3. **Migration Last Night** — BirdCast birds aloft, isHigh flag, flight direction/speed if available, season total vs historical average with weekly trend. Use `migration.narrativeSummary` as a starting point. Include moon phase if `moon.migrationNote` is non-null — one sentence noting the lunar conditions and their migration implication.
+6. **Notable / Rare Sightings** — Only if `hasNotables`. Bullets first, then table.
+   - Bullets (2–3): rarest species seen, any lifers, most recent sighting
+   - Table: Species | Location | Date | Count. For any species with `isLifer: true`, prepend the `◉ LIFER` badge to the species name cell. No row background colors — alternating thin `#e8e8e8` bottom borders only. Dark green header row.
 
-4. **Weather & Birding Conditions** — Overnight wind, morning forecast, `migrationInterpretation`, and critically: if `rainImpactNote` is not null, include it prominently with practical advice.
+7. **Community Buzz** — Only if `listservSightings` non-empty. Bullets first, then report cards.
+   - Bullets (2–3): synthesis of what the community is finding — most exciting species mentioned, which hotspots are active, any consensus strategy (e.g. "community consensus: go early, Spring Grove is the pick")
+   - Report cards: plain `#f8f8f8` background, no colored borders. Subject line linked. Body text in italic Georgia serif. Species tags in small gray text below.
 
-5. **Top Hotspots This Week** — Top 3–5 from aggregate data, showing 7-day species count. If `morningRainLikely` is true, add a note that conditions may suppress activity at open hotspots. Cross-reference `notableObservations` by location to call out any hotspot-specific finds.
+8. **5-Day Outlook** — Bullets first, then forecast strip, then one-sentence best-day call.
+   - Bullets (1–2): today's summary, single best upcoming day named explicitly
+   - Forecast strip: 5-cell row per Design System spec above
+   - One sentence below the strip: "Mark **[Day]** on your calendar — [wind direction + intensity + why it's the best day]."
 
-6. **Notable / Rare Sightings** — Only if `hasNotables` is true. List species, location, date. The most exceptional birds should already have a Chase Target card above — this section is the supporting cast: a table of all notable observations for completeness.
+9. **Birding Window** — Bullets first, then timeline bar.
+   - Bullets (2): arrive time + what to expect, activity cutoff + why
+   - Timeline bar: civil twilight → sunrise → golden hour → cutoff, per Design System spec
 
-7. **Ohio-birds Community Buzz** — Only if `listservSightings` is non-empty. Each entry has the full email body text and a parsed species list — use this real data. Pick the 3–5 most interesting reports (prioritise rare/unusual species or impressively diverse hotspot counts). For each, write one sentence summarising what was found and where, then list the top 3–5 species as a compact inline list. Link the subject line to `url`. End with a one-sentence synthesis: e.g. "Peak diversity at Blacklick this week — 20+ warbler species reported across multiple days." Keep this section tight — it's community intel, not a field guide.
-
-8. **5-Day Outlook** — Table of upcoming days. Call out the single best day explicitly. If today is poor (rain, north winds), tell the birder which day to target instead and why.
-
-9. **Birding Window** — Civil twilight, sunrise, recommended arrival, activity cutoff.
-
-Adjust emphasis freely. If rain dominates, lead with that. If a Kirtland's Warbler was just spotted, that's the entire email. If the season is 40% above average and last night was HIGH, open with that excitement.
+Adjust emphasis freely. If rain dominates, lead with that. If a Kirtland's Warbler was spotted, that's the entire email. If falloutPotential is true, FALLOUT ALERT banner goes between header and executive summary — crimson, all-caps, unmistakable.
 
 **For QUIET_PERIOD:**
 
-Write a short, conversational 4–6 sentence email (no cards, no tables). Be specific — use the actual data:
-- What is the current trend? Check `migration.season.weeklyTrend` (building / declining / steady) and `season.comparisonNote`.
-- Is there a reason (NW wind pattern, early/late season, unusual weather)?
-- What's the best upcoming day in the 5-day outlook, and why?
-- If `hasNotables` is true: mention the notable species and where it was seen (one sentence).
+Write a short, conversational 4–6 sentence plain-prose email. No cards, no tables, no charts — this is intentionally brief. Be specific with the actual data:
+- What is the current trend? (`migration.season.weeklyTrend` + `season.comparisonNote`)
+- Is there a cause (NW wind pattern, early/late season, weather)?
+- What's the single best upcoming day and why?
+- If `hasNotables`: one sentence on the notable species and where it was seen.
 - When will you check back?
 
-Avoid generic filler. "Migration has been light" is weak. "The 7-day rolling average is declining and we're 15% below the historical average for this point in the season — NW winds have been dominant all week. Saturday's SW wind shift looks like the first opportunity for meaningful movement." is good.
+Avoid generic filler. "The 7-day rolling average is declining and we're 8% below the historical average for mid-May — NW winds at 16 mph have been dominant all week, essentially shutting down movement since peak passage around May 14. Thursday's SW wind shift looks like the first opportunity for meaningful movement." is good. "Migration has been light" is not.
 
 ━━━ STEP 6 — SAVE THE DRAFT ━━━
 
@@ -214,6 +280,7 @@ Read the RESULT line in the output.
 - Do not retry a failed send — the email may have partially delivered.
 - The triage script is the single source of truth for send/skip decisions. Do not second-guess the `recommendation` field.
 - Your job in Steps 4–5 is to be a thoughtful editor, not a template filler. Use your reasoning to make the email genuinely useful.
+- **Design system**: Follow the Design System block above exactly. Two colors only. Universal lifer badge. Every section starts with 2–4 bullets. Every section has a visual element (bar chart, forecast strip, condition tiles, timeline, or table). No nested sub-boxes inside chase cards.
 - **HTML safety**: When inserting any string from the aggregate JSON into the HTML email body — species names, location names, hotspot names, forecast text, any external data — HTML-escape it first. Replace `&` → `&amp;`, `<` → `&lt;`, `>` → `&gt;`, `"` → `&quot;`. Build a small helper: `const esc = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');` and wrap every externally-sourced value with `esc(...)` before embedding in HTML attributes or text nodes.
 
 --- END ---

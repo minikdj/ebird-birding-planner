@@ -950,16 +950,16 @@ From architecture, security, and code quality reviews of the full repo.
 | R2-E | LOW | `index.js` | **FIXED** — `loadLifeList` now parses header row to find "Common Name" column index dynamically instead of hardcoding position. |
 | R2-F | LOW | `scripts/` | **FIXED** — `degreesToCardinal` exported from `birdcast-client.js`. Duplicate `cardinalFromDeg` in `triage.js` deleted and replaced with import. |
 
-### Email chart gap
+### Email chart gap — Resolved (2026-05-17)
 
-Section 7 describes two inline PNG charts as a future enhancement:
-- 7-day migration bar chart (BirdCast `cumulativeBirds` per night)
-- Warbler frequency trend line (BirdCast bar chart probability over the migration season)
+Charts are now built in pure HTML/CSS (no external libraries or PNG generation).
+The `routine-prompt.md` Design System specifies four visual types:
+- **Bar chart** (migration last night vs season avg; hotspot 7-day species counts) — HTML table rows with proportional-width colored `<div>` fills
+- **Forecast strip** (5-day outlook) — single-row table with 5 color-coded cells, quality-mapped to `#1a3a2a` / `#2d6a4f` / `#52796f` / `#bbb` / `#c0392b`
+- **Condition tiles** (weather) — 1×4 grid, all `#f5f5f5`, value emphasis via text only
+- **Timeline bar** (birding window) — 4-cell row, civil twilight → sunrise → golden hour → cutoff, color progression from dark to amber/red
 
-The email is currently generated without charts. `chart.js` and
-`chartjs-node-canvas` have been removed from `package.json`. If re-added,
-install as `optionalDependencies` (require native `canvas` compilation via
-`node-gyp`). Tracking as future enhancement in Section 14.
+All four verified rendering correctly in iPhone Safari and all scenario test emails. `chartjs-node-canvas` not needed.
 
 ---
 
@@ -1077,15 +1077,15 @@ Resolved items are struck through and kept for historical reference.
 | 2 | Test QUIET_PERIOD Routine path end-to-end | Testing | Requires a real Routine run on a low-migration night. See `TESTING.md` Test B. |
 | 3 | Test SILENT_SKIP Routine path | Testing | Requires a real Routine run on a very quiet night. See `TESTING.md` Test C. |
 | 4 | Test SendGrid fallback delivery | Testing | Set invalid RESEND_API_KEY in .env, run `send.js`, verify SendGrid fires. Requires both API keys in .env. |
-| 6 | Email rendering on mobile (Gmail app, Apple Mail) | Testing | Open a sent briefing on iPhone/Android. Check tables, links, dark mode. See `TESTING.md` Section 7. |
+| 6 | ~~Email rendering on mobile (Gmail app, Apple Mail)~~ | Testing | Verified 2026-05-17 — all 4 scenario HTML files tested on iPhone via iCloud Drive. Confirmed: tables render, charts display, color coding correct, 2-color design holds on mobile. |
 | 7 | Email rendering in Apple Mail desktop | Testing | Open a sent briefing in Apple Mail. See `TESTING.md` Section 7. |
 | 8 | Test degraded modes: NWS down, BirdCast outside season, iNat timeout | Testing | Mock API failures locally or run during a known outage window. |
 | 9 | Verify Resend custom domain (`BRIEFING_FROM_EMAIL`) | Config | Go to resend.com/domains → add and verify your domain → set `BRIEFING_FROM_EMAIL=Birding Briefing <briefing@yourdomain.com>` in .env. Without this, delivery is limited to the Resend account owner's address. |
 | 10 | Confirm BirdCast API key approved for programmatic use | Config | Contact birdcast.info to confirm your key is approved for automated requests. Working in practice; formal approval unconfirmed. |
-| 13 | GitHub branch protection on `main` | Security | Settings → Branches → Add rule: require PR review, no force-push, require signed commits. Protects against a compromised GitHub account pushing malicious code that runs in the next Routine. (Needs authenticated `gh` or web UI.) |
+| 13 | ~~GitHub branch protection on `main`~~ | Security | Applied 2026-05-17 via `gh api`. Requires 1 PR review. Force-push disabled. |
 | 14 | Scope Resend API key | Security | In Resend dashboard, scope the key to your sending domain only. Set a spend alert. Limits blast radius if the key leaks. |
-| 16 | Test `BRIEFING_FAVORITE_HOTSPOTS` env var | Testing | Set comma-separated locIds, use `plan_birding_trip` MCP tool in Claude Desktop, verify configured hotspots appear regardless of activity level. |
-| 17 | Test vacation-to-new-region flow | Testing | Change BRIEFING_REGION/LAT/LNG in .env to a new location, run full pipeline, verify region-correct data. |
+| 16 | ~~Test `BRIEFING_FAVORITE_HOTSPOTS` env var~~ | Testing | Verified 2026-05-17 — `getFavoriteHotspots()` returns 3-item array with correct `locId` fields when env var set to `L123456,L789012,L345678`. |
+| 17 | ~~Test vacation-to-new-region flow~~ | Testing | Verified 2026-05-17 — `BRIEFING_REGION=US-NY-061 BRIEFING_LAT=40.7 BRIEFING_LNG=-74.0` produces FULL_BRIEFING score 11, 76 notable species. Region override works correctly. |
 
 ### Resolved
 
@@ -1103,7 +1103,7 @@ Resolved items are struck through and kept for historical reference.
 
 | # | Item | Category | Notes |
 |---|------|----------|-------|
-| 12 | Inline email charts | Enhancement | 7-day migration bar chart + warbler frequency trend. Implement via `chartjs-node-canvas` as optional dependency. Deferred — emails are high-value without charts. |
+| 12 | ~~Inline email charts~~ | Enhancement | Implemented 2026-05-17 via pure HTML/CSS — bar charts, forecast strip, condition tiles, timeline bar. No chartjs-node-canvas needed. See Section 12 "Email chart gap" note. |
 
 **Reference:** `TESTING.md` — full feature inventory, test prompts, expected outputs, and status tracking.
 
@@ -1146,4 +1146,5 @@ Resolved items are struck through and kept for historical reference.
 | 2026-05-16 | SPEC.md comprehensive review and cleanup: removed all references to deleted scripts/briefing.js; updated Section 4 to document TOOL_HANDLERS Map and RECOMMENDATION enum; corrected Section 7 rendering description (agent writes dynamically, not via briefing.js); added BRIEFING_LOCATION_NAME to Section 9 secrets table; fixed L9 to note briefing.js deleted; resolved Open Question 6 (cron update chosen); removed duplicate Open Questions table; fixed TOC to correctly list sections 14 (Still To Do) and 15 (Open Questions); added briefing-draft.json to .gitignore list; clarified dotenv situation; added resend to dependencies table; added Current State summary box. |
 | 2026-05-17 | Four new aggregate.js features: (1) Life list integration — `scripts/build-life-list.js` pre-processes eBird life list CSV to `data/life-list.json`; `notableObservations[].isLifer` flags species not on life list; `liferOpportunities` count in flags; lifer-aware Chase Target cards in routine-prompt.md. (2) Moon phase — `buildMoonInfo()` adds `moon` field with phase name, illumination %, and migration note for full/new moon conditions. (3) Ohio-birds LISTSERV scraper — `src/ohio-birds-client.js` created; archive currently unavailable (HTTP 404), returns empty array gracefully; `listservSightings` field added to output. (4) Frontal passage / fallout detection — `NWSClient.detectFrontalPassage()` analyses NWS hourly forecast for wind shifts and overnight clearing; `frontalPassage`, `falloutPotential`, and `frontalNote` fields added to `weather.today` and `flags`. Unit tests added for all 4 features (moon phase names, lifer detection, strip-parenthetical, wind shift, clearing, fallout logic). |
 | 2026-05-17 | Ohio-birds LISTSERV scraper: full body access discovered — no login required. IIS blocks non-browser User-Agents with 403; browser UA reveals A3 iframe endpoint serving email body parts publicly. Pipeline upgraded to index → A2 page → A3 iframe → body text (`<pre>` block). Species parser extracts up to 12 species per report. Verified live: Blacklick Metro Park report yielded 12 species including Canada, Blackburnian, Tennessee, Bay-breasted, Cape May, Hooded warblers. `listservSightings` now returns `{subject, body, species[], location, url, source}`. Community Buzz section updated to write per-report summaries using real species data. |
+| 2026-05-17 | Email redesign: new Design System baked into `routine-prompt.md` — 2-color palette (#1a3a2a + #c0392b only), universal ◉ LIFER badge on every occurrence of lifer species, section structure (2–4 bullets → visual → narrative), four HTML/CSS visual types (bar chart, forecast strip, condition tiles, timeline bar). All 4 scenario test emails regenerated and verified on iPhone. |
 | 2026-05-17 | Batch completion: (1) Hotspot notes — `data/hotspot-notes.json` built for 9 Cincinnati-area hotspots with trail-level habitat notes; wired into `aggregate.js` and Chase Target cards. (2) Configurable triage thresholds — 5 env vars added (`BRIEFING_SCORE_HIGH_BIRDS`, `BRIEFING_SCORE_MED_BIRDS`, `BRIEFING_SCORE_LOW_BIRDS`, `BRIEFING_FULL_THRESHOLD`, `BRIEFING_QUIET_THRESHOLD`). (3) Life list auto-refresh — `aggregate.js` auto-rebuilds `data/life-list.json` when `~/Downloads/ebird_world_life_list.csv` is newer. (4) Automated test results documented for items 5, 15, 21. Section 14 (Still To Do) restructured into user-action / resolved / deferred tables. |
