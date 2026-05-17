@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Bird Report">
+  <title>Bird Report</title>
+  <style>
+    :root {
+      --green: #2d6a4f;
+      --green-light: #40916c;
+      --green-pale: #d8f3dc;
+      --red: #b5121b;
+      --bg: #f8faf8;
+      --card: #ffffff;
+      --text: #1a2e1a;
+      --muted: #6b7c6b;
+      --border: #d0ddd0;
+      --radius: 14px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100dvh;
+      padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+    }
+
+    .shell {
+      max-width: 480px;
+      margin: 0 auto;
+      padding: 20px 16px 40px;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 28px;
+      padding-top: 8px;
+    }
+
+    .logo {
+      font-size: 32px;
+      line-height: 1;
+    }
+
+    header h1 {
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--green);
+    }
+
+    header p {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px;
+      margin-bottom: 14px;
+    }
+
+    .card-title {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      margin-bottom: 12px;
+    }
+
+    label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 5px;
+    }
+
+    label span {
+      font-weight: 400;
+      color: var(--muted);
+    }
+
+    input[type="text"], input[type="password"] {
+      width: 100%;
+      font-size: 15px;
+      font-family: inherit;
+      color: var(--text);
+      background: var(--bg);
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 12px;
+      outline: none;
+      -webkit-appearance: none;
+      appearance: none;
+      transition: border-color 0.15s;
+    }
+
+    input[type="text"]:focus, input[type="password"]:focus {
+      border-color: var(--green-light);
+    }
+
+    .field + .field { margin-top: 12px; }
+
+    .btn {
+      display: block;
+      width: 100%;
+      padding: 15px;
+      font-size: 17px;
+      font-weight: 700;
+      font-family: inherit;
+      color: #fff;
+      background: var(--green);
+      border: none;
+      border-radius: var(--radius);
+      cursor: pointer;
+      -webkit-appearance: none;
+      appearance: none;
+      transition: background 0.15s, transform 0.1s;
+      margin-bottom: 14px;
+    }
+
+    .btn:active { transform: scale(0.97); background: var(--green-light); }
+    .btn:disabled { background: var(--muted); cursor: not-allowed; transform: none; }
+
+    .status {
+      display: none;
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      font-size: 14px;
+      line-height: 1.5;
+      margin-bottom: 14px;
+    }
+
+    .status.success {
+      display: block;
+      background: var(--green-pale);
+      border: 1px solid var(--green-light);
+      color: var(--green);
+    }
+
+    .status.error {
+      display: block;
+      background: #fde8e8;
+      border: 1px solid var(--red);
+      color: var(--red);
+    }
+
+    .status strong { display: block; font-size: 15px; margin-bottom: 4px; }
+
+    .hint {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 6px;
+      line-height: 1.5;
+    }
+
+    .hint a { color: var(--green-light); text-decoration: none; }
+
+    details summary {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--muted);
+      cursor: pointer;
+      list-style: none;
+      padding: 4px 0;
+    }
+
+    details summary::-webkit-details-marker { display: none; }
+    details summary::before { content: "▶ "; font-size: 10px; }
+    details[open] summary::before { content: "▼ "; }
+
+    details .inner { margin-top: 12px; }
+
+    .pat-note {
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.5;
+      margin-top: 8px;
+    }
+
+    .pat-note a { color: var(--green-light); }
+
+    footer {
+      text-align: center;
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 8px;
+    }
+  </style>
+</head>
+<body>
+<div class="shell">
+  <header>
+    <div class="logo">&#x1F426;</div>
+    <div>
+      <h1>Bird Report</h1>
+      <p>eBird on-demand briefing</p>
+    </div>
+  </header>
+
+  <!-- Status banner -->
+  <div id="status" class="status"></div>
+
+  <!-- Main form -->
+  <div class="card">
+    <div class="card-title">Report Options</div>
+
+    <div class="field">
+      <label for="location">Location</label>
+      <input type="text" id="location" placeholder="e.g. Cape May, NJ" value="Cincinnati, OH" autocorrect="off">
+    </div>
+
+    <div class="field">
+      <label for="region">eBird region code</label>
+      <input type="text" id="region" placeholder="e.g. US-NJ-009" value="US-OH-061" autocorrect="off" autocapitalize="characters">
+    </div>
+
+    <div class="field">
+      <label for="lat">Latitude</label>
+      <input type="text" id="lat" placeholder="e.g. 38.93" value="39.1" inputmode="decimal">
+    </div>
+
+    <div class="field">
+      <label for="lng">Longitude</label>
+      <input type="text" id="lng" placeholder="e.g. -74.96" value="-84.5" inputmode="decimal">
+    </div>
+
+    <div class="field">
+      <label for="focus">Focus <span>(optional)</span></label>
+      <input type="text" id="focus" placeholder="e.g. warblers, shorebirds, rarity" autocorrect="off">
+    </div>
+  </div>
+
+  <button class="btn" id="submitBtn" onclick="requestReport()">Request Report</button>
+
+  <!-- PAT config (collapsed by default) -->
+  <div class="card">
+    <details id="patDetails">
+      <summary>GitHub Token (required once)</summary>
+      <div class="inner">
+        <div class="field">
+          <label for="pat">Personal Access Token</label>
+          <input type="password" id="pat" placeholder="ghp_..." autocorrect="off" autocomplete="off" autocapitalize="none" spellcheck="false">
+        </div>
+        <p class="pat-note">
+          Needs <strong>workflow</strong> scope only.<br>
+          Get one at <a href="https://github.com/settings/tokens/new" target="_blank">github.com/settings/tokens/new</a>.<br>
+          Stored only in this browser — never sent anywhere except GitHub.
+        </p>
+        <p class="hint" id="patSaved" style="display:none; color: var(--green); margin-top:8px;">&#10003; Token saved</p>
+      </div>
+    </details>
+  </div>
+
+  <footer>Triggers the ebird-birding-planner GitHub Actions workflow</footer>
+</div>
+
+<script>
+  const REPO    = 'minikdj/ebird-birding-planner';
+  const WORKFLOW = 'report-on-demand.yml';
+  const STORAGE_KEY = 'bird_report_pat';
+
+  // Restore saved PAT
+  const savedPat = localStorage.getItem(STORAGE_KEY);
+  if (savedPat) {
+    document.getElementById('pat').value = savedPat;
+    document.getElementById('patSaved').style.display = 'block';
+  } else {
+    document.getElementById('patDetails').open = true;
+  }
+
+  // Save PAT on change
+  document.getElementById('pat').addEventListener('change', () => {
+    const val = document.getElementById('pat').value.trim();
+    if (val) {
+      localStorage.setItem(STORAGE_KEY, val);
+      document.getElementById('patSaved').style.display = 'block';
+    }
+  });
+
+  function setStatus(type, title, body) {
+    const el = document.getElementById('status');
+    el.className = 'status ' + type;
+    el.innerHTML = `<strong>${title}</strong>${body}`;
+    el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  function clearStatus() {
+    const el = document.getElementById('status');
+    el.className = 'status';
+    el.innerHTML = '';
+  }
+
+  async function requestReport() {
+    clearStatus();
+
+    const pat      = (document.getElementById('pat').value || localStorage.getItem(STORAGE_KEY) || '').trim();
+    const location = document.getElementById('location').value.trim();
+    const region   = document.getElementById('region').value.trim();
+    const lat      = document.getElementById('lat').value.trim();
+    const lng      = document.getElementById('lng').value.trim();
+    const focus    = document.getElementById('focus').value.trim();
+
+    if (!pat) {
+      setStatus('error', 'Token required', ' — tap "GitHub Token" below to add your PAT.');
+      document.getElementById('patDetails').open = true;
+      return;
+    }
+    if (!location || !region || !lat || !lng) {
+      setStatus('error', 'Fill in all fields', ' — location, region code, lat, and lng are required.');
+      return;
+    }
+
+    const btn = document.getElementById('submitBtn');
+    btn.disabled = true;
+    btn.textContent = 'Requesting…';
+
+    try {
+      const url = `https://api.github.com/repos/${REPO}/actions/workflows/${WORKFLOW}/dispatches`;
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Authorization':       `Bearer ${pat}`,
+          'Accept':              'application/vnd.github+json',
+          'Content-Type':        'application/json',
+          'X-GitHub-Api-Version': '2022-11-28',
+        },
+        body: JSON.stringify({
+          ref: 'main',
+          inputs: { location, region, lat, lng, focus },
+        }),
+      });
+
+      if (res.status === 204) {
+        setStatus('success', 'Report requested!',
+          ` Check <strong>${document.getElementById('pat').value ? '' : ''}your email</strong> in about 5 minutes.`
+        );
+        document.getElementById('focus').value = '';
+      } else if (res.status === 401) {
+        setStatus('error', 'Token rejected (401)', ' — check your PAT and make sure it has the <em>workflow</em> scope.');
+      } else if (res.status === 422) {
+        setStatus('error', 'Validation error (422)', ' — check the region code and coordinates.');
+      } else {
+        const text = await res.text();
+        setStatus('error', `GitHub error (${res.status})`, ` — ${text.slice(0, 200)}`);
+      }
+    } catch (err) {
+      setStatus('error', 'Network error', ` — ${err.message}. Check your connection.`);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Request Report';
+    }
+  }
+</script>
+</body>
+</html>
