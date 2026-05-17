@@ -14,11 +14,15 @@ The Routine agent runs daily at 09:00 UTC, clones the GitHub repo, runs
 The FULL_BRIEFING path is confirmed. QUIET_PERIOD rescheduling and all fallback
 delivery paths still need documented E2E verification (see Section 14).
 
-**New as of 2026-05-17:** Life list lifer flagging (★ LIFER OPPORTUNITY badges),
-moon phase + migration notes, frontal passage / fallout detection from NWS hourly
-data, and Ohio-birds LISTSERV scraper (active — `scripts/wa.exe` URL confirmed,
-surfaces community thread subjects as daily email "Community Buzz" section).
-163 unit tests passing.
+**Three expert reviews completed 2026-05-17** (architecture, code quality,
+security). Key fixes applied during review: workflow concurrency group added,
+`permissions: contents: read` added to workflow, send step gated on
+generate-email success, BRIEFING_FOCUS sanitized against prompt injection,
+workflow input validation added (region/lat/lng format), stale draft age warning
+added in send.js. Review findings documented in Section 12; new technical debt
+items and security action items added to Section 14.
+
+**171 unit tests passing.**
 
 ---
 
@@ -394,6 +398,17 @@ Add these in the GitHub repo → Settings → Secrets → Actions:
 | `BRIEFING_EMAIL_TO` | Your email address |
 | `BRIEFING_FROM_EMAIL` | Same verified sender as in Routine |
 | `NWS_CONTACT_EMAIL` | Your real email (NWS User-Agent) |
+| `GH_PAT` | **Fine-grained PAT** scoped to this repo only, with Actions: read & write permissions. Do NOT use a classic repo-scoped or workflow-scoped PAT — classic PATs stored in `localStorage` on the github.io origin are accessible to any XSS on that domain. Create at GitHub → Settings → Developer Settings → Fine-grained tokens. |
+
+### bird-report.html (mobile web app)
+
+`bird-report.html` is served via GitHub Pages at:
+**https://minikdj.github.io/ebird-birding-planner/bird-report.html**
+
+Save this URL to your iPhone home screen. The page stores the PAT in
+`localStorage` and dispatches `report-on-demand.yml` via the GitHub API. Use a
+fine-grained PAT (scoped to this repo, Actions: read & write only) — see the
+`GH_PAT` row above.
 
 ### Implementation checklist
 
@@ -1185,73 +1200,66 @@ Confirmed working in Gmail (desktop). Still needed:
 
 ## 12. Code Review Findings
 
-Two full review passes completed (2026-05-15 and 2026-05-16). All CRIT, HIGH,
-MEDIUM, and LOW findings are fixed. This section is the permanent audit record.
+This section is the permanent audit record for all review passes. Earlier passes
+(2026-05-15 and 2026-05-16) resolved all CRIT/HIGH/MEDIUM/LOW findings from the
+first two rounds; those records are preserved below. The third round (2026-05-17)
+covers architecture, code quality, and security reviews of the full repo including
+the GitHub Actions on-demand pipeline added in Section 3B.
 
-### CRIT — Fix immediately
+### Architecture Findings (from 2026-05-17 review)
 
-| ID | File | Finding | Fix |
-|----|------|---------|-----|
-| CRIT-1 | `birdcast-client.js:13` | BirdCast API key hardcoded as `static API_KEY` — committed in plain text, appears in every URL, leaks in logs | Move to `process.env.BIRDCAST_API_KEY`; pass via constructor same pattern as `EBirdClient` |
-| CRIT-2 | `ebird-client.js:54–99` | `locId`, `regionCode`, `speciesCode`, `y/m/d` interpolated directly into URL path segments with no format validation — path traversal injection against eBird API | Validate: `locId` → `/^L\d+$/`; `regionCode` → existing `REGION_CODE_RE`; `y/m/d` → integer range checks |
-| CRIT-3 | `ebird-client.js:11–27` | Rate limiter has TOCTOU gap under concurrent `Promise.all` — all 10 callers can read the limit check before any pushes a timestamp, sending a burst | Chain requests through a shared promise queue so only one caller executes the gate at a time |
+| Severity | Finding | Status |
+|----------|---------|--------|
+| Critical | Stale `briefing-draft.json` delivery risk — old draft could be emailed if generate-email step fails silently | **Fixed** — send step now gated on generate-email success; stale draft age warning added in `send.js` |
+| High | No retries on upstream API calls (eBird, BirdCast, NWS, iNat, Macaulay) — single transient failure aborts the run | Open — see Section 14 Technical Debt |
+| High | No JSON schema contracts between pipeline stages — `triage-output.json` and `aggregate-output.json` shape is implicit | Open — see Section 14 Technical Debt |
+| High | No eBird DTO/adapter layer — eBird field renames affect 30+ call sites across the codebase | Open — see Section 14 Technical Debt |
+| High | Race condition on concurrent workflow runs — two `report-on-demand` dispatches could overwrite `briefing-draft.json` | **Fixed** — `concurrency` group added to workflow |
+| Medium | `buildOutlook` in `aggregate.js` is sequential with unnecessary 300ms sleeps (~1.5s wasted per run) | Open — see Section 14 Technical Debt |
+| Medium | `maybeRefreshLifeList()` runs at module import time (top-level side effect in `aggregate.js`) | Open — see Section 14 Technical Debt |
+| Medium | Region-specific hardcoding (`NOISE_SPECIES`, `FAVORITE_HOTSPOTS`, phenology weeks) lives in source code, not config | Open — see Section 14 Technical Debt |
+| Missing | No artifact upload for debugging failed workflow runs | Open — see Section 14 Technical Debt |
+| Missing | No E2E CI test using fixture mode | Open — see Section 14 Technical Debt |
 
-### MEDIUM — Fix in same pass
+### Code Quality Findings (from 2026-05-17 review)
 
-| ID | File | Finding | Fix |
-|----|------|---------|-----|
-| M1 | `index.js:813`, `ebird-client.js:47` | Raw `error.message` including endpoint path returned to MCP caller — leaks internal URL structure | Log full error to stderr; return generic message to caller |
-| M2 | `birdcast-client.js:60–68` | BirdCast error logs include full URL with API key | Strip key param before logging: `url.replace(/([?&]key=)[^&]+/, '$1***')` |
-| M3 | `index.js:291,621` | `radius_km` accepted as string — silent NaN if LLM passes `"30"` instead of `30` | Add `coerceNumber(v, fallback)` helper; use throughout |
-| M4 | `index.js:291` | `radius_km` unbounded — caller can trigger 500km scan + fan-out API calls | Clamp to `Math.min(Math.max(1, radius), 100)` |
-| M5 | `utils.js:348` | `isCincinnatiArea` matched all of Ohio via `startsWith("US-OH")` | Removed; replaced by `getFavoriteHotspots()` which uses haversine + BRIEFING_FAVORITE_HOTSPOTS env var |
-| M6 | `index.js:104–120` | `getBirdCastData` has no inflight coalescing — two concurrent tool calls for same region/date both miss cache and fire duplicate requests | Store in-flight promises; return to concurrent waiters |
-| M7 | `index.js:477` | Hotspot ID detection uses `!locId.startsWith("L")` — matches "Lagoon Park" as a location ID | Use `/^L\d+$/.test(locId)` |
-| M8 | `index.js:699` | `best_day_to_bird` calls `birdcast.getLiveMigration` directly, bypassing the 24h cache | Route through `getBirdCastData` |
-| M9 | `index.js:714–718` | `getRegionStats` fetched per past day but `statsNote` never used in ranking — wasted API quota | Include `stats.numSpecies` in day score, or remove the call |
+| Severity | Finding | Status |
+|----------|---------|--------|
+| High | Cincinnati defaults silently apply to any unconfigured user — no warning emitted | Open — see Section 14 Technical Debt |
+| High | Three different "high migration" thresholds across `triage.js`, `aggregate.js`, `handleBestDayToBird` — should be one constant | Open — see Section 14 Technical Debt |
+| High | `handlePlanVacationBirding` is 225 lines with the same filter block written 4x and 6 hardcoded frequency thresholds | Open — see Section 14 Technical Debt |
+| High | Tests reimplement logic inline rather than importing it (negative coverage — tests can pass while the real code is broken) | Open — see Section 14 Technical Debt |
+| High | `process.exit()` fires at module import time in `src/index.js` — breaks test isolation | Open — see Section 14 Technical Debt |
+| Medium | `resolveHotspot` name→locId lookup duplicated in `handleHotspotDetails` and `handleCompareHotspots` | Open — see Section 14 Technical Debt |
+| Medium | lat/lng validation duplicated inline across 4 files | Open — see Section 14 Technical Debt |
+| Medium | Life list CSV parser uses `split(',')` — doesn't handle quoted commas (species names like "Smith, John") | Open — see Section 14 Technical Debt |
+| Medium | `shown[0]` crash if all observations dedup to empty array | **Fixed** |
+| Medium | `buildOutlook` comment says "parallel" but code is sequential | Open (cosmetic — actual fix is parallelizing, see Technical Debt) |
+| Low | `formatNumber(NaN)` returns `"NaN"` in emails | Open — low priority |
 
-### LOW — Originally tracked
+### Security Findings (from 2026-05-17 review)
 
-| ID | File | Status | Finding |
-|----|------|--------|---------|
-| L1 | `index.js` | **FIXED** | Tool schemas extracted to `src/tools.js` (~213 lines). `index.js` reduced from ~1400 to ~1215 lines. Tool dispatch `switch` replaced with `TOOL_HANDLERS` Map — adding a tool is now one line. Full handler extraction deferred (requires dependency injection refactor). |
-| L2 | `birdcast-client.js` | **FIXED** | `_get` → `#get` (true ES private method) |
-| L3 | `index.js` | **FIXED** | `compare_hotspots` capped at 10 items |
-| L4 | `index.js` | **FIXED** | `hotspot_details` name input capped at 200 chars |
-| L5 | `index.js` | **FIXED** | Named constants for scoring weights and candidate limits |
-| L6 | `index.js` | **FIXED** | `getHotspotSpeciesCounts` catch block now logs to stderr |
-| L7 | `index.js` | **DONE** (already was) | `best_day_to_bird` stats bonus already applied at line 990 |
-| L8 | `utils.js` | **FIXED** | Comment documenting "this weekend" asymmetry |
-| L9 | `briefing.js` | **N/A** | `briefing.js` deleted — file no longer exists. Legacy fix applied before deletion. |
+| Severity | Finding | Status |
+|----------|---------|--------|
+| Critical | Classic workflow-scope PAT stored in `localStorage` on github.io origin — any XSS on that origin can steal it; swap for fine-grained PAT scoped to this repo only | Open — requires user action (see Section 14) |
+| Critical | `BRIEFING_FOCUS` was unsanitized prompt injection vector passed directly into Claude system prompt | **Fixed** — input sanitized in `generate-email.js` |
+| High | Workflow inputs (`location`, `lat`, `lng`, `region`) were unvalidated — arbitrary strings reached Node scripts | **Fixed** — validation step added to workflow |
+| High | No `permissions: contents: read` on workflow — default write permissions broader than needed | **Fixed** |
+| Medium | Resend API key likely not domain-scoped — key theft allows sending from any verified Resend domain | Open — requires user action (see Section 14) |
+| Medium | `ANTHROPIC_API_KEY` has no spend cap — runaway workflow loop could incur unbounded charges | Open — requires user action (see Section 14) |
+| Medium | `htmlBody` from Claude sent verbatim to Resend without sanitization — malformed output could affect email clients | Open — see Section 14 Technical Debt |
+| Low | `resend` and `@anthropic-ai/sdk` use caret versions — supply-chain risk for production workloads | Open — see Section 14 Technical Debt |
 
-### Round 2 review findings (2026-05-16)
+### Earlier review passes (2026-05-15 and 2026-05-16) — all fixed
 
-From architecture, security, and code quality reviews of the full repo.
-
-#### Fixed in same pass
-
-| ID | Severity | File | Finding |
-|----|----------|------|---------|
-| R2-1 | HIGH | `index.js` | `handleHotspotDetails`: `getRecentObservations` calls missing `.catch(() => [])` — eBird errors crash the handler |
-| R2-2 | HIGH | `index.js` | `handleCompareHotspots`: same missing `.catch()` + `subId` absent makes checklist count always 1 (added `.filter(Boolean)`) |
-| R2-3 | HIGH | `index.js` | `handleCompareHotspots`: `input.startsWith("L")` accepts "Lake Erie Metropark" as locId — replaced with `/^L\d+$/.test()` |
-| R2-4 | MEDIUM | `index.js` | `handleMigrationForecast`: NWS weather always fetched for default coords regardless of `region_code` passed — now resolves region to coordinates |
-| R2-5 | MEDIUM | `index.js` | `handleBirdingWindow`: `activityCutoff` unbounded below — clamped to minimum 6:00 AM |
-| R2-6 | MEDIUM | `briefing.js` | HTML injection in template interpolation — fixed before file was deleted |
-| R2-7 | MEDIUM | `index.js` | `handleBestDayToBird`: `getBirdCastData` not wrapped in `.catch()` — BirdCast failure kills entire tool response |
-| R2-8 | LOW | `index.js` | `loadLifeList` reads from disk on every `plan_vacation_birding` call — now cached in `_lifeListCache` module-level variable |
-| R2-9 | LOW | `package.json` | `chart.js` and `chartjs-node-canvas` listed as deps but never imported — removed. MCP SDK pinned to exact version `1.29.0` |
-
-#### Investigated / resolved
-
-| ID | Severity | File | Finding |
-|----|----------|------|---------|
-| R2-A | MEDIUM | `index.js` | Rate limiter concern investigated: the gate resolves *before* the HTTP call starts, so concurrent HTTP requests can be in flight. Effective throughput is not 1 req/RTT — the limiter is correct. `getHotspotSpeciesCounts` manual batching is redundant but harmless. No fix needed. |
-| R2-B | MEDIUM | `index.js` | **FIXED** — Exported `toYMD()` from `utils.js`, replaced `toISOString().slice(0,10)` in `handleBestDayToBird`. Added `toYMD()` import in `scripts/triage.js` and `scripts/aggregate.js`. |
-| R2-C | LOW | `index.js` | **FIXED** — `NWSClient` and `INaturalistClient` now import and use `Cache` from `utils.js`. Own `Map`-based caches deleted. |
-| R2-D | LOW | `index.js` | **FIXED** — Added `InputError` class in `index.js`; outer MCP handler catches `instanceof InputError` and surfaces `.message` directly to caller. |
-| R2-E | LOW | `index.js` | **FIXED** — `loadLifeList` now parses header row to find "Common Name" column index dynamically instead of hardcoding position. |
-| R2-F | LOW | `scripts/` | **FIXED** — `degreesToCardinal` exported from `birdcast-client.js`. Duplicate `cardinalFromDeg` in `triage.js` deleted and replaced with import. |
+All CRIT, HIGH, MEDIUM, and LOW findings from the first two review rounds are
+resolved. Key fixes: BirdCast API key moved to env var (CRIT-1); path traversal
+validation on eBird URL parameters (CRIT-2); rate-limiter TOCTOU gap fixed with
+promise queue (CRIT-3); error message leakage patched (M1–M2); input coercion
+and radius clamping (M3–M4); isCincinnatiArea removed (M5); inflight coalescing
+(M6); hotspot ID regex (M7–M8); chart.js removed (R2-9); toYMD UTC fix (R2-B);
+shared Cache class (R2-C); InputError class (R2-D); dynamic CSV column detection
+(R2-E); degreesToCardinal deduplication (R2-F).
 
 ### Email chart gap — Resolved (2026-05-17)
 
@@ -1384,7 +1392,33 @@ Resolved items are struck through and kept for historical reference.
 | 8 | Test degraded modes: NWS down, BirdCast outside season, iNat timeout | Testing | Mock API failures locally or run during a known outage window. |
 | 9 | Verify Resend custom domain (`BRIEFING_FROM_EMAIL`) | Config | Go to resend.com/domains → add and verify your domain → set `BRIEFING_FROM_EMAIL=Birding Briefing <briefing@yourdomain.com>` in .env. Without this, delivery is limited to the Resend account owner's address. |
 | 10 | Confirm BirdCast API key approved for programmatic use | Config | Contact birdcast.info to confirm your key is approved for automated requests. Working in practice; formal approval unconfirmed. |
-| 14 | Scope Resend API key | Security | In Resend dashboard, scope the key to your sending domain only. Set a spend alert. Limits blast radius if the key leaks. |
+| 14 | Scope Resend API key to sending domain only in Resend dashboard | Security (S-M1) | In Resend dashboard → API Keys, restrict key to your sending domain. Limits blast radius if key leaks. |
+| 15 | Swap classic workflow-scope PAT for fine-grained PAT (scoped to this repo, Actions: read & write only) in `bird-report.html` | Security (S-C1) | GitHub → Settings → Developer Settings → Fine-grained tokens. Classic PAT on the github.io origin is accessible to any XSS on that domain. |
+| 16 | Set spend cap on `ANTHROPIC_API_KEY` at console.anthropic.com | Security (S-M2) | Prevents runaway charges if the workflow is triggered in a loop. |
+| 17 | Consider HTML sanitizer pass on `htmlBody` before Resend send (e.g. `sanitize-html` npm package) | Security (S-M3) | Claude-generated HTML sent verbatim; a sanitizer pass reduces risk from malformed output affecting email clients. |
+| 18 | Pin exact versions for `resend` and `@anthropic-ai/sdk` in `package.json` | Security (S-L1) | Caret versions allow patch/minor updates that could introduce supply-chain changes. |
+
+### Technical Debt / Future Work
+
+Items identified in the 2026-05-17 review passes. Prioritized roughly by impact.
+
+| Item | Source | Notes |
+|------|--------|-------|
+| Add retries (3x exponential backoff) to `ebird-client`, `birdcast-client`, `nws-client`, `media-client` | Architecture (A-H1) | Single transient failure currently aborts the run. |
+| Add JSON schema files for `triage-output` and `aggregate-output`; validate in `generate-email.js` | Architecture (A-H2) | Prevents silent schema drift between pipeline stages. |
+| Add eBird DTO/adapter layer so field renames affect one file | Architecture (A-H3) | Currently 30+ call sites would need updates on any eBird API field rename. |
+| Extract pure scoring logic from `triage.js` into `src/triage-scorer.js` for direct unit testing | Code Quality (CQ-H4) | Reduces the "tests reimplement logic inline" problem. |
+| Extract `resolveHotspot()` helper used by `handleHotspotDetails` and `handleCompareHotspots` | Code Quality (CQ-M1) | Eliminates name→locId duplication. |
+| Extract `validateCoords()` helper (currently duplicated in 4 files) | Code Quality (CQ-M2) | Single point for lat/lng range validation. |
+| Move region config (`NOISE_SPECIES`, `FAVORITE_HOTSPOTS`, phenology weeks) to `config/region.js` | Architecture (A-M3) | Makes the tool usable outside Cincinnati without source edits. |
+| Parallelize `buildOutlook` in `aggregate.js` (remove sequential 300ms sleeps) | Architecture (A-M1) | ~1.5s wasted per run; straightforward `Promise.all` refactor. |
+| Remove top-level side effect: move `maybeRefreshLifeList()` call into `main()` in `aggregate.js` | Architecture (A-M2) | Top-level calls execute at `import` time, breaking test isolation and future ESM lazy-loading. |
+| Fix life list CSV parser to handle quoted commas (species names like "Smith, John") | Code Quality (CQ-M3) | Use a proper CSV parser or quoted-field regex instead of bare `split(',')`. |
+| Add artifact upload to workflow (`triage-output.json`, `aggregate-output.json`, `briefing-draft.json`) | Architecture (A-Miss1) | Enables post-mortem debugging of failed runs without re-triggering. |
+| Add E2E CI test using fixture mode (`BRIEFING_TEST_FIXTURE=full_lifer`) | Architecture (A-Miss2) | Confirms the full pipeline compiles and produces valid JSON on every push. |
+| Emit a warning when Cincinnati defaults apply to an unconfigured user | Code Quality (CQ-H1) | Silent defaults make misconfigurations hard to spot. |
+| Consolidate the three "high migration" threshold constants into one shared constant | Code Quality (CQ-H2) | `triage.js`, `aggregate.js`, and `handleBestDayToBird` each have their own value. |
+| Refactor `handlePlanVacationBirding` — extract repeated filter block and named frequency constants | Code Quality (CQ-H3) | 225-line handler with 4x duplicated filter logic and 6 magic thresholds. |
 
 ### Bug Fixes Identified in Testing
 
@@ -1407,6 +1441,7 @@ All 4 bugs identified in initial testing (B1–B4) resolved 2026-05-17. See git 
 
 | Date | Change |
 |------|--------|
+| 2026-05-17 | Architecture, code quality, and security reviews completed. Key fixes applied: workflow concurrency group, permissions: contents: read, send step gated on generate-email success, focus input sanitization (prompt injection defense), workflow input validation (region/lat/lng format), stale draft age warning in send.js. Review findings documented in Section 12; technical debt items added to Section 14. |
 | 2026-05-15 | Initial spec created. Infrastructure decision: Anthropic Routines. All Phase 2 tools and enrichments documented. |
 | 2026-05-15 | Core architecture resolved: Routines run Node scripts (`triage.js`, `aggregate.js`) via bash rather than calling the local MCP server. Added Section 4B (Script Architecture for Routines). MCP server unchanged for Claude Desktop. |
 | 2026-05-15 | Added Section 12: code review findings (security + architecture). CRIT and MEDIUM fixes applied. |
