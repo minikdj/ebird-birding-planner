@@ -39,6 +39,13 @@ async function main() {
     return;
   }
 
+  // Configurable migration thresholds (see .env.example)
+  const SCORE_HIGH_BIRDS  = parseInt(process.env.BRIEFING_SCORE_HIGH_BIRDS  || '500000', 10);
+  const SCORE_MED_BIRDS   = parseInt(process.env.BRIEFING_SCORE_MED_BIRDS   || '100000', 10);
+  const SCORE_LOW_BIRDS   = parseInt(process.env.BRIEFING_SCORE_LOW_BIRDS   || '50000',  10);
+  const FULL_THRESHOLD    = parseInt(process.env.BRIEFING_FULL_THRESHOLD    || '5',      10);
+  const QUIET_THRESHOLD   = parseInt(process.env.BRIEFING_QUIET_THRESHOLD   || '2',      10);
+
   const birdcast = new BirdCastClient(birdcastKey);
   const nws = new NWSClient();
   const ebird = new EBirdClient(ebirdKey);
@@ -59,11 +66,11 @@ async function main() {
   }
 
   const cumBirds = live?.cumulativeBirds ?? 0;
-  if (cumBirds > 500000) {
+  if (cumBirds > SCORE_HIGH_BIRDS) {
     migrationScore += 3;
-  } else if (cumBirds > 100000) {
+  } else if (cumBirds > SCORE_MED_BIRDS) {
     migrationScore += 2;
-  } else if (cumBirds > 50000) {
+  } else if (cumBirds > SCORE_LOW_BIRDS) {
     migrationScore += 1;
   }
 
@@ -131,15 +138,15 @@ async function main() {
       recommendation = RECOMMENDATION.QUIET_PERIOD;
       recommendationReason = 'BirdCast skipped; no notable species found';
     }
-  } else if (migrationScore >= 5 || live?.isHigh === true || notableSpecies.length > 0) {
+  } else if (migrationScore >= FULL_THRESHOLD || live?.isHigh === true || notableSpecies.length > 0) {
     recommendation = RECOMMENDATION.FULL_BRIEFING;
     const reasons = [];
     if (live?.isHigh) reasons.push('High migration intensity (isHigh flag)');
-    if (migrationScore >= 5) reasons.push(`Migration score ${migrationScore}/10`);
+    if (migrationScore >= FULL_THRESHOLD) reasons.push(`Migration score ${migrationScore}/10`);
     if (notableSpecies.length > 0) reasons.push(`${notableSpecies.length} notable species`);
     if (FAVORABLE_WINDS.has(overnightWind)) reasons.push('favorable weather');
     recommendationReason = reasons.join(' + ');
-  } else if (migrationScore >= 2) {
+  } else if (migrationScore >= QUIET_THRESHOLD) {
     recommendation = RECOMMENDATION.QUIET_PERIOD;
     recommendationReason = `Migration score ${migrationScore}/10, no notable species`;
   } else {

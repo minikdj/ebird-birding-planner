@@ -792,6 +792,11 @@ them from environment at runtime:
 | `BRIEFING_SKIP_BIRDCAST` | Set to `true` for non-US locations where BirdCast has no data. Triage uses eBird notables only; sends FULL_BRIEFING if notables found, QUIET_PERIOD otherwise. |
 | `NWS_CONTACT_EMAIL` | Contact email in NWS User-Agent header (default `birding-briefing@example.com`). Set to a real address. |
 | `EBIRD_LIFE_LIST_CSV` | Path to eBird life list CSV export — enables "new for life list" highlights in vacation planning |
+| `BRIEFING_SCORE_HIGH_BIRDS` | Birds-aloft threshold for +3 score bonus (default `500000`). Lower for Pacific coast or sparse-migration regions. |
+| `BRIEFING_SCORE_MED_BIRDS` | Birds-aloft threshold for +2 score bonus (default `100000`). |
+| `BRIEFING_SCORE_LOW_BIRDS` | Birds-aloft threshold for +1 score bonus (default `50000`). |
+| `BRIEFING_FULL_THRESHOLD` | Minimum migrationScore for FULL_BRIEFING (default `5`). Raise for Gulf Coast spring where high scores are routine. |
+| `BRIEFING_QUIET_THRESHOLD` | Minimum migrationScore for QUIET_PERIOD; below this is SILENT_SKIP (default `2`). |
 
 ### What does NOT need to be configured (hardcoded defaults)
 
