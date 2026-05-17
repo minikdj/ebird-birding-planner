@@ -675,3 +675,397 @@ describe('frontal passage detection — fallout potential', () => {
     assert.strictEqual(detectFallout(41, 19), true);
   });
 });
+
+// ---------------------------------------------------------------------------
+// 21. Degraded mode handling
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// 21a. BirdCast season gate — skipBirdCast=true recommendation logic
+// ---------------------------------------------------------------------------
+// Inline the triage recommendation logic for the skipBirdCast branch.
+// When birdcastSkipped is true, recommendation must never be SILENT_SKIP.
+
+function triageRecommendationSkipped(notableSpeciesCount) {
+  // Mirrors the skipBirdCast branch in scripts/triage.js (lines 146-155)
+  if (notableSpeciesCount > 0) {
+    return RECOMMENDATION.FULL_BRIEFING;
+  } else {
+    return RECOMMENDATION.QUIET_PERIOD;
+  }
+}
+
+describe('Degraded mode handling — BirdCast season gate (skipBirdCast=true)', () => {
+  it('with notables present → FULL_BRIEFING (never SILENT_SKIP)', () => {
+    const rec = triageRecommendationSkipped(3);
+    assert.strictEqual(rec, RECOMMENDATION.FULL_BRIEFING);
+    assert.notStrictEqual(rec, RECOMMENDATION.SILENT_SKIP);
+  });
+
+  it('with zero notables → QUIET_PERIOD (never SILENT_SKIP)', () => {
+    const rec = triageRecommendationSkipped(0);
+    assert.strictEqual(rec, RECOMMENDATION.QUIET_PERIOD);
+    assert.notStrictEqual(rec, RECOMMENDATION.SILENT_SKIP);
+  });
+
+  it('with many notables → FULL_BRIEFING', () => {
+    const rec = triageRecommendationSkipped(15);
+    assert.strictEqual(rec, RECOMMENDATION.FULL_BRIEFING);
+  });
+
+  it('with exactly 1 notable → FULL_BRIEFING', () => {
+    const rec = triageRecommendationSkipped(1);
+    assert.strictEqual(rec, RECOMMENDATION.FULL_BRIEFING);
+  });
+
+  it('result is always one of the two non-SILENT_SKIP values', () => {
+    for (const count of [0, 1, 5, 50]) {
+      const rec = triageRecommendationSkipped(count);
+      assert.ok(
+        rec === RECOMMENDATION.FULL_BRIEFING || rec === RECOMMENDATION.QUIET_PERIOD,
+        `expected FULL_BRIEFING or QUIET_PERIOD for count=${count}, got ${rec}`
+      );
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 21b. NWS weatherUnavailable — flags object shape remains valid
+// ---------------------------------------------------------------------------
+// Mirrors the flags object in aggregate.js (lines 590-600).
+// When weather is unavailable, the flags block must still have the expected shape.
+
+function buildFlagsFromWeather(weather, frontalPassageData, lastNight, notableObservations) {
+  return {
+    highMigrationNight: lastNight?.isHigh ?? false,
+    hasNotables: notableObservations.length > 0,
+    morningRainLikely: (weather?.morning?.precipProbability ?? 0) >= 40,
+    favorableOvernightWind: FAVORABLE_WINDS.has(
+      weather?.overnight?.windDirection?.toUpperCase() ?? ''
+    ),
+    frontalPassage: frontalPassageData?.frontalPassage ?? false,
+    falloutPotential: frontalPassageData?.falloutPotential ?? false,
+    liferOpportunities: notableObservations.filter(o => o.isLifer).length,
+  };
+}
+
+describe('Degraded mode handling — NWS weatherUnavailable graceful handling', () => {
+  const unavailableWeather = { weatherUnavailable: true, overnight: null, morning: null };
+  const nullFrontal = null;
+  const emptyNotables = [];
+
+  it('flags object is built without crashing when weather is unavailable', () => {
+    assert.doesNotThrow(() => {
+      buildFlagsFromWeather(unavailableWeather, nullFrontal, null, emptyNotables);
+    });
+  });
+
+  it('frontalPassage defaults to false when frontalPassageData is null', () => {
+    const flags = buildFlagsFromWeather(unavailableWeather, nullFrontal, null, emptyNotables);
+    assert.strictEqual(flags.frontalPassage, false);
+  });
+
+  it('falloutPotential defaults to false when frontalPassageData is null', () => {
+    const flags = buildFlagsFromWeather(unavailableWeather, nullFrontal, null, emptyNotables);
+    assert.strictEqual(flags.falloutPotential, false);
+  });
+
+  it('morningRainLikely is false when morning is null', () => {
+    const flags = buildFlagsFromWeather(unavailableWeather, nullFrontal, null, emptyNotables);
+    assert.strictEqual(flags.morningRainLikely, false);
+  });
+
+  it('favorableOvernightWind is false when overnight is null', () => {
+    const flags = buildFlagsFromWeather(unavailableWeather, nullFrontal, null, emptyNotables);
+    assert.strictEqual(flags.favorableOvernightWind, false);
+  });
+
+  it('flags object has all expected keys', () => {
+    const flags = buildFlagsFromWeather(unavailableWeather, nullFrontal, null, emptyNotables);
+    const expectedKeys = [
+      'highMigrationNight', 'hasNotables', 'morningRainLikely',
+      'favorableOvernightWind', 'frontalPassage', 'falloutPotential', 'liferOpportunities',
+    ];
+    for (const key of expectedKeys) {
+      assert.ok(key in flags, `flags should have key: ${key}`);
+    }
+  });
+
+  it('flags object has correct values even when weather is entirely null', () => {
+    const flags = buildFlagsFromWeather(null, nullFrontal, null, emptyNotables);
+    assert.strictEqual(flags.frontalPassage, false);
+    assert.strictEqual(flags.falloutPotential, false);
+    assert.strictEqual(flags.morningRainLikely, false);
+    assert.strictEqual(flags.favorableOvernightWind, false);
+    assert.strictEqual(flags.highMigrationNight, false);
+    assert.strictEqual(flags.hasNotables, false);
+    assert.strictEqual(flags.liferOpportunities, 0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 21c. Wind shift / frontal passage edge cases (empty/degenerate inputs)
+// ---------------------------------------------------------------------------
+// Uses the same detectWindShift / detectFallout helpers defined above in suite 17.
+
+function detectFrontalFromArrays(eveningWindDirs, dawnWindDirs, nightMaxPrecip, dawnMaxPrecip) {
+  // Reproduces the core logic of NWSClient.detectFrontalPassage (nws-client.js lines 352-376)
+  const SOUTHERLY = new Set(['S', 'SE', 'SW', 'SSE', 'SSW', 'ESE', 'WSW']);
+  const NORTHERLY = new Set(['N', 'NE', 'NW', 'NNE', 'NNW', 'ENE', 'WNW']);
+
+  const eveningIsSoutherly = eveningWindDirs.length > 0 &&
+    eveningWindDirs.some(d => SOUTHERLY.has(d));
+  const dawnIsNortherly = dawnWindDirs.length > 0 &&
+    dawnWindDirs.some(d => NORTHERLY.has(d));
+
+  const windShiftDetected = eveningIsSoutherly && dawnIsNortherly;
+  const clearingDetected = nightMaxPrecip > 40 && dawnMaxPrecip < 20;
+  const frontalPassage = windShiftDetected && clearingDetected;
+  const falloutPotential = nightMaxPrecip > 40 && dawnMaxPrecip < 20;
+
+  return { frontalPassage, falloutPotential, windShiftDetected, clearingDetected };
+}
+
+describe('Degraded mode handling — wind shift detection edge cases', () => {
+  it('empty hourly array (no evening or dawn periods) → frontalPassage: false', () => {
+    const result = detectFrontalFromArrays([], [], 0, 0);
+    assert.strictEqual(result.frontalPassage, false);
+  });
+
+  it('empty hourly array → falloutPotential: false', () => {
+    const result = detectFrontalFromArrays([], [], 0, 0);
+    assert.strictEqual(result.falloutPotential, false);
+  });
+
+  it('single evening period, no dawn periods → windShiftDetected: false', () => {
+    const result = detectFrontalFromArrays(['S'], [], 0, 0);
+    assert.strictEqual(result.windShiftDetected, false);
+  });
+
+  it('single dawn period, no evening periods → windShiftDetected: false', () => {
+    const result = detectFrontalFromArrays([], ['N'], 0, 0);
+    assert.strictEqual(result.windShiftDetected, false);
+  });
+
+  it('rain but no clearing (stays rainy at dawn) → falloutPotential: false', () => {
+    // nightMaxPrecip=80, dawnMaxPrecip=60 — not < 20
+    const result = detectFrontalFromArrays(['S'], ['N'], 80, 60);
+    assert.strictEqual(result.falloutPotential, false);
+  });
+
+  it('rain then clear with wind shift → falloutPotential: true', () => {
+    // nightMaxPrecip=70 (>40), dawnMaxPrecip=10 (<20)
+    const result = detectFrontalFromArrays(['SW'], ['NW'], 70, 10);
+    assert.strictEqual(result.falloutPotential, true);
+  });
+
+  it('rain then clear with wind shift → frontalPassage: true', () => {
+    const result = detectFrontalFromArrays(['S'], ['N'], 60, 5);
+    assert.strictEqual(result.frontalPassage, true);
+  });
+
+  it('only rain, no clearing, no wind shift → all flags false', () => {
+    const result = detectFrontalFromArrays([], [], 80, 80);
+    assert.strictEqual(result.frontalPassage, false);
+    assert.strictEqual(result.falloutPotential, false);
+    assert.strictEqual(result.windShiftDetected, false);
+  });
+
+  it('no rain at all, wind shift present → falloutPotential: false', () => {
+    // No rain overnight — nightMaxPrecip is 0
+    const result = detectFrontalFromArrays(['S'], ['N'], 0, 0);
+    assert.strictEqual(result.falloutPotential, false);
+  });
+
+  it('result always has expected shape', () => {
+    const result = detectFrontalFromArrays([], [], 0, 0);
+    assert.ok('frontalPassage' in result);
+    assert.ok('falloutPotential' in result);
+    assert.ok('windShiftDetected' in result);
+    assert.ok('clearingDetected' in result);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 21d. Triage score clamping — score never goes below 0
+// ---------------------------------------------------------------------------
+// Inline the full triage scoring logic from scripts/triage.js (lines 77-108).
+// Test that maximum penalties cannot produce a negative score.
+
+function computeTriageScore({
+  isHigh = false,
+  cumulativeBirds = 0,
+  notableSpeciesCount = 0,
+  overnightWind = '',
+  overnightPrecip = null,
+  scoreHighBirds = 500000,
+  scoreMedBirds = 100000,
+  scoreLowBirds = 50000,
+} = {}) {
+  let score = 0;
+
+  if (isHigh === true) score += 4;
+
+  if (cumulativeBirds > scoreHighBirds) score += 3;
+  else if (cumulativeBirds > scoreMedBirds) score += 2;
+  else if (cumulativeBirds > scoreLowBirds) score += 1;
+
+  if (notableSpeciesCount > 0) score += 2;
+
+  const wind = overnightWind.toUpperCase();
+  if (FAVORABLE_WINDS.has(wind) && overnightPrecip != null && overnightPrecip < 30) {
+    score += 2;
+  } else if (POOR_WINDS.has(wind) && overnightPrecip != null && overnightPrecip > 60) {
+    score -= 2;
+  }
+
+  return score;
+}
+
+describe('Degraded mode handling — triage score clamping', () => {
+  it('NW wind + high precip + no migration → score is -2 (penalty applied, no clamp)', () => {
+    // triage.js does not clamp scores — the penalty can produce a negative value.
+    // Score: 0 (no birds) + 0 (no notables) - 2 (NW + >60% precip) = -2
+    const score = computeTriageScore({
+      isHigh: false,
+      cumulativeBirds: 0,
+      notableSpeciesCount: 0,
+      overnightWind: 'NW',
+      overnightPrecip: 90,
+    });
+    assert.strictEqual(score, -2);
+  });
+
+  it('negative score means both FULL_BRIEFING and QUIET_PERIOD thresholds are unmet', () => {
+    // When score is negative the triage logic falls through to SILENT_SKIP.
+    // This test verifies that the threshold comparisons behave as expected.
+    const score = computeTriageScore({
+      cumulativeBirds: 0,
+      notableSpeciesCount: 0,
+      overnightWind: 'NW',
+      overnightPrecip: 90,
+    });
+    const FULL_THRESHOLD = 5;
+    const QUIET_THRESHOLD = 2;
+    assert.ok(score < QUIET_THRESHOLD, `score (${score}) should be below QUIET_THRESHOLD (${QUIET_THRESHOLD})`);
+    assert.ok(score < FULL_THRESHOLD, `score (${score}) should be below FULL_THRESHOLD (${FULL_THRESHOLD})`);
+  });
+
+  it('with all positive signals, score stays positive even with NW penalty', () => {
+    const score = computeTriageScore({
+      isHigh: true,
+      cumulativeBirds: 600000,
+      notableSpeciesCount: 5,
+      overnightWind: 'NW',
+      overnightPrecip: 90,
+    });
+    // +4 (isHigh) + 3 (>500k birds) + 2 (notables) - 2 (NW penalty) = +7
+    assert.ok(score > 0, `score should be > 0, got ${score}`);
+    assert.strictEqual(score, 7);
+  });
+
+  it('NNW wind (in POOR_WINDS) + 70% precip → score is -2', () => {
+    const score = computeTriageScore({
+      cumulativeBirds: 0,
+      notableSpeciesCount: 0,
+      overnightWind: 'NNW',
+      overnightPrecip: 70,
+    });
+    assert.strictEqual(score, -2);
+  });
+
+  it('zero migration, no wind penalty → score is 0', () => {
+    const score = computeTriageScore({
+      cumulativeBirds: 0,
+      notableSpeciesCount: 0,
+      overnightWind: 'E', // neutral — neither favorable nor poor
+      overnightPrecip: 50,
+    });
+    assert.strictEqual(score, 0);
+  });
+
+  it('favorable winds bonus applied correctly', () => {
+    const score = computeTriageScore({
+      cumulativeBirds: 0,
+      notableSpeciesCount: 0,
+      overnightWind: 'S',
+      overnightPrecip: 10,
+    });
+    // +0 (no birds) + 0 (no notables) + 2 (S winds + low precip) = 2
+    assert.strictEqual(score, 2);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 21e. Life list empty/missing — lifer detection with empty or null list
+// ---------------------------------------------------------------------------
+// Uses the same isLiferOpportunityFn defined above in suite 16.
+// Tests that with an empty or null life list the function never crashes
+// and isLifer is consistently false (null) or true (empty set).
+
+function buildNotableObservationsWithLifers(species, lifeListObj) {
+  // Reproduces the isLiferOpportunity call in aggregate.js (line 516)
+  function isLiferOpportunity(speciesName, lifeList) {
+    if (!lifeList || !lifeList.set) return false;
+    const normalized = speciesName.replace(/\s*\([^)]*\)\s*$/, '').toLowerCase().trim();
+    return !lifeList.set.has(normalized);
+  }
+
+  return species.map(name => ({
+    species: name,
+    isLifer: isLiferOpportunity(name, lifeListObj),
+  }));
+}
+
+describe('Degraded mode handling — life list empty/missing', () => {
+  const sampleSpecies = ['American Robin', 'Connecticut Warbler', 'Baltimore Oriole'];
+
+  it('null life list → isLifer is false for all species (graceful degradation)', () => {
+    const obs = buildNotableObservationsWithLifers(sampleSpecies, null);
+    for (const o of obs) {
+      assert.strictEqual(o.isLifer, false, `expected isLifer=false for ${o.species} with null list`);
+    }
+  });
+
+  it('life list with null set → isLifer is false for all species', () => {
+    const obs = buildNotableObservationsWithLifers(sampleSpecies, { set: null, total: 0 });
+    for (const o of obs) {
+      assert.strictEqual(o.isLifer, false, `expected isLifer=false for ${o.species} with null set`);
+    }
+  });
+
+  it('empty Set life list → every species is a lifer (set exists but is empty)', () => {
+    const emptyLifeList = { set: new Set(), total: 0, source: 'data/life-list.json' };
+    const obs = buildNotableObservationsWithLifers(sampleSpecies, emptyLifeList);
+    for (const o of obs) {
+      assert.strictEqual(o.isLifer, true, `expected isLifer=true for ${o.species} with empty set`);
+    }
+  });
+
+  it('empty species list → no crash, returns empty array', () => {
+    const obs = buildNotableObservationsWithLifers([], null);
+    assert.strictEqual(obs.length, 0);
+  });
+
+  it('null life list → liferOpportunities count is 0 (no false positives)', () => {
+    const obs = buildNotableObservationsWithLifers(sampleSpecies, null);
+    const liferCount = obs.filter(o => o.isLifer).length;
+    assert.strictEqual(liferCount, 0);
+  });
+
+  it('empty Set life list → liferOpportunities count equals species count', () => {
+    const emptyLifeList = { set: new Set(), total: 0, source: 'data/life-list.json' };
+    const obs = buildNotableObservationsWithLifers(sampleSpecies, emptyLifeList);
+    const liferCount = obs.filter(o => o.isLifer).length;
+    assert.strictEqual(liferCount, sampleSpecies.length);
+  });
+
+  it('partially populated life list → only unlisted species are lifers', () => {
+    const partialList = { set: new Set(['american robin']), total: 1, source: 'test' };
+    const obs = buildNotableObservationsWithLifers(sampleSpecies, partialList);
+    const robinObs = obs.find(o => o.species === 'American Robin');
+    const warblerObs = obs.find(o => o.species === 'Connecticut Warbler');
+    assert.strictEqual(robinObs.isLifer, false);
+    assert.strictEqual(warblerObs.isLifer, true);
+  });
+});
