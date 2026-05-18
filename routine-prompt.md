@@ -206,11 +206,15 @@ Structure your email as inline-CSS HTML (mobile-friendly, max-width 600px, table
    - **Field ID:** **Visual marks ONLY** — 2–3 sentences describing the field marks that eliminate confusion with similar species (eye-ring, hood, wing pattern, leg color, tail shape, flight style, etc.).
 
      Then close with the audio block:
-     - If `notableObservations[i].recording` is non-null, render a tappable listen link styled as a small button:
+     - If `notableObservations[i].recording` is non-null, render a tappable audio block — spectrogram image stacked above a listen button, both wrapped in the same `<a>` so the entire block is one tap target:
        ```
-       <a href="{recording.listenUrl}" style="display:inline-block;background:#1a3a2a;color:#fff;text-decoration:none;font-size:13px;font-weight:bold;padding:6px 12px;border-radius:4px;margin-top:8px">▶ Listen at Macaulay Library</a>
+       <a href="{recording.listenUrl}" style="display:block;text-decoration:none;margin-top:10px">
+         <img src="{recording.spectrogramUrl}" alt="Spectrogram of {species} song" style="display:block;width:100%;max-width:560px;height:auto;border-radius:4px 4px 0 0;background:#0f2318">
+         <div style="background:#1a3a2a;color:#fff;font-size:13px;font-weight:bold;padding:8px 12px;border-radius:0 0 4px 4px;text-align:center;font-family:Arial,sans-serif">▶ Listen at Macaulay Library</div>
+       </a>
+       <div style="font-size:10px;color:#999;margin-top:4px;font-family:Arial,sans-serif">Recorded by {recording.recordist} · or open Merlin Sound ID in the field</div>
        ```
-       Below the button add small gray attribution text: `<div style="font-size:10px;color:#999;margin-top:4px">Recorded by {recording.recordist} · or open Merlin Sound ID in the field</div>`. Email clients don't play `<audio>` tags — this link opens the Macaulay asset page in a browser with the audio player ready to play.
+       Email clients don't play `<audio>` tags — the link opens the Macaulay asset page in a browser with the audio player ready. The spectrogram (640×220 preview from the Cornell CDN) gives a visual cue that audio is available and shows the call's frequency pattern.
      - If `recording` is null, fall back to: "Listen with **Merlin Sound ID** before going."
 
      **HARD CONSTRAINT — zero audio descriptions in the Field ID prose itself.** No phonetic transcriptions, no mnemonics, no syllable patterns, no song character descriptions, no quoted call notes. Banned tokens include but are not limited to: `beecher`, `teacher`, `witchety`, `pee-oo`, `phee-phew`, `chebek`, `fitz-bew`, `drink-your-tea`, and every other syllabic bird mnemonic. The Macaulay listen link (or Merlin fallback) is the ONLY audio reference allowed in the entire email. Phonetic transcriptions from memory are hallucinated more often than not and misdirect birders in the field — the audio link is one tap away and plays real recordings.

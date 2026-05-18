@@ -110,10 +110,11 @@ export class MediaClient {
    * @param {string} commonName   - Species common name (used only for cache key)
    * @returns {Promise<{
    *   assetId: number,
-   *   listenUrl: string,    // Macaulay asset page (audio player + spectrogram)
+   *   listenUrl: string,        // Macaulay asset page (audio player + spectrogram)
+   *   spectrogramUrl: string,   // 640×220 pre-cropped spectrogram preview (CDN)
    *   recordist: string,
    *   attribution: string,
-   *   rating: number | null,// Macaulay rating 0–5
+   *   rating: number | null,    // Macaulay rating 0–5
    *   source: 'macaulay',
    * } | null>}
    */
@@ -247,9 +248,16 @@ export class MediaClient {
 
     const attribution = `Audio: ${recordist}${location ? ` · ${location}` : ''}${date ? ` · ${date}` : ''} (Macaulay Library #${assetId})`;
 
+    // Macaulay's "poster" variant is a pre-cropped 640×220 spectrogram preview —
+    // perfect aspect ratio for inline email display (the full spectrogram_small
+    // is 11448×220, which is unreadable when scaled to email width).
+    const spectrogramUrl = asset.previewUrl || asset.thumbnailUrl
+      || `https://cdn.download.ams.birds.cornell.edu/api/v1/asset/${assetId}/poster`;
+
     return {
       assetId,
       listenUrl: `https://macaulaylibrary.org/asset/${assetId}`,
+      spectrogramUrl,
       recordist,
       attribution,
       rating,

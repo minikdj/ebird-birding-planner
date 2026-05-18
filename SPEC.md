@@ -973,12 +973,15 @@ Merlin specifically cannot be embedded because it is a phone app, not a web serv
 {
   assetId: number,           // Macaulay asset ID (numeric)
   listenUrl: string,         // https://macaulaylibrary.org/asset/{assetId}
+  spectrogramUrl: string,    // 640×220 pre-cropped spectrogram preview (Cornell CDN)
   recordist: string,         // Recordist's display name
   attribution: string,       // "Audio: {name} · {location} · {date} (Macaulay Library #{id})"
   rating: number | null,     // Macaulay rating 0–5
   source: 'macaulay',
 }
 ```
+
+**Spectrogram URL selection:** the Macaulay search response exposes the full spectrogram at `largeUrl` (`spectrogram_small` variant, 11448×220 — too wide for inline email display) and a pre-cropped preview at `previewUrl` / `thumbnailUrl` (`poster` variant, 640×220, ~5KB). We use the `poster` variant — Cornell has already cropped it to a sensible aspect ratio for display.
 
 **`aggregate.js` integration:**
 - Photo and audio lookups run **in parallel** via `Promise.all` for the same top-10 notable species — no added latency over the photo-only path
@@ -995,10 +998,12 @@ The asset detail page (`https://macaulaylibrary.org/asset/{assetId}`) renders an
 
 ### Email rendering rules (defined in `routine-prompt.md` Field ID block)
 
-- **Listen button** appears at the bottom of each Chase Target card's Field ID block, immediately below the visual marks prose
-- Button style: `background:#1a3a2a; color:#fff; padding:6px 12px; border-radius:4px; font-size:13px; font-weight:bold` — design-system dark green to read as a primary action without competing with the lifer/urgency red
-- Attribution: small gray text (`font-size:10px; color:#999`) below the button — "Recorded by {recordist} · or open Merlin Sound ID in the field"
-- **Null handling**: if `recording` is null, omit the button entirely and render only "Listen with **Merlin Sound ID** before going."
+- **Audio block** appears at the bottom of each Chase Target card's Field ID, immediately below the visual marks prose. It's a stacked two-piece composition wrapped in a single `<a>`:
+  - **Spectrogram image** on top — `recording.spectrogramUrl` rendered at `width:100%; max-width:560px; height:auto; border-radius:4px 4px 0 0`. The dark-green `#0f2318` background fills any letterbox space, matching the Chase Target hero photo treatment.
+  - **Listen button** on the bottom — dark green `#1a3a2a` strip with white "▶ Listen at Macaulay Library" text, `border-radius:0 0 4px 4px` so it fuses visually with the spectrogram above.
+- The whole stack is one tap target — tap anywhere on the spectrogram or button to open the Macaulay asset page (audio player + full-resolution spectrogram).
+- **Attribution** below the audio block: small gray text (`font-size:10px; color:#999`) — "Recorded by {recordist} · or open Merlin Sound ID in the field"
+- **Null handling**: if `recording` is null, omit the entire audio block and render only "Listen with **Merlin Sound ID** before going."
 - **No phonetic mnemonics anywhere in the email** — this rule predates audio integration and remains in force. The Macaulay link is the only audio reference allowed in the Field ID prose.
 
 ---
