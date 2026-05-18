@@ -1,0 +1,363 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "aggregate-output.schema.json",
+  "title": "Aggregate Output",
+  "description": "Schema for the JSON blob produced by scripts/aggregate.js. Field paths are referenced by routine-prompt.md Step 3. If you rename or restructure fields here, update the prompt documentation AND the schema version comment.",
+  "type": "object",
+  "required": [
+    "date",
+    "region",
+    "location",
+    "migration",
+    "weather",
+    "birdingWindow",
+    "moon",
+    "hotspots",
+    "notableObservations",
+    "listservSightings",
+    "hotspotNotes",
+    "lifeList",
+    "flags",
+    "sourceStatus"
+  ],
+  "additionalProperties": true,
+  "properties": {
+    "date": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+      "description": "ISO date string YYYY-MM-DD for the briefing day"
+    },
+    "region": {
+      "type": "string",
+      "description": "eBird region code e.g. US-OH-061"
+    },
+    "location": {
+      "type": "object",
+      "required": ["lat", "lng"],
+      "additionalProperties": false,
+      "properties": {
+        "lat": { "type": "number", "minimum": -90, "maximum": 90 },
+        "lng": { "type": "number", "minimum": -180, "maximum": 180 }
+      }
+    },
+    "migration": {
+      "type": "object",
+      "required": ["lastNight", "season", "topExpectedSpecies", "narrativeSummary"],
+      "additionalProperties": true,
+      "properties": {
+        "lastNight": {
+          "description": "BirdCast last-night migration summary. Null if unavailable.",
+          "oneOf": [
+            { "type": "null" },
+            {
+              "type": "object",
+              "additionalProperties": true,
+              "properties": {
+                "cumulativeBirds": { "type": ["number", "null"] },
+                "formattedCount": { "type": ["string", "null"] },
+                "isHigh": { "type": ["boolean", "null"] }
+              }
+            }
+          ]
+        },
+        "season": {
+          "description": "BirdCast season comparison summary. Null if unavailable.",
+          "oneOf": [
+            { "type": "null" },
+            { "type": "object", "additionalProperties": true }
+          ]
+        },
+        "topExpectedSpecies": {
+          "description": "Top 20 expected species by BirdCast historical frequency. Null if unavailable.",
+          "oneOf": [
+            { "type": "null" },
+            {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["name", "speciesCode", "probability"],
+                "additionalProperties": false,
+                "properties": {
+                  "name": { "type": "string" },
+                  "speciesCode": { "type": "string" },
+                  "probability": { "type": "number", "minimum": 0, "maximum": 100 }
+                }
+              }
+            }
+          ]
+        },
+        "narrativeSummary": {
+          "type": ["string", "null"],
+          "description": "Plain-English BirdCast migration summary for the email"
+        }
+      }
+    },
+    "weather": {
+      "type": "object",
+      "required": ["today", "outlook"],
+      "additionalProperties": true,
+      "properties": {
+        "today": {
+          "type": "object",
+          "required": ["weatherUnavailable"],
+          "additionalProperties": true,
+          "properties": {
+            "overnight": {
+              "description": "NWS overnight weather. Null if unavailable.",
+              "oneOf": [
+                { "type": "null" },
+                {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "properties": {
+                    "windDirection": { "type": ["string", "null"] },
+                    "windSpeedMph": { "type": ["number", "null"] },
+                    "precipProbability": { "type": ["number", "null"] }
+                  }
+                }
+              ]
+            },
+            "morning": {
+              "description": "NWS morning weather. Null if unavailable.",
+              "oneOf": [
+                { "type": "null" },
+                {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "properties": {
+                    "precipProbability": { "type": ["number", "null"] },
+                    "tempF": { "type": ["number", "null"] }
+                  }
+                }
+              ]
+            },
+            "migrationInterpretation": { "type": ["string", "null"] },
+            "rainImpactNote": { "type": ["string", "null"] },
+            "weatherUnavailable": { "type": "boolean" },
+            "frontalPassage": { "type": ["boolean", "null"] },
+            "falloutPotential": { "type": ["boolean", "null"] },
+            "windShiftDetected": { "type": ["boolean", "null"] },
+            "clearingDetected": { "type": ["boolean", "null"] },
+            "frontalNote": { "type": ["string", "null"] }
+          }
+        },
+        "outlook": {
+          "description": "5-day forward outlook. Array of per-day objects. Live runs have richer shape; fixture runs have simpler shape. Both are valid. Items may be null if a day's fetch failed.",
+          "type": "array",
+          "items": {
+            "oneOf": [
+              { "type": "null" },
+              {
+                "type": "object",
+                "required": ["date"],
+                "additionalProperties": true,
+                "properties": {
+                  "date": { "type": "string" }
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    "birdingWindow": {
+      "type": "object",
+      "required": ["civilTwilight", "sunrise"],
+      "additionalProperties": true,
+      "properties": {
+        "civilTwilight": { "type": ["string", "null"] },
+        "sunrise": { "type": ["string", "null"] },
+        "goldenHourEnd": { "type": ["string", "null"] },
+        "solarNoon": { "type": ["string", "null"] },
+        "sunset": { "type": ["string", "null"] },
+        "activityCutoff": { "type": ["string", "null"] },
+        "note": { "type": ["string", "null"] }
+      }
+    },
+    "moon": {
+      "type": "object",
+      "required": ["phaseName", "illuminationPct", "phase"],
+      "additionalProperties": true,
+      "properties": {
+        "phaseName": { "type": "string" },
+        "illuminationPct": { "type": "number", "minimum": 0, "maximum": 100 },
+        "phase": { "type": "number", "minimum": 0, "maximum": 1 },
+        "migrationNote": { "type": ["string", "null"] }
+      }
+    },
+    "hotspots": {
+      "type": "array",
+      "description": "Top-5 nearby hotspots ranked by 7-day species count",
+      "items": {
+        "type": "object",
+        "required": ["locId", "name"],
+        "additionalProperties": true,
+        "properties": {
+          "locId": { "type": "string" },
+          "name": { "type": "string" },
+          "speciesCount7Day": { "type": "number" },
+          "speciesCount7d": { "type": "number" },
+          "allTimeSpecies": { "type": "number" },
+          "county": { "type": ["string", "null"] }
+        }
+      }
+    },
+    "notableObservations": {
+      "type": "array",
+      "description": "Notable eBird observations grouped by species. Each item represents the most recent sighting of a species + its 48h trail.",
+      "items": {
+        "type": "object",
+        "required": [
+          "species",
+          "speciesCode",
+          "location",
+          "date",
+          "count",
+          "isLifer",
+          "recentSightings",
+          "photo",
+          "recording"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "species": { "type": "string" },
+          "speciesCode": { "type": ["string", "null"] },
+          "location": { "type": ["string", "null"] },
+          "date": { "type": ["string", "null"] },
+          "count": { "type": ["number", "null"] },
+          "locId": { "type": ["string", "null"] },
+          "source": { "type": ["string", "null"] },
+          "isLifer": { "type": "boolean" },
+          "recentSightings": {
+            "description": "All confirmed sightings of this species within the last 48 hours (up to 5), newest first. Null in fixture data that predates this field.",
+            "oneOf": [
+              { "type": "null" },
+              {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["location", "date"],
+                  "additionalProperties": true,
+                  "properties": {
+                    "location": { "type": ["string", "null"] },
+                    "date": { "type": ["string", "null"] },
+                    "count": { "type": ["number", "null"] },
+                    "locId": { "type": ["string", "null"] }
+                  }
+                }
+              }
+            ]
+          },
+          "photo": {
+            "description": "Best photo for this species. Macaulay Library primary, Wikipedia fallback. Null if not found.",
+            "oneOf": [
+              { "type": "null" },
+              {
+                "type": "object",
+                "additionalProperties": true,
+                "properties": {
+                  "url": { "type": ["string", "null"] },
+                  "thumbnailUrl": { "type": ["string", "null"] },
+                  "photographer": { "type": ["string", "null"] },
+                  "attribution": { "type": ["string", "null"] },
+                  "source": { "type": ["string", "null"] }
+                }
+              }
+            ]
+          },
+          "recording": {
+            "description": "Best audio recording for this species. Macaulay Library only. Null if not found.",
+            "oneOf": [
+              { "type": "null" },
+              {
+                "type": "object",
+                "additionalProperties": true,
+                "properties": {
+                  "assetId": { "type": ["string", "number", "null"] },
+                  "listenUrl": { "type": ["string", "null"] },
+                  "recordist": { "type": ["string", "null"] },
+                  "attribution": { "type": ["string", "null"] },
+                  "rating": { "type": ["number", "null"] },
+                  "source": { "type": ["string", "null"] }
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    "listservSightings": {
+      "type": "array",
+      "description": "OHIO-BIRDS LISTSERV subject-line sightings. The `body` field is intentionally ABSENT from all items (security: prompt-injection defense — anyone can post to OHIO-BIRDS and the body is unsanitized). We use additionalProperties: true rather than false here so future fields can be added without a schema update, but body is never listed as a valid property.",
+      "items": {
+        "type": "object",
+        "required": ["subject", "url", "source"],
+        "additionalProperties": true,
+        "properties": {
+          "subject": { "type": "string" },
+          "species": {
+            "type": ["array", "null"],
+            "items": { "type": "string" }
+          },
+          "location": { "type": ["string", "null"] },
+          "url": { "type": "string" },
+          "source": { "type": "string" }
+        }
+      }
+    },
+    "hotspotNotes": {
+      "type": "object",
+      "description": "Per-hotspot micro-habitat notes keyed by eBird locId. Loaded from data/hotspot-notes.json. May be empty object if file is missing.",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": true
+      }
+    },
+    "lifeList": {
+      "description": "Life list summary. Null if data/life-list.json is not loaded.",
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "required": ["totalSpecies", "source"],
+          "additionalProperties": true,
+          "properties": {
+            "totalSpecies": { "type": "number" },
+            "source": { "type": "string" }
+          }
+        }
+      ]
+    },
+    "flags": {
+      "type": "object",
+      "required": [
+        "highMigrationNight",
+        "hasNotables",
+        "morningRainLikely",
+        "favorableOvernightWind",
+        "frontalPassage",
+        "falloutPotential",
+        "liferOpportunities"
+      ],
+      "additionalProperties": true,
+      "properties": {
+        "highMigrationNight": { "type": "boolean" },
+        "hasNotables": { "type": "boolean" },
+        "morningRainLikely": { "type": "boolean" },
+        "favorableOvernightWind": { "type": "boolean" },
+        "frontalPassage": { "type": "boolean" },
+        "falloutPotential": { "type": "boolean" },
+        "liferOpportunities": { "type": "number" }
+      }
+    },
+    "sourceStatus": {
+      "type": "object",
+      "description": "Per-source health for every external fetch. Values are 'ok' or 'error: <message>'. Fixture runs use a single 'fixture' key with pattern 'ok: <fixtureName>'.",
+      "additionalProperties": {
+        "type": "string",
+        "description": "Source status string. Pattern: 'ok' | 'ok: ...' | 'error: ...'",
+        "pattern": "^(ok|error: )"
+      }
+    }
+  }
+}

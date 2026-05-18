@@ -83,48 +83,72 @@
   "notableObservations": [
     {
       "species": "Connecticut Warbler",
+      "speciesCode": "conwar",
       "location": "Otto Armleder Memorial Park",
       "date": "2026-05-17",
       "count": 1,
       "locId": "L298164",
       "source": "ebird",
-      "isLifer": true
+      "isLifer": true,
+      "recentSightings": [
+        { "location": "Otto Armleder Memorial Park", "date": "2026-05-17 07:15", "count": 1, "locId": "L298164" }
+      ],
+      "photo": null,
+      "recording": null
     },
     {
       "species": "Alder Flycatcher",
+      "speciesCode": "aldfly",
       "location": "Otto Armleder Memorial Park",
       "date": "2026-05-17",
       "count": 1,
       "locId": "L298164",
       "source": "ebird",
-      "isLifer": true
+      "isLifer": true,
+      "recentSightings": [
+        { "location": "Otto Armleder Memorial Park", "date": "2026-05-17 07:15", "count": 1, "locId": "L298164" }
+      ],
+      "photo": null,
+      "recording": null
     },
     {
       "species": "Tennessee Warbler",
+      "speciesCode": "tenwar",
       "location": "Otto Armleder Memorial Park",
       "date": "2026-05-16",
       "count": 3,
       "locId": "L298164",
       "source": "ebird",
-      "isLifer": true
+      "isLifer": true,
+      "recentSightings": [],
+      "photo": null,
+      "recording": null
     },
     {
       "species": "Mourning Warbler",
+      "speciesCode": "mouwar",
       "location": "Shawnee Lookout Park",
       "date": "2026-05-16",
       "count": 1,
       "locId": "L285901",
       "source": "ebird",
-      "isLifer": false
+      "isLifer": false,
+      "recentSightings": [],
+      "photo": null,
+      "recording": null
     },
     {
       "species": "Yellow-bellied Flycatcher",
+      "speciesCode": "yebfly",
       "location": "Spring Grove Cemetery & Arboretum",
       "date": "2026-05-15",
       "count": 2,
       "locId": "L285760",
       "source": "ebird",
-      "isLifer": false
+      "isLifer": false,
+      "recentSightings": [],
+      "photo": null,
+      "recording": null
     }
   ],
 

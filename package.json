@@ -16,7 +16,8 @@
     "triage": "node scripts/triage.js",
     "aggregate": "node scripts/aggregate.js",
     "send": "node scripts/send.js",
-    "test:unit": "node scripts/test-unit.js"
+    "test:unit": "node scripts/test-unit.js",
+    "validate:schema": "node scripts/validate-schema.js"
   },
   "keywords": [
     "ebird",
@@ -30,6 +31,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "0.52.0",
     "@modelcontextprotocol/sdk": "1.29.0",
+    "ajv": "^8.20.0",
     "resend": "6.12.3",
     "sanitize-html": "2.17.4",
     "suncalc": "^1.9.0"

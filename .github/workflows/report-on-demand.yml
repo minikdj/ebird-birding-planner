@@ -29,7 +29,7 @@ permissions:
 
 concurrency:
   group: report-on-demand
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   generate-report:
@@ -37,6 +37,18 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Rate cap (max 20 dispatches per 24h)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          YESTERDAY=$(date -u -d '24 hours ago' '+%Y-%m-%dT%H:%M:%SZ')
+          COUNT=$(gh api "repos/${{ github.repository }}/actions/workflows/report-on-demand.yml/runs?event=workflow_dispatch&created=>${YESTERDAY}" --jq '.total_count')
+          echo "Workflow dispatches in last 24h: $COUNT"
+          if [ "$COUNT" -gt 20 ]; then
+            echo "ERROR: rate cap exceeded (limit 20/24h). Aborting to protect API budget."
+            exit 1
+          fi
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -93,6 +105,10 @@ jobs:
           BRIEFING_SKIP_BIRDCAST: ${{ secrets.BRIEFING_SKIP_BIRDCAST }}
         run: node scripts/aggregate.js > aggregate-output.json
 
+      - name: Validate aggregate schema
+        if: steps.triage.outputs.recommendation != 'SILENT_SKIP'
+        run: node scripts/validate-schema.js aggregate-output.json
+
       - name: Generate email
         id: generate
         # Always runs — generate-email.js handles SILENT_SKIP internally (writes minimal draft)
@@ -105,7 +121,6 @@ jobs:
         run: node scripts/generate-email.js
 
       - name: Send email
-        if: steps.generate.outcome == 'success'
         env:
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           SENDGRID_API_KEY: ${{ secrets.SENDGRID_API_KEY }}
