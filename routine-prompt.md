@@ -181,7 +181,7 @@ When `notableObservations[i].photo` is non-null, include the photo. Rules:
 *Chase card* (use for Chase Targets):
 White background, `border-left: 4px solid #c0392b`, no tinted background. Inside:
 - Hero photo (if `photo` non-null): full-width image at top of card, before any text (see Bird photo spec above)
-- Header line: `◉ LIFER` badge (if applicable) + species name in large bold dark text (NOT red) + location in gray
+- Header line: `◉ LIFER` badge (if applicable) + species name in large bold dark text (NOT red) + location and recency in gray — format: "[Most recent location] · reported [today/yesterday], [HH:MM]" (e.g. "Burnet Woods · reported today, 07:31")
 - Body: prose with **bold inline labels** for `Where to look:` and `Field ID:` — NO nested boxes, NO sub-cards, NO colored inner containers
 - Bottom: a single full-width red bar (`background:#c0392b; color:#fff; padding:8px; border-radius:0 0 2px 2px`) if time-sensitive, with the departure time or urgency note
 
@@ -202,7 +202,7 @@ Structure your email as inline-CSS HTML (mobile-friendly, max-width 600px, table
 2. **Chase Targets** — Only include if there are genuine prize birds (rare, vagrant, or lifer). Do not include common migrants.
    - Each card (1–3 max) uses the Chase Card format from the Design System.
    - `◉ LIFER` badge is mandatory if `isLifer: true` — in the card header AND in the Notable Sightings table row for the same species.
-   - **Where to look:** Lead with the full recent sighting trail from `recentSightings[]`. List every confirmed location within the last 48 hours with its time — e.g. "Confirmed at **Burnet Woods** (today 07:31) and **Otto Armleder** (yesterday 15:20) — check both." If only one recent location, say so explicitly ("Single report at X — bird may still be present"). Then add trail-level directions from `hotspotNotes[locId].trails[].directions` if available — exact trail names, GPS, landmarks. More recent = more prominent.
+   - **Where to look:** Write prose directions first — use `hotspotNotes[locId].trails[].directions` for exact trail names, GPS, landmarks. Then close with a single compact sentence summarising the `recentSightings[]` data as a quoted recent trail: e.g. "Recent reports: **Burnet Woods** today 07:31 (×1) · **Otto Armleder** yesterday 18:19–19:41 (3 reports) — start at the most recent site." Collapse multiple sightings at the same location into one entry with a time range and count. Do NOT dump the raw array as an arrow-separated list — integrate it naturally as supporting evidence at the end of the prose.
    - **Field ID:** 2–3 sentences. Steps in order:
      1. **Visual clincher first** — the one field mark that eliminates confusion with similar species (complete vs broken eye-ring, wing pattern in flight, leg color, etc.).
      2. **Vocalization from All About Birds** — fetch `allAboutBirdsUrl` using your browser tool and copy the song/call description text from the Sounds page verbatim (or closely paraphrased). Do NOT transcribe from memory — phonetic mnemonics vary across sources and hallucinated mnemonics misdirect birders. If the page is unreachable, write "Song is distinctive — load **Merlin Sound ID** and listen before going" and stop.
@@ -224,7 +224,7 @@ Structure your email as inline-CSS HTML (mobile-friendly, max-width 600px, table
 5. **Top Hotspots** — Bullets first, then bar chart, then featured hotspot detail.
    - Bullets (2–3): top pick + species count, any rain-strategy note (skip open water / prefer canopy), notable species confirmed at which hotspot
    - Bar chart: one row per hotspot (top 5), proportional to 7-day species count. Featured/best hotspot bar in `#1a3a2a`, others in `#52796f`.
-   - Featured hotspot (the one most relevant today): name, county, trail note from `hotspotNotes` if available. Other hotspots listed compactly below the chart.
+   - Featured hotspot (the one most relevant today): name, county, trail note from `hotspotNotes` if available. Other hotspots listed compactly below the chart. Do NOT include phonetic song transcriptions anywhere in hotspot notes — refer to Merlin Sound ID instead.
 
 6. **Notable / Rare Sightings** — Only if `hasNotables`. Bullets first, then table.
    - Bullets (2–3): rarest species seen, any lifers, most recent sighting
