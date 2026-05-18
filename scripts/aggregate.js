@@ -505,12 +505,6 @@ async function main() {
     notableGroupMap.get(obs.comName).push(obs);
   }
 
-  // Helper: construct All About Birds sounds-page URL from common name.
-  // All About Birds blocks server-side fetches (403) but the Routine's Claude browser
-  // can access it — include the URL so the Routine can fetch it at write time.
-  const toAABUrl = (name) =>
-    `https://www.allaboutbirds.org/guide/${name.replace(/ /g, '_')}/sounds`;
-
   // NOTE: Ohio-birds LISTSERV sightings are passed through to listservSightings (below)
   // as raw { subject, url, source } objects rather than merged into notableObservations.
   // The LISTSERV archive exposes subject lines publicly but message bodies require login,
@@ -543,7 +537,6 @@ async function main() {
         locId: mostRecent.locId ?? null,
         source: mostRecent._source ?? 'ebird',
         isLifer: isLiferOpportunity(comName, lifeList),
-        allAboutBirdsUrl: toAABUrl(comName),
         recentSightings,
       };
     })
@@ -584,9 +577,6 @@ async function main() {
   // notableObservations[].recentSightings — all confirmed sightings of this species within
   //   the last 48 hours (up to 5), sorted newest-first. Each: { location, date, count, locId }.
   //   Use in Chase Target "Where to look" to show the full recent location trail.
-  // notableObservations[].allAboutBirdsUrl — All About Birds sounds page for this species.
-  //   All About Birds blocks Node.js fetches (403) but the Routine's Claude browser can
-  //   access it. Fetch this URL at write time to get authoritative song descriptions.
 
   const liferOpportunities = notableObservations.filter(o => o.isLifer).length;
 

@@ -98,7 +98,6 @@ The JSON contains:
 - `notableObservations` — rare/unusual species, last 14 days, 50km; sorted by recency. Each entry has:
   - `isLifer: boolean` — true = not yet on life list
   - `recentSightings: []` — every confirmed sighting of this species in the last 48 hours (up to 5), newest first; each `{ location, date, count, locId }`. Use this to show the full recent location trail in Chase Target cards — birders need to know every spot the bird has shown up, not just the most recent.
-  - `allAboutBirdsUrl: string` — All About Birds sounds page URL. Fetch this with your browser tool before writing the Field ID vocalization description — use the text on that page verbatim, do not transcribe from memory.
 - `listservSightings` — recent trip reports from Ohio-birds LISTSERV, each `{ subject, body, species[], location, url, source }`. The `body` is the first ~1200 chars of the actual email text; `species` is a parsed list of birds mentioned. Use this to surface what the Ohio birding community is actively finding and discussing. May be empty if archive is unavailable.
 - `hotspotNotes` — keyed by eBird locId; each entry has `trails[]`, `habitatSummary`, `rareSpeciesPotential`. Cross-reference `notableObservations[].locId` with `hotspotNotes` to write specific "Where to look" field directions in Chase Target cards.
 - `lifeList` — `{ totalSpecies, source }` or null if life list not loaded
@@ -203,10 +202,9 @@ Structure your email as inline-CSS HTML (mobile-friendly, max-width 600px, table
    - Each card (1–3 max) uses the Chase Card format from the Design System.
    - `◉ LIFER` badge is mandatory if `isLifer: true` — in the card header AND in the Notable Sightings table row for the same species.
    - **Where to look:** Write prose directions first — use `hotspotNotes[locId].trails[].directions` for exact trail names, GPS, landmarks. Then close with a single compact sentence summarising the `recentSightings[]` data as a quoted recent trail: e.g. "Recent reports: **Burnet Woods** today 07:31 (×1) · **Otto Armleder** yesterday 18:19–19:41 (3 reports) — start at the most recent site." Collapse multiple sightings at the same location into one entry with a time range and count. Do NOT dump the raw array as an arrow-separated list — integrate it naturally as supporting evidence at the end of the prose.
-   - **Field ID:** 2–3 sentences. Steps in order:
-     1. **Visual clincher first** — the one field mark that eliminates confusion with similar species (complete vs broken eye-ring, wing pattern in flight, leg color, etc.).
-     2. **Vocalization from All About Birds** — fetch `allAboutBirdsUrl` using your browser tool and copy the song/call description text from the Sounds page verbatim (or closely paraphrased). Do NOT transcribe from memory — phonetic mnemonics vary across sources and hallucinated mnemonics misdirect birders. If the page is unreachable, skip the vocalization and go straight to step 3.
-     3. Close with: "Confirm song with **Merlin Sound ID** before going."
+   - **Field ID:** **Visual marks ONLY** — 2–3 sentences describing the field marks that eliminate confusion with similar species (eye-ring, hood, wing pattern, leg color, tail shape, flight style, etc.). Then close with exactly one line: "Listen with **Merlin Sound ID** before going."
+
+     **HARD CONSTRAINT — zero audio descriptions in Field ID.** No phonetic transcriptions, no mnemonics, no syllable patterns, no song character descriptions, no quoted call notes. Banned tokens include but are not limited to: `beecher`, `teacher`, `witchety`, `pee-oo`, `phee-phew`, `chebek`, `fitz-bew`, `drink-your-tea`, and every other syllabic bird mnemonic. The Merlin Sound ID redirect is the ONLY audio reference allowed in the entire email. Phonetic transcriptions from memory are hallucinated more often than not and misdirect birders in the field — Merlin is one tap away on the user's phone and plays real recordings, so there is no value in attempting to describe a song in text.
    - If `migration.lastNight.isHigh`, note that additional individuals of the target species are likely present.
    - Omit entirely if no genuine prize birds exist.
 
