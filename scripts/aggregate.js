@@ -19,7 +19,9 @@ import { NWSClient } from '../src/nws-client.js';
 import { EBirdClient } from '../src/ebird-client.js';
 import { OhioBirdsClient } from '../src/ohio-birds-client.js';
 import { MediaClient } from '../src/media-client.js';
-import { DEFAULTS, formatNumber, toYMD, computeActivityCutoff, FAVORABLE_WINDS, POOR_WINDS } from '../src/utils.js';
+import { DEFAULTS, formatNumber, toYMD, computeActivityCutoff, FAVORABLE_WINDS } from '../src/utils.js';
+import { loadLifeListSync, isLifer } from '../src/lifelist.js';
+import { rateNight, loadThresholdsFromEnv } from '../src/migration-scoring.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -166,40 +168,11 @@ function loadHotspotNotes() {
   return hotspotNotes;
 }
 
-/**
- * Load the user's life list from data/life-list.json.
- * Returns a Set of normalized species names (lowercase, parentheticals stripped).
- * Returns null if the file is missing or unreadable.
- */
+// Life list loading + lifer check are unified in src/lifelist.js
+// (single source of truth for both the pipeline and the MCP server).
+const LIFE_LIST_JSON_PATH = fileURLToPath(new URL('../data/life-list.json', import.meta.url));
 function loadLifeList() {
-  try {
-    const lifeListPath = new URL('../data/life-list.json', import.meta.url);
-    const raw = readFileSync(fileURLToPath(lifeListPath), 'utf8');
-    const data = JSON.parse(raw);
-    if (!Array.isArray(data.species)) {
-      process.stderr.write('aggregate.js: life-list.json has no species array\n');
-      return { set: null, total: 0, source: 'data/life-list.json' };
-    }
-    const normalizedSet = new Set(
-      data.species.map(name => name.replace(/\s*\([^)]*\)\s*$/, '').toLowerCase().trim())
-    );
-    return { set: normalizedSet, total: data.totalSpecies, source: 'data/life-list.json' };
-  } catch (err) {
-    process.stderr.write(`aggregate.js: Could not load life list — ${err.message}\n`);
-    return null;
-  }
-}
-
-/**
- * Check if a species name is NOT in the life list (i.e., it would be a lifer).
- * @param {string} speciesName - common name of the species
- * @param {{ set: Set<string> } | null} lifeList
- * @returns {boolean} true if this species is NOT on the life list
- */
-function isLiferOpportunity(speciesName, lifeList) {
-  if (!lifeList || !lifeList.set) return false;
-  const normalized = speciesName.replace(/\s*\([^)]*\)\s*$/, '').toLowerCase().trim();
-  return !lifeList.set.has(normalized);
+  return loadLifeListSync({ jsonPath: LIFE_LIST_JSON_PATH });
 }
 
 /**
@@ -315,15 +288,8 @@ async function buildOutlook(birdcast, nws, config, today) {
     const rainImpactNote = computeRainImpactNote(weather);
     const birdingWindow = buildBirdingWindow(dateStr, config.lat, config.lng);
 
-    const favorable = FAVORABLE_WINDS.has(wind ?? '') && (overnightPrecip ?? 100) < 30;
-    const poor = POOR_WINDS.has(wind ?? '') || (overnightPrecip ?? 0) > 60;
-
-    let outlookRating;
-    if (isHigh || (birds > 300_000 && favorable)) outlookRating = 'Excellent';
-    else if (birds > 100_000 && favorable) outlookRating = 'Good';
-    else if (birds > 50_000 && !poor) outlookRating = 'Moderate';
-    else if (poor) outlookRating = 'Poor';
-    else outlookRating = 'Quiet';
+    // Categorical outlook rating — unified via src/migration-scoring.js
+    const { rating: outlookRating } = rateNight(live, weather);
 
     return {
       dateStr,
@@ -571,7 +537,7 @@ async function main() {
         count: mostRecent.howMany ?? null,
         locId: mostRecent.locId ?? null,
         source: mostRecent._source ?? 'ebird',
-        isLifer: isLiferOpportunity(comName, lifeList),
+        isLifer: isLifer(comName, lifeList),
         recentSightings,
       };
     })

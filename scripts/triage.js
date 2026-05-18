@@ -7,7 +7,8 @@ import { readFileSync } from 'fs';
 import { BirdCastClient, degreesToCardinal } from '../src/birdcast-client.js';
 import { NWSClient } from '../src/nws-client.js';
 import { EBirdClient } from '../src/ebird-client.js';
-import { DEFAULTS, formatNumber, toYMD, FAVORABLE_WINDS, POOR_WINDS, RECOMMENDATION } from '../src/utils.js';
+import { DEFAULTS, formatNumber, toYMD, FAVORABLE_WINDS, RECOMMENDATION } from '../src/utils.js';
+import { rateNight, loadThresholdsFromEnv } from '../src/migration-scoring.js';
 
 async function main() {
   // TEST FIXTURE MODE — bypass all API calls with pre-baked scenario data.
@@ -54,12 +55,10 @@ async function main() {
     return;
   }
 
-  // Configurable migration thresholds (see .env.example)
-  const SCORE_HIGH_BIRDS  = parseInt(process.env.BRIEFING_SCORE_HIGH_BIRDS  || '500000', 10);
-  const SCORE_MED_BIRDS   = parseInt(process.env.BRIEFING_SCORE_MED_BIRDS   || '100000', 10);
-  const SCORE_LOW_BIRDS   = parseInt(process.env.BRIEFING_SCORE_LOW_BIRDS   || '50000',  10);
-  const FULL_THRESHOLD    = parseInt(process.env.BRIEFING_FULL_THRESHOLD    || '5',      10);
-  const QUIET_THRESHOLD   = parseInt(process.env.BRIEFING_QUIET_THRESHOLD   || '2',      10);
+  // Configurable migration thresholds — unified via src/migration-scoring.js.
+  const thresholds = loadThresholdsFromEnv();
+  const FULL_THRESHOLD  = thresholds.fullThreshold;
+  const QUIET_THRESHOLD = thresholds.quietThreshold;
 
   const birdcast = new BirdCastClient(birdcastKey);
   const nws = new NWSClient();
@@ -74,38 +73,19 @@ async function main() {
     ebird.getNearbyNotableObservations(lat, lng, 2, 50).catch(() => null),
   ]);
 
-  let migrationScore = 0;
-
-  if (live?.isHigh === true) {
-    migrationScore += 4;
-  }
-
-  const cumBirds = live?.cumulativeBirds ?? 0;
-  if (cumBirds > SCORE_HIGH_BIRDS) {
-    migrationScore += 3;
-  } else if (cumBirds > SCORE_MED_BIRDS) {
-    migrationScore += 2;
-  } else if (cumBirds > SCORE_LOW_BIRDS) {
-    migrationScore += 1;
-  }
-
   const notableSpecies = Array.isArray(notableObs)
     ? [...new Set(notableObs.map((o) => o.comName).filter(Boolean))]
     : [];
 
-  if (notableSpecies.length > 0) {
-    migrationScore += 2;
-  }
+  // Unified scoring (src/migration-scoring.js). Produces the same integer the
+  // inlined logic did — see scripts/test-unit.js section 21d which inlines the
+  // formula and is guaranteed to keep matching.
+  const { score: migrationScore } = rateNight(live, weather, {
+    notableSpeciesCount: notableSpecies.length,
+    thresholds,
+  });
 
   const overnightWind = weather?.overnight?.windDirection?.toUpperCase() ?? '';
-  const overnightPrecip = weather?.overnight?.precipProbability ?? null;
-
-  // Use shared FAVORABLE_WINDS / POOR_WINDS from utils (imported at top)
-  if (FAVORABLE_WINDS.has(overnightWind) && overnightPrecip != null && overnightPrecip < 30) {
-    migrationScore += 2;
-  } else if (POOR_WINDS.has(overnightWind) && overnightPrecip != null && overnightPrecip > 60) {
-    migrationScore -= 2;
-  }
 
   const peakInterval = Array.isArray(live?.nightSeries) && live.nightSeries.length > 0
     ? live.nightSeries.reduce((best, cur) => (cur.numAloft > (best?.numAloft ?? -1) ? cur : best), null)
