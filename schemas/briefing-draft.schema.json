@@ -1,0 +1,13 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "briefing-draft.json",
+  "title": "Briefing Draft",
+  "description": "Schema for the JSON blob produced by scripts/generate-email.js and consumed by scripts/send.js. Intentionally restricted to {subject, htmlBody} — recipient (to), sender (from), cc, bcc, and reply-to MUST come from environment variables / loadConfig() and are NEVER read from the draft. This schema enforces that trust boundary: any draft with a `to` field is rejected.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["subject", "htmlBody"],
+  "properties": {
+    "subject":  { "type": "string", "minLength": 1, "maxLength": 200 },
+    "htmlBody": { "type": "string", "minLength": 1 }
+  }
+}
