@@ -1,3 +1,5 @@
+import { fetchWithRetry } from './utils.js';
+
 const BASE_URL = 'https://api.ebird.org/v2';
 const RATE_LIMIT_MAX = 90;
 const RATE_LIMIT_WINDOW_MS = 60 * 1000;
@@ -51,12 +53,12 @@ export class EBirdClient {
       }
     }
 
-    const response = await fetch(url.toString(), {
+    const response = await fetchWithRetry(url.toString(), {
       headers: {
         'X-eBirdApiToken': this.apiKey,
       },
       signal: AbortSignal.timeout(10_000),
-    });
+    }, { retries: 1, baseMs: 500, label: 'ebird:request' });
 
     if (!response.ok) {
       throw new Error(

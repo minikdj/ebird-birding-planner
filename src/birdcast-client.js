@@ -9,6 +9,8 @@
  * Outside those windows all data methods return null gracefully.
  */
 
+import { fetchWithRetry } from './utils.js';
+
 export class BirdCastClient {
   static BASE_URL = 'https://dashboard.birdcast.org/api/v1';
 
@@ -68,7 +70,7 @@ export class BirdCastClient {
       const elapsed = Date.now() - this._lastBirdCastCall;
       if (elapsed < 200) await new Promise(r => setTimeout(r, 200 - elapsed));
       this._lastBirdCastCall = Date.now();
-      const response = await fetch(url, { signal: AbortSignal.timeout(10_000) });
+      const response = await fetchWithRetry(url, { signal: AbortSignal.timeout(10_000) }, { retries: 1, baseMs: 500, label: 'birdcast:request' });
       if (!response.ok) {
         const safeUrl = url.replace(/([?&]key=)[^&]+/, '$1***');
         process.stderr.write(

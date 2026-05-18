@@ -1,4 +1,4 @@
-import { Cache, haversineKm } from './utils.js';
+import { Cache, haversineKm, fetchWithRetry } from './utils.js';
 
 const BASE_URL = 'https://api.inaturalist.org/v1';
 const RATE_LIMIT_DELAY_MS = 1000;
@@ -63,10 +63,10 @@ export class INaturalistClient {
 
   async #get(url) {
     try {
-      const response = await fetch(url, {
+      const response = await fetchWithRetry(url, {
         signal: AbortSignal.timeout(10_000),
         headers: { 'User-Agent': USER_AGENT },
-      });
+      }, { retries: 1, baseMs: 500, label: 'inat:nearby' });
       if (!response.ok) {
         process.stderr.write(
           `INaturalistClient: HTTP ${response.status} for ${url}\n`

@@ -11,7 +11,7 @@
 // rarely change, so aggressive caching is safe and important for email
 // generation speed (each Chase Target card needs a photo).
 
-import { Cache } from './utils.js';
+import { Cache, fetchWithRetry } from './utils.js';
 
 // Cache TTL: 7 days — photos for a species change rarely
 const PHOTO_CACHE_TTL = 7 * 24 * 60 * 60 * 1000;
@@ -199,13 +199,13 @@ export class MediaClient {
     });
     const url = `${ML_SEARCH_URL}?${params}`;
 
-    const resp = await fetch(url, {
+    const resp = await fetchWithRetry(url, {
       signal: AbortSignal.timeout(TIMEOUT_MS),
       headers: {
         'Accept':     'application/json',
         'User-Agent': USER_AGENT,
       },
-    });
+    }, { retries: 1, baseMs: 500, label: 'macaulay:photo' });
 
     if (!resp.ok) return null;
 
@@ -263,13 +263,13 @@ export class MediaClient {
     });
     const url = `${ML_SEARCH_URL}?${params}`;
 
-    const resp = await fetch(url, {
+    const resp = await fetchWithRetry(url, {
       signal: AbortSignal.timeout(TIMEOUT_MS),
       headers: {
         'Accept':     'application/json',
         'User-Agent': USER_AGENT,
       },
-    });
+    }, { retries: 1, baseMs: 500, label: 'macaulay:recording' });
 
     if (!resp.ok) return null;
 
@@ -329,13 +329,13 @@ export class MediaClient {
     const title = encodeURIComponent(commonName.replace(/ /g, '_'));
     const url = `${WIKI_API_BASE}/${title}`;
 
-    const resp = await fetch(url, {
+    const resp = await fetchWithRetry(url, {
       signal: AbortSignal.timeout(TIMEOUT_MS),
       headers: {
         'Accept':     'application/json',
         'User-Agent': USER_AGENT,
       },
-    });
+    }, { retries: 1, baseMs: 500, label: 'wiki:summary' });
 
     if (!resp.ok) return null;
 

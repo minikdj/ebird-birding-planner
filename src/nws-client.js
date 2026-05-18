@@ -1,4 +1,4 @@
-import { Cache, FAVORABLE_WINDS, POOR_WINDS, SOUTHERLY_WINDS, NORTHERLY_WINDS } from './utils.js';
+import { Cache, FAVORABLE_WINDS, POOR_WINDS, SOUTHERLY_WINDS, NORTHERLY_WINDS, fetchWithRetry } from './utils.js';
 
 const DISPLAY_TZ = process.env.BRIEFING_TIMEZONE || 'America/New_York';
 
@@ -257,12 +257,12 @@ export class NWSClient {
    */
   async _get(url) {
     try {
-      const response = await fetch(url, {
+      const response = await fetchWithRetry(url, {
         headers: {
           'User-Agent': NWSClient.USER_AGENT,
         },
         signal: AbortSignal.timeout(15_000),
-      });
+      }, { retries: 1, baseMs: 500, label: 'nws:forecast' });
 
       if (!response.ok) {
         process.stderr.write(`NWSClient: HTTP ${response.status} for ${url}\n`);

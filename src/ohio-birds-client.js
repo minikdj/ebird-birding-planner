@@ -1,4 +1,5 @@
 // ohio-birds-client.js — Ohio-birds LISTSERV scraper
+import { fetchWithRetry } from './utils.js';
 // Fetches the public Miami University LISTSERV archive for the Ohio-birds mailing list
 // and extracts full message bodies for the Cincinnati / SW Ohio area daily birding email.
 //
@@ -48,7 +49,7 @@ export class OhioBirdsClient {
 
       for (const { yy, mm } of months) {
         const indexUrl = `${OhioBirdsClient.SCRIPTS}?A1=ind${yy}${mm}&L=${this.listName}`;
-        const resp = await fetch(indexUrl, this._fetchOpts);
+        const resp = await fetchWithRetry(indexUrl, this._fetchOpts, { retries: 1, baseMs: 500, label: 'ohio-birds:archive' });
         if (!resp.ok) {
           process.stderr.write(`OhioBirdsClient: HTTP ${resp.status} for ${indexUrl}\n`);
           continue;
@@ -142,7 +143,7 @@ export class OhioBirdsClient {
     const a2Url = OhioBirdsClient.BASE_URL + href;
 
     // Step 1: Fetch the A2 message page
-    const a2Resp = await fetch(a2Url, this._fetchOpts);
+    const a2Resp = await fetchWithRetry(a2Url, this._fetchOpts, { retries: 1, baseMs: 500, label: 'ohio-birds:message' });
     if (!a2Resp.ok) return null;
     const a2Html = await a2Resp.text();
 
@@ -153,7 +154,7 @@ export class OhioBirdsClient {
 
     // Step 3: Fetch the body
     const a3Url = a3Path.startsWith('http') ? a3Path : OhioBirdsClient.BASE_URL + a3Path;
-    const a3Resp = await fetch(a3Url, this._fetchOpts);
+    const a3Resp = await fetchWithRetry(a3Url, this._fetchOpts, { retries: 1, baseMs: 500, label: 'ohio-birds:body' });
     if (!a3Resp.ok) return null;
     const a3Html = await a3Resp.text();
 
