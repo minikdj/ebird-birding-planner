@@ -13,6 +13,7 @@
 // fail per-call rather than crashing the runner — so tests can import
 // individual modules in isolation.
 
+import { fileURLToPath } from 'url';
 import { loadConfig } from './config.js';
 import { loadLifeListSync, defaultCsvPath } from './lifelist.js';
 import { EBirdClient } from './ebird-client.js';
@@ -45,7 +46,8 @@ async function main() {
 
   // Resolve a life-list path: project JSON cache → env CSV → home-default CSV.
   // Loaded synchronously so the server starts ready; null if neither exists.
-  const jsonPath = new URL('../data/life-list.json', import.meta.url).pathname;
+  // fileURLToPath handles Windows drive letters correctly (pathname alone does not).
+  const jsonPath = fileURLToPath(new URL('../data/life-list.json', import.meta.url));
   const csvPath = config.lifeListCsvPath || defaultCsvPath();
   const lifeList = loadLifeListSync({ jsonPath, csvPath });
 

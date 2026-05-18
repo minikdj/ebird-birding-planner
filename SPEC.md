@@ -161,7 +161,8 @@ Only the email-composition step differs.
   NWS/iNat helpers (1h/6h). Cache lives only for the MCP server
   process — every script run starts cold.
 - **Key redaction.** BirdCast client redacts `?key=…` to `?key=***` in
-  all stderr logs (`src/birdcast-client.js`).
+  its error logs (`src/birdcast-client.js`). Other clients do not currently
+  embed credentials in URLs, so no analogous redaction is needed for them today.
 - **Idempotency.** `send.js` writes `briefing-output/.sent-YYYY-MM-DD.marker`
   after a provider accepts the message. Subsequent runs that day exit 0
   without sending unless `BRIEFING_FORCE_SEND=true`.
@@ -178,9 +179,8 @@ ebird-birding-planner/
 │   ├── migration-scoring.js  unified rateNight() + threshold loader
 │   ├── utils.js              Cache, resolveLocation, toYMD, fetchWithRetry,
 │   │                         FAVORITE_HOTSPOTS, RECOMMENDATION enum, …
-│   ├── tools.js              legacy tool schema dump (handlers/*.js owns the schemas now)
 │   ├── handlers/             one file per MCP tool
-│   │   ├── _shared.js        createContext(), InputError, helpers
+│   │   ├── _shared.js        createContext(), InputError, getBirdCastData, helpers
 │   │   ├── index.js          HANDLERS[] registry + TOOL_HANDLERS Map
 │   │   └── {tool-name}.js    each exports { tool, handle }
 │   └── *-client.js           6 external API wrappers
@@ -450,10 +450,14 @@ Inline reference:
 
 Recipient and sender are NOT in the draft — they come from env vars.
 
+Briefing draft shape is now formally specified in `schemas/briefing-draft.schema.json`.
+
 ### 4.3 Triage output
 
-`triage-output.json` (no schema file yet — informal contract documented
-in `triage.js`):
+`triage-output.json`:
+
+Triage output shape is now formally specified in `schemas/triage-output.schema.json`.
+Informal contract also documented in `triage.js`:
 
 ```
 {
@@ -560,7 +564,9 @@ in `triage.js`):
 **Key exposure.**
 
 - `BirdCastClient` strips `?key=…` from URLs before writing to stderr
-  (`url.replace(/([?&]key=)[^&]+/, '$1***')` in every error log).
+  (`url.replace(/([?&]key=)[^&]+/, '$1***')` in its error logs). Other
+  clients do not embed credentials in URLs, so no analogous redaction is
+  needed for them today.
 - Recipient and sender come from env, not the draft JSON — a compromised
   agent cannot redirect mail.
 
@@ -702,18 +708,18 @@ All configuration is via env vars. Defaults in `src/config.js` and
 
 | Tier | Runner | Count | Network? |
 |---|---|---|---|
-| Unit | `node scripts/test-unit.js` (`node:test`) | 171 | No |
-| Regression | `node scripts/test-regressions.js` | ~30 | No |
+| Unit | `node scripts/test-unit.js` (`node:test`) | 169 assertions across 27 suites | No |
+| Regression | `node scripts/test-regressions.js` | 96 assertions across 30 suites | No |
 | Schema | `node scripts/validate-schema.js <file>` (Ajv) | per-file | No |
 | Integration smoke | `node scripts/test.js` | 6 | Yes (live keys) |
 
-- **Unit** covers pure logic in `utils.js`, `migration-scoring.js`,
-  `lifelist.js`, and decision/score paths in `triage.js`/`aggregate.js`.
-  Includes degraded-mode tests (NWS unavailable, BirdCast skipped, life
-  list missing, malformed inputs).
-- **Regression** covers security and contract invariants from §5.3.
-  Pinned to specific code paths and security-critical functions; do not
-  re-test logic already in unit.
+- **Unit** (169 assertions, 27 suites) covers pure logic in `utils.js`,
+  `migration-scoring.js`, `lifelist.js`, and decision/score paths in
+  `triage.js`/`aggregate.js`. Includes degraded-mode tests (NWS unavailable,
+  BirdCast skipped, life list missing, malformed inputs).
+- **Regression** (96 assertions, 30 suites) covers security and contract
+  invariants from §5.3. Pinned to specific code paths and security-critical
+  functions; do not re-test logic already in unit.
 - **Schema** validates `aggregate-output.json` against
   `schemas/aggregate-output.schema.json` via Ajv (`strict: false`). CI
   runs this on every on-demand workflow run; locally run via
@@ -830,7 +836,8 @@ enough to drive a "Community Buzz" section without that risk.
 
 | Date | Change |
 |---|---|
-| 2026-05-18 | Multi-wave refactor and spec rewrite. **Security/operability:** sanitize-html allowlist + plaintext alternative + idempotency marker in `send.js`; CRLF defenses on env-supplied addresses and subject; `fetchWithRetry` wired into all 6 clients with timeout + redaction; LISTSERV body excluded from aggregate output (prompt-injection); `BRIEFING_FOCUS` regex tightened; `submit_email` tool-use API in `generate-email.js`; `<untrusted_external_data>` fencing rule added to prompt; JSON Schema contract added (`schemas/aggregate-output.schema.json`) with Ajv-based CI validation; fine-grained PAT and 20/24h workflow rate cap. **Architecture:** decomposed 1306-line `src/index.js` into `config.js` + `lifelist.js` + `server.js` + `handlers/*.js` + `migration-scoring.js`; unified `rateNight()` replaces three drifted scoring impls; `routine-prompt.md` drops dead refs and gains `sourceStatus` disclosure rule. **Quality:** unit test suite expanded to 171 tests, regression suite added (`scripts/test-regressions.js`), schema validation gated in CI, fixture system documented (`BRIEFING_TEST_FIXTURE`). |
+| 2026-05-18 | Multi-wave refactor and spec rewrite. **Security/operability:** sanitize-html allowlist + plaintext alternative + idempotency marker in `send.js`; CRLF defenses on env-supplied addresses and subject; `fetchWithRetry` wired into all 6 clients with timeout + redaction; LISTSERV body excluded from aggregate output (prompt-injection); `BRIEFING_FOCUS` regex tightened; `submit_email` tool-use API in `generate-email.js`; `<untrusted_external_data>` fencing rule added to prompt; JSON Schema contract added (`schemas/aggregate-output.schema.json`) with Ajv-based CI validation; fine-grained PAT and 20/24h workflow rate cap. **Architecture:** decomposed 1306-line `src/index.js` into `config.js` + `lifelist.js` + `server.js` + `handlers/*.js` + `migration-scoring.js`; unified `rateNight()` replaces three drifted scoring impls; `routine-prompt.md` drops dead refs and gains `sourceStatus` disclosure rule. **Quality:** unit test suite expanded to 169 assertions / 27 suites, regression suite added (`scripts/test-regressions.js`, 96 assertions / 30 suites), schema validation gated in CI, fixture system documented (`BRIEFING_TEST_FIXTURE`). |
+| 2026-05-18 | **Round 2 hardening (R2-W2E):** schema `additionalProperties` tightening; tri-state flags via `sourceStatus`; `sanitize-html` allowedStyles allowlist; schema validation in `generate-email.js`; NWS `detectFrontalPassage` timezone fix (was using UTC hours, now uses local-tz `localHour()` helper and `Intl.DateTimeFormat` date strings); LISTSERV region gating; idempotency marker race fix; CSP meta tag on `bird-report.html` (default-src 'self', connect-src api.github.com, frame-ancestors none); `plan-vacation-birding.js` target-species logic extracted into pure `buildTargetSpecies()` helper; `src/tools.js` deleted (zero imports; `src/handlers/index.js` is source of truth for tool schemas); BirdCast User-Agent header added; `validate-schema.js` 10 MB input size cap and improved AJV error formatting. |
 | 2026-05-17 | Audio integration: Macaulay Library recordings on every Chase Target via `MediaClient.getTopRecording()`. Email design system locked: two colors, four HTML/CSS visual types, mobile-native stacked-row Notable Sightings, eBird species page links. Frontal passage / fallout detection. Ohio-birds LISTSERV scraper (index-only). Moon phase + lifer flags. On-demand mobile pipeline (`generate-email.js` + `.github/workflows/report-on-demand.yml` + `bird-report.html`). |
 | 2026-05-16 | Architectural refactor: `aggregate.js` produces JSON, agent writes email body dynamically, `send.js` handles delivery. FULL_BRIEFING path confirmed end-to-end across multiple Routine runs. Chase Targets section added. TESTING.md created. |
 | 2026-05-15 | Infrastructure decision: Anthropic Routines (cloud-hosted scheduled agent). 11 MCP tools implemented. `plan_vacation_birding` (life-list-aware two-tier targets, historical bar-chart data). Initial code review fixes (BirdCast key out of source, path traversal, rate-limiter TOCTOU, error message leakage). |

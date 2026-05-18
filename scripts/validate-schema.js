@@ -9,7 +9,7 @@
 // Exit 0 on valid, exit 1 on invalid (all errors printed to stderr).
 
 import Ajv from 'ajv';
-import { readFileSync } from 'fs';
+import { readFileSync, statSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join, resolve } from 'path';
 
@@ -23,13 +23,29 @@ const schema = JSON.parse(readFileSync(schemaPath, 'utf8'));
 const ajv = new Ajv({ allErrors: true, strict: false });
 const validate = ajv.compile(schema);
 
+const MAX_INPUT_BYTES = 10 * 1024 * 1024;  // 10 MB
+
 const inputPath = process.argv[2];
 let raw;
 if (inputPath) {
+  const stat = statSync(resolve(inputPath));
+  if (stat.size > MAX_INPUT_BYTES) {
+    process.stderr.write(`[validate-schema] input too large: ${stat.size} bytes (max ${MAX_INPUT_BYTES})\n`);
+    process.exit(1);
+  }
   raw = readFileSync(resolve(inputPath), 'utf8');
 } else {
-  raw = readFileSync(0, 'utf8');  // stdin fd
+  // stdin path — read in chunks to enforce the cap
+  raw = '';
+  for await (const chunk of process.stdin) {
+    raw += chunk;
+    if (raw.length > MAX_INPUT_BYTES) {
+      process.stderr.write(`[validate-schema] stdin exceeded ${MAX_INPUT_BYTES} bytes\n`);
+      process.exit(1);
+    }
+  }
 }
+
 const data = JSON.parse(raw);
 
 if (validate(data)) {
@@ -37,10 +53,12 @@ if (validate(data)) {
   process.exit(0);
 }
 
-process.stderr.write('[validate-schema] FAILED:\n');
+process.stderr.write(`[validate-schema] FAILED: ${validate.errors.length} error(s)\n`);
 for (const err of validate.errors) {
-  process.stderr.write(
-    `  ${err.instancePath || '/'} ${err.message} ${err.params ? JSON.stringify(err.params) : ''}\n`
-  );
+  const where = err.instancePath || '(root)';
+  process.stderr.write(`  ${where}: ${err.message}\n`);
+  if (err.params && Object.keys(err.params).length) {
+    process.stderr.write(`     params: ${JSON.stringify(err.params)}\n`);
+  }
 }
 process.exit(1);

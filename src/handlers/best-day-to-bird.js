@@ -48,8 +48,7 @@ export async function handle(args, ctx) {
       let bcData = null;
 
       if (ctx.clients.birdcast.isInMigrationSeason(dateStr)) {
-        const bcResult = await getBirdCastData(regionCode, dateStr, ctx)
-          .catch(() => ({ live: null, season: null, species: null, summary: null }));
+        const bcResult = await getBirdCastData(regionCode, dateStr, ctx);
         bcData = bcResult.live;
         if (bcData) {
           const birds = bcData.cumulativeBirds ?? 0;

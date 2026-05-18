@@ -32,6 +32,119 @@ export const tool = {
   },
 };
 
+/**
+ * Build the ranked target-species lists from destination vs. home frequency data.
+ *
+ * Pure function — no I/O, no side effects — so it is independently testable.
+ *
+ * @param {Array|null} destSpecies   - BirdCast expected species at destination
+ * @param {Array|null} homeSpecies   - BirdCast expected species at home region
+ * @param {Set|null}   lifeListSet   - normalized lowercased species names on life list
+ * @param {object}     opts
+ * @param {string}     opts.tripStartDate - YYYY-MM-DD, used in dataNote string
+ * @param {string}     opts.regionCode    - destination region code, used in dataNote
+ * @param {Function}   opts.hasName       - (name: string) => boolean life-list lookup
+ * @param {number}     [opts.lifeListTotal] - total species count for note
+ * @returns {{ targetSpecies: object, dataNote: string|null }}
+ */
+function buildTargetSpecies(destSpecies, homeSpecies, lifeListSet, opts = {}) {
+  const { tripStartDate, regionCode, hasName = () => false, lifeListTotal } = opts;
+
+  if (!destSpecies) {
+    const targetSpecies = lifeListSet
+      ? { newToYourLifeList: [], seenBeforeButRareHere: [] }
+      : { notFindableAtHome: [], rareAtHome: [] };
+    const dataNote = regionCode
+      ? `BirdCast frequency data is not available for region ${regionCode}. Hotspots and recent sightings are shown above.`
+      : 'No region code available — target species comparison requires a county-level region code or recognized city.';
+    return { targetSpecies, dataNote };
+  }
+
+  const homeMap = homeSpecies ? new Map(homeSpecies.map((s) => [s.commonName, s.probability])) : new Map();
+  let destThreshold = 0.15;
+  const homeThreshold = 0.10;
+
+  let pool = destSpecies
+    .filter((s) => s.commonName && !NOISE_SPECIES.has(s.commonName))
+    .filter((s) => s.probability >= destThreshold)
+    .map((s) => ({ ...s, homeProbability: homeMap.get(s.commonName) ?? 0 }));
+
+  if (lifeListSet) {
+    pool = pool.filter((s) => s.homeProbability < homeThreshold);
+    if (pool.length > 40) pool = pool.filter((s) => s.probability > 0.25 && s.homeProbability < 0.05);
+    if (pool.length < 5) {
+      destThreshold = 0.10;
+      pool = destSpecies
+        .filter((s) => s.commonName && !NOISE_SPECIES.has(s.commonName))
+        .filter((s) => s.probability >= destThreshold)
+        .filter((s) => (homeMap.get(s.commonName) ?? 0) < homeThreshold)
+        .map((s) => ({ ...s, homeProbability: homeMap.get(s.commonName) ?? 0 }));
+    }
+
+    const toEntry = (s) => ({
+      name: s.commonName,
+      destinationFrequency: Math.round(s.probability * 100) / 100,
+      homeFrequency: Math.round(s.homeProbability * 100) / 100,
+      onYourLifeList: hasName(s.commonName),
+    });
+
+    const notSeen = pool.filter((s) => !hasName(s.commonName));
+    const alreadySeen = pool.filter((s) => hasName(s.commonName));
+
+    const targetSpecies = {
+      newToYourLifeList: notSeen.sort((a, b) => b.probability - a.probability).slice(0, 15).map(toEntry),
+      seenBeforeButRareHere: alreadySeen.sort((a, b) => b.probability - a.probability).slice(0, 10).map(toEntry),
+    };
+
+    const lifeTally = lifeListTotal ?? lifeListSet.size;
+    const dataNote = `Using your eBird life list (${lifeTally} species). ` +
+      `"New to your life list" = findable here (>${Math.round(destThreshold * 100)}% frequency) but not in your records. ` +
+      `Frequencies from BirdCast historical bar chart for the week of ${tripStartDate}.`;
+
+    return { targetSpecies, dataNote };
+  } else {
+    pool = pool.filter((s) => s.homeProbability < homeThreshold);
+    if (pool.length > 40) pool = pool.filter((s) => s.probability > 0.25 && s.homeProbability < 0.05);
+
+    let similarNote = null;
+    if (pool.length < 5) {
+      destThreshold = 0.10;
+      pool = destSpecies
+        .filter((s) => s.commonName && !NOISE_SPECIES.has(s.commonName))
+        .filter((s) => s.probability >= destThreshold)
+        .filter((s) => (homeMap.get(s.commonName) ?? 0) < homeThreshold)
+        .map((s) => ({ ...s, homeProbability: homeMap.get(s.commonName) ?? 0 }));
+      similarNote = 'This destination has similar species to your home location — thresholds relaxed to show the most distinctive local birds.';
+    }
+    if (pool.length < 3) {
+      const relaxedHomeThreshold = 0.05;
+      const relaxedDestThreshold = 0.10;
+      pool = destSpecies
+        .filter((s) => s.commonName && !NOISE_SPECIES.has(s.commonName))
+        .filter((s) => s.probability >= relaxedDestThreshold)
+        .filter((s) => (homeMap.get(s.commonName) ?? 0) < relaxedHomeThreshold)
+        .map((s) => ({ ...s, homeProbability: homeMap.get(s.commonName) ?? 0 }));
+      similarNote = 'This destination has significant species overlap with your home region. Showing species that are findable here but uncommon at home.';
+    }
+
+    const toEntry = (s) => ({
+      name: s.commonName,
+      destinationFrequency: Math.round(s.probability * 100) / 100,
+      homeFrequency: Math.round(s.homeProbability * 100) / 100,
+    });
+
+    const targetSpecies = {
+      notFindableAtHome: pool.filter((s) => s.homeProbability < 0.02).sort((a, b) => b.probability - a.probability).slice(0, 15).map(toEntry),
+      rareAtHome: pool.filter((s) => s.homeProbability >= 0.02).sort((a, b) => b.probability - a.probability).slice(0, 15).map(toEntry),
+    };
+
+    const dataNote = similarNote
+      ?? `Frequencies from BirdCast historical bar chart for the week of ${tripStartDate}. Set EBIRD_LIFE_LIST_CSV for personalized life-list comparisons.`;
+
+    return { targetSpecies, dataNote };
+  }
+}
+
 async function resolveDestination(raw, ctx) {
   const fromLookup = resolveLocation(raw);
   if (fromLookup) return fromLookup;
@@ -106,98 +219,12 @@ export async function handle(args, ctx) {
     .filter((h) => h.recentChecklists > 0)
     .slice(0, 5);
 
-  let targetSpecies;
-  let dataNote;
-
-  if (destSpecies) {
-    const homeMap = homeSpecies ? new Map(homeSpecies.map((s) => [s.commonName, s.probability])) : new Map();
-
-    let destThreshold = 0.15;
-    const homeThreshold = 0.10;
-
-    let pool = destSpecies
-      .filter((s) => s.commonName && !NOISE_SPECIES.has(s.commonName))
-      .filter((s) => s.probability >= destThreshold)
-      .map((s) => ({ ...s, homeProbability: homeMap.get(s.commonName) ?? 0 }));
-
-    if (lifeListSet) {
-      pool = pool.filter((s) => s.homeProbability < homeThreshold);
-      if (pool.length > 40) pool = pool.filter((s) => s.probability > 0.25 && s.homeProbability < 0.05);
-      if (pool.length < 5) {
-        destThreshold = 0.10;
-        pool = destSpecies
-          .filter((s) => s.commonName && !NOISE_SPECIES.has(s.commonName))
-          .filter((s) => s.probability >= destThreshold)
-          .filter((s) => (homeMap.get(s.commonName) ?? 0) < homeThreshold)
-          .map((s) => ({ ...s, homeProbability: homeMap.get(s.commonName) ?? 0 }));
-      }
-
-      const toEntry = (s) => ({
-        name: s.commonName,
-        destinationFrequency: Math.round(s.probability * 100) / 100,
-        homeFrequency: Math.round(s.homeProbability * 100) / 100,
-        onYourLifeList: hasName(s.commonName),
-      });
-
-      const notSeen = pool.filter((s) => !hasName(s.commonName));
-      const alreadySeen = pool.filter((s) => hasName(s.commonName));
-
-      targetSpecies = {
-        newToYourLifeList: notSeen.sort((a, b) => b.probability - a.probability).slice(0, 15).map(toEntry),
-        seenBeforeButRareHere: alreadySeen.sort((a, b) => b.probability - a.probability).slice(0, 10).map(toEntry),
-      };
-
-      const lifeTally = ctx.lifeList.total ?? lifeListSet.size;
-      dataNote = `Using your eBird life list (${lifeTally} species). ` +
-        `"New to your life list" = findable here (>${Math.round(destThreshold * 100)}% frequency) but not in your records. ` +
-        `Frequencies from BirdCast historical bar chart for the week of ${tripStartDate}.`;
-    } else {
-      pool = pool.filter((s) => s.homeProbability < homeThreshold);
-      if (pool.length > 40) pool = pool.filter((s) => s.probability > 0.25 && s.homeProbability < 0.05);
-
-      let similarNote = null;
-      if (pool.length < 5) {
-        destThreshold = 0.10;
-        pool = destSpecies
-          .filter((s) => s.commonName && !NOISE_SPECIES.has(s.commonName))
-          .filter((s) => s.probability >= destThreshold)
-          .filter((s) => (homeMap.get(s.commonName) ?? 0) < homeThreshold)
-          .map((s) => ({ ...s, homeProbability: homeMap.get(s.commonName) ?? 0 }));
-        similarNote = 'This destination has similar species to your home location — thresholds relaxed to show the most distinctive local birds.';
-      }
-      if (pool.length < 3) {
-        const relaxedHomeThreshold = 0.05;
-        const relaxedDestThreshold = 0.10;
-        pool = destSpecies
-          .filter((s) => s.commonName && !NOISE_SPECIES.has(s.commonName))
-          .filter((s) => s.probability >= relaxedDestThreshold)
-          .filter((s) => (homeMap.get(s.commonName) ?? 0) < relaxedHomeThreshold)
-          .map((s) => ({ ...s, homeProbability: homeMap.get(s.commonName) ?? 0 }));
-        similarNote = 'This destination has significant species overlap with your home region. Showing species that are findable here but uncommon at home.';
-      }
-
-      const toEntry = (s) => ({
-        name: s.commonName,
-        destinationFrequency: Math.round(s.probability * 100) / 100,
-        homeFrequency: Math.round(s.homeProbability * 100) / 100,
-      });
-
-      targetSpecies = {
-        notFindableAtHome: pool.filter((s) => s.homeProbability < 0.02).sort((a, b) => b.probability - a.probability).slice(0, 15).map(toEntry),
-        rareAtHome: pool.filter((s) => s.homeProbability >= 0.02).sort((a, b) => b.probability - a.probability).slice(0, 15).map(toEntry),
-      };
-
-      dataNote = similarNote
-        ?? `Frequencies from BirdCast historical bar chart for the week of ${tripStartDate}. Set EBIRD_LIFE_LIST_CSV for personalized life-list comparisons.`;
-    }
-  } else {
-    targetSpecies = lifeListSet
-      ? { newToYourLifeList: [], seenBeforeButRareHere: [] }
-      : { notFindableAtHome: [], rareAtHome: [] };
-    dataNote = regionCode
-      ? `BirdCast frequency data is not available for region ${regionCode}. Hotspots and recent sightings are shown above.`
-      : 'No region code available — target species comparison requires a county-level region code or recognized city.';
-  }
+  const { targetSpecies, dataNote } = buildTargetSpecies(destSpecies, homeSpecies, lifeListSet, {
+    tripStartDate,
+    regionCode,
+    hasName,
+    lifeListTotal: ctx.lifeList?.total,
+  });
 
   const notableRecentSightings = Array.isArray(notableObs)
     ? [...new Map(notableObs.map((o) => [o.speciesCode, o])).values()]

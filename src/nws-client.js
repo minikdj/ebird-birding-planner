@@ -334,23 +334,30 @@ export class NWSClient {
         return nullResult;
       }
 
-      // Step 3: Categorise periods into evening (22–23), deep night (0–2), and dawn (5–7)
-      // We look at the full overnight window: evening of dateStr through morning of dateStr.
-      // NWS returns UTC times; we compare against dateStr UTC dates.
+      // Step 3: Categorise periods into evening (22–23), deep night (0–2), and dawn (5–7).
+      // We use local-timezone hours and dates so that, e.g., "22:00 EDT" is treated as
+      // 10 PM locally rather than the UTC-equivalent time. Previously this code used
+      // getUTCHours() and toISOString().split('T')[0], which was off by the UTC offset
+      // (up to 5 hours in EDT), making frontalPassage systematically wrong.
+
+      const localDateFmt = new Intl.DateTimeFormat('en-CA', {
+        timeZone: DISPLAY_TZ, year: 'numeric', month: '2-digit', day: '2-digit',
+      });
+
+      // Build the local "next day" string by advancing dateStr by one calendar day.
       const [yr, mo, dy] = dateStr.split('-').map(Number);
+      const nextDayUtc = new Date(Date.UTC(yr, mo - 1, dy + 1, 12, 0, 0));
+      const nextDateStr = localDateFmt.format(nextDayUtc);
 
-      // Build next-day string for 0–8am periods
-      const nextDay = new Date(Date.UTC(yr, mo - 1, dy + 1));
-      const nextDateStr = nextDay.toISOString().split('T')[0];
-
-      const eveningPeriods = [];  // 22–23 UTC on dateStr (pre-frontal)
-      const nightPeriods = [];    // 0–2 UTC on dateStr (peak migration / rain window)
-      const dawnPeriods = [];     // 5–8 UTC on dateStr (post-frontal clearing check)
+      const eveningPeriods = [];  // 22–23 local on dateStr (pre-frontal)
+      const nightPeriods = [];    // 0–2 local on dateStr (peak migration / rain window)
+      const dawnPeriods = [];     // 5–8 local on dateStr or next day (post-frontal clearing check)
 
       for (const period of periods) {
         const startTime = new Date(period.startTime);
-        const periodDate = startTime.toISOString().split('T')[0];
-        const hour = startTime.getUTCHours();
+        const periodDate = localDateFmt.format(startTime);
+        const hour = localHour(period.startTime);
+        if (hour === null) continue;
 
         if (periodDate === dateStr && hour >= 22) {
           eveningPeriods.push(period);

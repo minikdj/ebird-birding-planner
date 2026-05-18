@@ -31,6 +31,7 @@ export const tool = {
 };
 
 export async function handle(args, ctx) {
+  // Tuning constants — not user-configurable; promote to config.js if/when env override needed.
   const SCORE_SPECIES_WEIGHT = 2;
   const SCORE_NOTABLE_WEIGHT = 5;
   const HOTSPOT_CANDIDATE_LIMIT = 15;
