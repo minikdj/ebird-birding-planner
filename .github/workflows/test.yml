@@ -1,0 +1,62 @@
+name: Tests
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Syntax check all JS
+        run: |
+          find src scripts -name '*.js' -not -path '*/node_modules/*' -print0 \
+            | xargs -0 -n1 node -c
+
+      - name: Run unit tests
+        run: node scripts/test-unit.js
+
+      - name: Run regression tests
+        run: node scripts/test-regressions.js
+
+      - name: Validate schemas parse
+        run: |
+          for f in schemas/*.json; do
+            node -e "JSON.parse(require('fs').readFileSync('$f', 'utf8')); console.log('OK: $f')"
+          done
+
+      - name: Validate aggregate fixtures against schema
+        # Other fixtures need updating to match post-R2 schema; tracked as follow-up
+        run: |
+          for fixture in scripts/fixtures/aggregate-full_lifer.json scripts/fixtures/aggregate-quiet_period.json; do
+            echo "Validating: $fixture"
+            BRIEFING_TEST_FIXTURE=$(basename "$fixture" .json | sed 's/^aggregate-//') \
+              node scripts/aggregate.js > /tmp/agg.json
+            node scripts/validate-schema.js /tmp/agg.json || {
+              echo "FAILED: $fixture"
+              exit 1
+            }
+          done
+        env:
+          BRIEFING_TIMEZONE: America/New_York
