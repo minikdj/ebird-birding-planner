@@ -95,7 +95,10 @@ The JSON contains:
 - `birdingWindow` — civil twilight, sunrise, golden hour end, activity cutoff (temp-adjusted)
 - `moon` — phaseName, illuminationPct, migrationNote (non-null when moon phase is significant for migration)
 - `hotspots` — top 5 by 7-day species count (proxy for active birder community)
-- `notableObservations` — deduplicated rare/unusual species, last 14 days, 50km; sorted by recency; each has `isLifer: boolean` (true = not yet on life list)
+- `notableObservations` — rare/unusual species, last 14 days, 50km; sorted by recency. Each entry has:
+  - `isLifer: boolean` — true = not yet on life list
+  - `recentSightings: []` — every confirmed sighting of this species in the last 48 hours (up to 5), newest first; each `{ location, date, count, locId }`. Use this to show the full recent location trail in Chase Target cards — birders need to know every spot the bird has shown up, not just the most recent.
+  - `allAboutBirdsUrl: string` — All About Birds sounds page URL. Fetch this with your browser tool before writing the Field ID vocalization description — use the text on that page verbatim, do not transcribe from memory.
 - `listservSightings` — recent trip reports from Ohio-birds LISTSERV, each `{ subject, body, species[], location, url, source }`. The `body` is the first ~1200 chars of the actual email text; `species` is a parsed list of birds mentioned. Use this to surface what the Ohio birding community is actively finding and discussing. May be empty if archive is unavailable.
 - `hotspotNotes` — keyed by eBird locId; each entry has `trails[]`, `habitatSummary`, `rareSpeciesPotential`. Cross-reference `notableObservations[].locId` with `hotspotNotes` to write specific "Where to look" field directions in Chase Target cards.
 - `lifeList` — `{ totalSpecies, source }` or null if life list not loaded
@@ -199,8 +202,11 @@ Structure your email as inline-CSS HTML (mobile-friendly, max-width 600px, table
 2. **Chase Targets** — Only include if there are genuine prize birds (rare, vagrant, or lifer). Do not include common migrants.
    - Each card (1–3 max) uses the Chase Card format from the Design System.
    - `◉ LIFER` badge is mandatory if `isLifer: true` — in the card header AND in the Notable Sightings table row for the same species.
-   - **Where to look:** uses `hotspotNotes[locId].trails[].directions` if available — exact trail names, GPS, landmarks.
-   - **Field ID:** 2–3 sentences. Lead with the visual clincher — the one field mark that eliminates confusion with similar species (e.g. complete vs broken eye-ring, wing pattern in flight, leg color). For vocalizations: describe the song *character* only — loud/soft, emphatic/thin, slow/fast, rising/falling — in one short phrase. Do NOT phonetically transcribe songs ("beecher-beecher", "teacher-teacher", etc.) — these mnemonics vary across field guides and errors will misdirect a birder in the field. Always close the Field ID with: "Confirm song with **Merlin Sound ID** before going." Example: "Complete white eye-ring (broken in MacGillivray's Warbler), gray hood to the chest, walks on the ground rather than hops. Song is loud and emphatically repeated in slow, deliberate phrases. Confirm song with **Merlin Sound ID** before going."
+   - **Where to look:** Lead with the full recent sighting trail from `recentSightings[]`. List every confirmed location within the last 48 hours with its time — e.g. "Confirmed at **Burnet Woods** (today 07:31) and **Otto Armleder** (yesterday 15:20) — check both." If only one recent location, say so explicitly ("Single report at X — bird may still be present"). Then add trail-level directions from `hotspotNotes[locId].trails[].directions` if available — exact trail names, GPS, landmarks. More recent = more prominent.
+   - **Field ID:** 2–3 sentences. Steps in order:
+     1. **Visual clincher first** — the one field mark that eliminates confusion with similar species (complete vs broken eye-ring, wing pattern in flight, leg color, etc.).
+     2. **Vocalization from All About Birds** — fetch `allAboutBirdsUrl` using your browser tool and copy the song/call description text from the Sounds page verbatim (or closely paraphrased). Do NOT transcribe from memory — phonetic mnemonics vary across sources and hallucinated mnemonics misdirect birders. If the page is unreachable, write "Song is distinctive — load **Merlin Sound ID** and listen before going" and stop.
+     3. Close with: "Confirm with **Merlin Sound ID** before going."
    - If `migration.lastNight.isHigh`, note that additional individuals of the target species are likely present.
    - Omit entirely if no genuine prize birds exist.
 

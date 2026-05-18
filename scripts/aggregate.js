@@ -492,32 +492,62 @@ async function main() {
       }))
     : null;
 
-  // Notable observations — deduplicate by species, keep most recent per species
-  const notableMap = new Map();
+  // Notable observations — group all sightings by species, keep full recent trail.
+  // eBird dates are in local time ("YYYY-MM-DD HH:MM"); compute 48h cutoff in display tz.
+  const _cutoff48h = new Date(Date.now() - 48 * 60 * 60 * 1000)
+    .toLocaleString('sv-SE', { timeZone: DISPLAY_TZ })
+    .slice(0, 16); // "YYYY-MM-DD HH:MM"
+
+  const notableGroupMap = new Map();
   for (const obs of (notableObs || [])) {
     if (!obs.comName) continue;
-    if (!notableMap.has(obs.comName) || obs.obsDt > notableMap.get(obs.comName).obsDt) {
-      notableMap.set(obs.comName, obs);
-    }
+    if (!notableGroupMap.has(obs.comName)) notableGroupMap.set(obs.comName, []);
+    notableGroupMap.get(obs.comName).push(obs);
   }
+
+  // Helper: construct All About Birds sounds-page URL from common name.
+  // All About Birds blocks server-side fetches (403) but the Routine's Claude browser
+  // can access it — include the URL so the Routine can fetch it at write time.
+  const toAABUrl = (name) =>
+    `https://www.allaboutbirds.org/guide/${name.replace(/ /g, '_')}/sounds`;
 
   // NOTE: Ohio-birds LISTSERV sightings are passed through to listservSightings (below)
   // as raw { subject, url, source } objects rather than merged into notableObservations.
   // The LISTSERV archive exposes subject lines publicly but message bodies require login,
   // so we surface thread subjects as community-buzz context in the email, not as species records.
 
-  const notableObservationsRaw = [...notableMap.values()]
-    .sort((a, b) => (b.obsDt ?? '').localeCompare(a.obsDt ?? ''))
-    .map((o) => ({
-      species: o.comName,
-      speciesCode: o.speciesCode ?? null,
-      location: o.locName,
-      date: o.obsDt,
-      count: o.howMany ?? null,
-      locId: o.locId ?? null,
-      source: o._source ?? 'ebird',
-      isLifer: isLiferOpportunity(o.comName, lifeList),
-    }));
+  const notableObservationsRaw = [...notableGroupMap.entries()]
+    .map(([comName, obsList]) => {
+      // Sort all observations newest-first
+      const sorted = [...obsList].sort((a, b) => (b.obsDt ?? '').localeCompare(a.obsDt ?? ''));
+      const mostRecent = sorted[0];
+
+      // All confirmed sightings within the last 48 hours (up to 5), newest first.
+      // Used by the Routine to show the full recent location trail in Chase Target cards.
+      const recentSightings = sorted
+        .filter((o) => (o.obsDt ?? '') >= _cutoff48h)
+        .slice(0, 5)
+        .map((o) => ({
+          location: o.locName,
+          date: o.obsDt,
+          count: o.howMany ?? null,
+          locId: o.locId ?? null,
+        }));
+
+      return {
+        species: comName,
+        speciesCode: mostRecent.speciesCode ?? null,
+        location: mostRecent.locName,
+        date: mostRecent.obsDt,
+        count: mostRecent.howMany ?? null,
+        locId: mostRecent.locId ?? null,
+        source: mostRecent._source ?? 'ebird',
+        isLifer: isLiferOpportunity(comName, lifeList),
+        allAboutBirdsUrl: toAABUrl(comName),
+        recentSightings,
+      };
+    })
+    .sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''));
 
   // Fetch top-rated photos for notable species (Macaulay Library primary, Wikipedia fallback).
   // Cap at 10 photo lookups to bound latency — prioritize lifers and then by order.
@@ -551,6 +581,12 @@ async function main() {
   // notableObservations[].photo — { url, thumbnailUrl, photographer, attribution, source }
   //   or null if no photo found. Macaulay Library (primary) → Wikipedia (fallback).
   //   url = 640px wide (email-safe); thumbnailUrl = 320px (table row thumbnails).
+  // notableObservations[].recentSightings — all confirmed sightings of this species within
+  //   the last 48 hours (up to 5), sorted newest-first. Each: { location, date, count, locId }.
+  //   Use in Chase Target "Where to look" to show the full recent location trail.
+  // notableObservations[].allAboutBirdsUrl — All About Birds sounds page for this species.
+  //   All About Birds blocks Node.js fetches (403) but the Routine's Claude browser can
+  //   access it. Fetch this URL at write time to get authoritative song descriptions.
 
   const liferOpportunities = notableObservations.filter(o => o.isLifer).length;
 
