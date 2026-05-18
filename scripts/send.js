@@ -29,12 +29,13 @@
 // them into the HTML body.
 
 import { readFile, mkdir, writeFile } from 'fs/promises';
-import { statSync, realpathSync, existsSync } from 'fs';
+import { statSync, realpathSync, existsSync, writeFileSync, renameSync, mkdirSync, unlinkSync } from 'fs';
 import { dirname, join, resolve, sep } from 'path';
 import { fileURLToPath } from 'url';
 import { Resend } from 'resend';
 import sanitizeHtml from 'sanitize-html';
 import { toYMD } from '../src/utils.js';
+import { loadConfig, ymdInTimezone } from '../src/config.js';
 
 // ---------------------------------------------------------------------------
 // HTML sanitization allowlist
@@ -48,33 +49,120 @@ const SANITIZE_OPTIONS = {
   allowedTags: ['table','tr','td','tbody','thead','div','span','img','a','p','strong','em','b','i','br','h1','h2','h3','h4','h5','h6','ul','ol','li','blockquote'],
   allowedAttributes: {
     '*': ['style','align','valign','width','height','cellpadding','cellspacing','border','colspan','rowspan'],
-    'a': ['href','style','target','rel'],
+    'a': ['href','style','rel'],
     'img': ['src','alt','width','height','style'],
   },
-  allowedSchemes: ['https','mailto'],
+  allowedSchemes: ['https'],
   allowedSchemesByTag: { img: ['https'] },
   disallowedTagsMode: 'discard',
+  // M1: Lock down the CSS sink — only the subset our design system actually
+  // uses is permitted. Notably absent: position, top/left/right/bottom,
+  // z-index, transform, animation, expression, filter, visibility.
+  allowedStyles: {
+    '*': {
+      'color':            [/^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i, /^rgb\((\s*\d{1,3}\s*,?){2,3}\s*\d{1,3}\s*\)$/i, /^(black|white|gray|grey|red|green|blue|yellow|orange)$/i],
+      'background':       [/^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i, /^rgb\(/i, /^(transparent|white|black)$/i],
+      'background-color': [/^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i, /^rgb\(/i, /^(transparent|white|black)$/i],
+      'font-size':        [/^\d+(?:\.\d+)?(px|em|rem|%|pt)$/],
+      'font-weight':      [/^(?:\d{3}|bold|normal|lighter|bolder)$/],
+      'font-family':      [/^[A-Za-z0-9\s,'"-]+$/],
+      'font-style':       [/^(normal|italic|oblique)$/],
+      'text-align':       [/^(left|right|center|justify)$/],
+      'text-decoration':  [/^(none|underline|line-through|overline)(\s+\S+)*$/],
+      'text-transform':   [/^(none|uppercase|lowercase|capitalize)$/],
+      'text-underline-offset': [/^\d+(?:\.\d+)?(px|em)$/],
+      'text-decoration-thickness': [/^\d+(?:\.\d+)?(px|em)$/],
+      'line-height':      [/^\d+(?:\.\d+)?(px|em|%)?$/],
+      'letter-spacing':   [/^-?\d+(?:\.\d+)?(px|em)$/],
+      'padding':          [/^(\d+(?:\.\d+)?(px|em|%)\s*){1,4}$/],
+      'padding-top':      [/^\d+(?:\.\d+)?(px|em|%)$/],
+      'padding-right':    [/^\d+(?:\.\d+)?(px|em|%)$/],
+      'padding-bottom':   [/^\d+(?:\.\d+)?(px|em|%)$/],
+      'padding-left':     [/^\d+(?:\.\d+)?(px|em|%)$/],
+      'margin':           [/^(\d+(?:\.\d+)?(px|em|%)\s*){1,4}$/, /^auto$/],
+      'margin-top':       [/^\d+(?:\.\d+)?(px|em|%)$/, /^auto$/],
+      'margin-right':     [/^\d+(?:\.\d+)?(px|em|%)$/, /^auto$/],
+      'margin-bottom':    [/^\d+(?:\.\d+)?(px|em|%)$/, /^auto$/],
+      'margin-left':      [/^\d+(?:\.\d+)?(px|em|%)$/, /^auto$/],
+      'width':            [/^\d+(?:\.\d+)?(px|em|%)$/, /^auto$/],
+      'max-width':        [/^\d+(?:\.\d+)?(px|em|%)$/],
+      'min-width':        [/^\d+(?:\.\d+)?(px|em|%)$/],
+      'height':           [/^\d+(?:\.\d+)?(px|em|%)$/, /^auto$/],
+      'max-height':       [/^\d+(?:\.\d+)?(px|em|%)$/],
+      'min-height':       [/^\d+(?:\.\d+)?(px|em|%)$/],
+      'border':           [/^[\d.]+px\s+(solid|dashed|dotted|double)\s+(#(?:[0-9a-f]{3}|[0-9a-f]{6})|rgb\(.+\))$/i],
+      'border-left':      [/^[\d.]+px\s+(solid|dashed|dotted|double)\s+(#(?:[0-9a-f]{3}|[0-9a-f]{6})|rgb\(.+\))$/i],
+      'border-right':     [/^[\d.]+px\s+(solid|dashed|dotted|double)\s+(#(?:[0-9a-f]{3}|[0-9a-f]{6})|rgb\(.+\))$/i],
+      'border-top':       [/^[\d.]+px\s+(solid|dashed|dotted|double)\s+(#(?:[0-9a-f]{3}|[0-9a-f]{6})|rgb\(.+\))$/i],
+      'border-bottom':    [/^[\d.]+px\s+(solid|dashed|dotted|double)\s+(#(?:[0-9a-f]{3}|[0-9a-f]{6})|rgb\(.+\))$/i],
+      'border-radius':    [/^\d+(?:\.\d+)?(px|em|%)(\s+\d+(?:\.\d+)?(px|em|%))*$/],
+      'border-collapse':  [/^(collapse|separate)$/],
+      'display':          [/^(block|inline|inline-block|table|table-row|table-cell|none)$/],
+      'vertical-align':   [/^(top|middle|bottom|baseline|sub|super|text-top|text-bottom)$/, /^-?\d+(?:\.\d+)?(px|em|%)$/],
+      'box-shadow':       [/^[\w\s\d.()#,-]+$/],
+      'opacity':          [/^[01](\.\d+)?$/],
+      'white-space':      [/^(normal|nowrap|pre|pre-wrap|pre-line)$/],
+      'object-fit':       [/^(contain|cover|fill|none|scale-down)$/],
+      // Explicitly NOT allowed: position, top/left/right/bottom, z-index,
+      // visibility, transform, animation, behavior, expression, filter
+    },
+  },
+  // M3: Force rel="noopener noreferrer" and strip target on all anchors.
+  // Defeats reverse-tabnabbing (window.opener navigation hijack).
+  transformTags: {
+    'a': (tagName, attribs) => {
+      const out = { ...attribs };
+      out.rel = 'noopener noreferrer';
+      delete out.target;
+      return { tagName, attribs: out };
+    },
+  },
 };
 
-/** Derive a plaintext alternative from sanitized HTML (strip tags, collapse whitespace). */
+/**
+ * I6: Derive a plaintext alternative from HTML.
+ * Converts block-level tags to newlines and surfaces <a href> URLs in
+ * parenthetical form: "link text (https://url)" so the plaintext body is
+ * useful on text-only clients and in email snippet previews.
+ *
+ * Example:
+ *   <p>Chase the <a href="https://ebird.org/species/conwar">Connecticut Warbler</a>.</p>
+ *   => "Chase the Connecticut Warbler (https://ebird.org/species/conwar)."
+ */
 function htmlToText(html) {
-  const stripped = sanitizeHtml(html, { allowedTags: [], allowedAttributes: {} });
-  // Decode-ish whitespace collapse; sanitize-html already decoded entities.
-  return stripped.replace(/\s+/g, ' ').trim();
-}
+  // First pass: inline href values next to link text.
+  // Replace <a href="URL">text</a> with "text (URL)" before stripping tags.
+  let out = html.replace(/<a\s[^>]*href=["']([^"']*)["'][^>]*>([\s\S]*?)<\/a>/gi, (_, href, text) => {
+    // Strip any nested tags from the link text (e.g. <strong> inside <a>)
+    const plainText = text.replace(/<[^>]+>/g, '').trim();
+    if (href && href !== plainText) {
+      return `${plainText} (${href})`;
+    }
+    return plainText;
+  });
 
-/** Compute YYYY-MM-DD in the given IANA timezone. */
-function ymdInTimezone(date, timeZone) {
-  // en-CA produces YYYY-MM-DD format
-  try {
-    return new Intl.DateTimeFormat('en-CA', {
-      timeZone,
-      year: 'numeric', month: '2-digit', day: '2-digit',
-    }).format(date);
-  } catch {
-    // Bad timezone → fall back to UTC YMD
-    return toYMD(date);
-  }
+  // Second pass: convert block-level closing tags to newlines.
+  out = out.replace(/<\/(p|div|li|tr|h[1-6])>/gi, '\n');
+  out = out.replace(/<br\s*\/?>/gi, '\n');
+
+  // Strip remaining tags.
+  out = out.replace(/<[^>]+>/g, '');
+
+  // Decode common HTML entities.
+  out = out
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&nbsp;/g, ' ');
+
+  // Normalize whitespace.
+  return out
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .replace(/^ /gm, '')
+    .trim();
 }
 
 const __filename = fileURLToPath(import.meta.url);
@@ -101,30 +189,46 @@ function extractEmail(str) {
 // ---------------------------------------------------------------------------
 
 async function main() {
+  // M6: Load all configuration through loadConfig() — no direct process.env reads below.
+  const config = loadConfig();
+
   // --- Idempotency check (before any work) ---
-  const timezone = process.env.BRIEFING_TIMEZONE || 'America/New_York';
-  const ymd = ymdInTimezone(new Date(), timezone);
-  const markerPath = join(BRIEFING_OUTPUT_DIR, `.sent-${ymd}.marker`);
-  const forceSend = process.env.BRIEFING_FORCE_SEND === 'true';
-  if (!forceSend && existsSync(markerPath)) {
-    process.stdout.write('Already sent today — skipping\n');
+  const ymd = ymdInTimezone(new Date(), config.timezone);
+  const briefingOutputDir = BRIEFING_OUTPUT_DIR;
+  const finalMarker   = join(briefingOutputDir, `.sent-${ymd}.marker`);
+  const pendingMarker = join(briefingOutputDir, `.pending-${ymd}-${process.pid}.marker`);
+
+  if (!config.forceSend && existsSync(finalMarker)) {
+    process.stdout.write(`[idempotency] Already sent for ${ymd} — exiting clean. Override with BRIEFING_FORCE_SEND=true.\n`);
     process.exit(0);
   }
 
-  // --- Header-injection defense on env-supplied addresses ---
-  // CRLF in From/To headers can be used to inject additional headers (BCC,
-  // Reply-To, etc.) into the SMTP envelope. Reject at startup.
-  for (const envName of ['BRIEFING_FROM_EMAIL', 'BRIEFING_EMAIL_TO']) {
-    const val = process.env[envName];
-    if (val && /[\r\n]/.test(val)) {
-      process.stderr.write(`send.js: ${envName} contains CR/LF — refusing to start\n`);
-      process.exit(1);
+  // M8: Atomic idempotency marker — write a pending marker with exclusive-create
+  // flag. If two runs race, only one will succeed the open; the loser exits clean.
+  // The pending marker is renamed to the final marker only after successful delivery.
+  // If delivery fails, the pending marker is deleted so a retry can proceed.
+  mkdirSync(briefingOutputDir, { recursive: true });
+
+  let pendingWritten = false;
+  if (!config.forceSend) {
+    try {
+      writeFileSync(pendingMarker, JSON.stringify({ pid: process.pid, startedAt: new Date().toISOString() }), { flag: 'wx' });
+      pendingWritten = true;
+    } catch (e) {
+      if (e.code === 'EEXIST') {
+        process.stdout.write('[idempotency] Another process is already sending for this YMD — exiting clean.\n');
+        process.exit(0);
+      }
+      throw e;
     }
   }
 
   const draftPath = process.argv[2];
 
   if (!draftPath) {
+    if (pendingWritten) {
+      try { require('fs').unlinkSync(pendingMarker); } catch (_) { /* best effort */ }
+    }
     process.stderr.write('Usage: node scripts/send.js <briefing-draft.json>\n');
     process.exit(1);
   }
@@ -180,12 +284,12 @@ async function main() {
   const cleanHtml = sanitizeHtml(htmlBody, SANITIZE_OPTIONS);
   const textBody = htmlToText(cleanHtml);
 
-  const resendKey = process.env.RESEND_API_KEY;
-  // Always use env vars — draft JSON cannot override recipient or sender.
-  const emailTo = process.env.BRIEFING_EMAIL_TO;
+  const resendKey = config.resendApiKey;
+  // Always use config — draft JSON cannot override recipient or sender.
+  const emailTo = config.emailTo;
   // @resend.dev only delivers to the Resend account owner — configure a verified
   // domain via BRIEFING_FROM_EMAIL for production use.
-  const emailFrom = process.env.BRIEFING_FROM_EMAIL
+  const emailFrom = config.emailFrom
     || 'Birding Briefing <briefing@resend.dev>';
 
   const today = toYMD(new Date());
@@ -233,7 +337,7 @@ async function main() {
     // --- Fallback: SendGrid ---
     // Runs whenever Resend failed (API error OR throw) — not only on network errors.
     if (!sent) {
-      const sendgridKey = process.env.SENDGRID_API_KEY;
+      const sendgridKey = config.sendgridApiKey;
       if (sendgridKey) {
         try {
           const sgResponse = await fetch('https://api.sendgrid.com/v3/mail/send', {
@@ -273,18 +377,37 @@ async function main() {
 
   // --- Final fallback: save HTML to disk (repo-relative path, not cwd-relative) ---
   if (!sent) {
-    await mkdir(BRIEFING_OUTPUT_DIR, { recursive: true });
-    const filename = join(BRIEFING_OUTPUT_DIR, `briefing-${today}.html`);
+    // Delivery failed — clean up pending marker so a retry can proceed.
+    if (pendingWritten) {
+      try { unlinkSync(pendingMarker); } catch (_) { /* best effort */ }
+    }
+    await mkdir(briefingOutputDir, { recursive: true });
+    const filename = join(briefingOutputDir, `briefing-${today}.html`);
     await writeFile(filename, cleanHtml, 'utf8');
     process.stdout.write(`RESULT: HTML SAVED to ${filename} (no email sent — check secrets above)\n`);
   } else {
+    // M8: Rename pending marker → final marker atomically.
     // Idempotency marker — prevents double-send on workflow re-run. Only
     // written when an actual provider accepted the message.
-    try {
-      await mkdir(BRIEFING_OUTPUT_DIR, { recursive: true });
-      await writeFile(markerPath, `sent ${new Date().toISOString()}\n`, 'utf8');
-    } catch (err) {
-      process.stderr.write(`send.js: failed to write idempotency marker: ${err.message}\n`);
+    if (pendingWritten) {
+      try {
+        renameSync(pendingMarker, finalMarker);
+      } catch (e) {
+        // Rename failed — write final marker directly as fallback.
+        try {
+          writeFileSync(finalMarker, JSON.stringify({ pid: process.pid, sentAt: new Date().toISOString() }));
+        } catch (e2) {
+          process.stderr.write(`send.js: failed to write idempotency marker: ${e2.message}\n`);
+        }
+      }
+    } else {
+      // forceSend mode — still write the final marker so caller can observe.
+      try {
+        await mkdir(briefingOutputDir, { recursive: true });
+        await writeFile(finalMarker, JSON.stringify({ pid: process.pid, sentAt: new Date().toISOString(), forceSend: true }), 'utf8');
+      } catch (err) {
+        process.stderr.write(`send.js: failed to write idempotency marker: ${err.message}\n`);
+      }
     }
   }
 
@@ -320,3 +443,6 @@ export function safeDraftPath(draftPath) {
   }
   return realDraft;
 }
+
+// Export htmlToText for testing
+export { htmlToText };
