@@ -7,10 +7,23 @@ import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import Anthropic from '@anthropic-ai/sdk';
+import Ajv from 'ajv';
+import { loadConfig } from '../src/config.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const repoRoot = join(__dirname, '..');
+
+// ---------------------------------------------------------------------------
+// 0. Load config and prepare AJV validator
+// ---------------------------------------------------------------------------
+
+const config = loadConfig();
+
+const schemaPath = join(__dirname, '..', 'schemas', 'aggregate-output.schema.json');
+const schema = JSON.parse(readFileSync(schemaPath, 'utf8'));
+const ajv = new Ajv({ allErrors: true, strict: false });
+const validateAggregate = ajv.compile(schema);
 
 // ---------------------------------------------------------------------------
 // 1. Load input files
@@ -35,7 +48,7 @@ const triage = JSON.parse(readFileSync(triagePath, 'utf8'));
 // ---------------------------------------------------------------------------
 
 if (triage.recommendation === 'SILENT_SKIP') {
-  const locationName = process.env.BRIEFING_LOCATION_NAME || triage.region || 'your location';
+  const locationName = config.locationName || triage.region || 'your location';
   const score = triage.migrationScore ?? 0;
   const reason = triage.recommendationReason ?? 'Low migration activity';
 
@@ -56,13 +69,26 @@ if (!existsSync(aggregatePath)) {
 }
 
 const aggregate = JSON.parse(readFileSync(aggregatePath, 'utf8'));
+
+// ---------------------------------------------------------------------------
+// 3a. Validate aggregate against schema (defense in depth)
+// ---------------------------------------------------------------------------
+
+if (!validateAggregate(aggregate)) {
+  process.stderr.write('[generate-email] aggregate-output.json failed schema validation:\n');
+  for (const err of validateAggregate.errors) {
+    process.stderr.write(`  ${err.instancePath || '/'} ${err.message} ${JSON.stringify(err.params || {})}\n`);
+  }
+  process.exit(1);
+}
+
 const routinePrompt = readFileSync(routinePromptPath, 'utf8');
 
 // ---------------------------------------------------------------------------
 // 3. Validate API key
 // ---------------------------------------------------------------------------
 
-const apiKey = process.env.ANTHROPIC_API_KEY;
+const apiKey = config.anthropicApiKey;
 if (!apiKey) {
   process.stderr.write('ERROR: ANTHROPIC_API_KEY is not set.\n');
   process.exit(1);
@@ -72,9 +98,9 @@ if (!apiKey) {
 // 4. Build system prompt
 // ---------------------------------------------------------------------------
 
-const locationName = process.env.BRIEFING_LOCATION_NAME || 'the requested location';
-const timezone = process.env.BRIEFING_TIMEZONE || 'America/New_York';
-const focusRaw = process.env.BRIEFING_FOCUS || '';
+const locationName = config.locationName || 'the requested location';
+const timezone = config.timezone;
+const focusRaw = config.briefingFocus || '';
 // Accepts letters, digits, spaces, commas, and apostrophes only.
 // '.' and '-' removed: '.' permits URL injection (https://evil.example)
 // and '-' is not needed for "shorebirds, warblers, rarity"-style hints.
@@ -157,7 +183,7 @@ const tools = [{
 let message;
 try {
   message = await client.messages.create({
-    model: 'claude-sonnet-4-5',
+    model: config.anthropicModel,
     max_tokens: 8192,
     system: systemPrompt,
     tools,
