@@ -20,7 +20,7 @@
     "flags",
     "sourceStatus"
   ],
-  "additionalProperties": true,
+  "additionalProperties": false,
   "properties": {
     "date": {
       "type": "string",
@@ -43,7 +43,7 @@
     "migration": {
       "type": "object",
       "required": ["lastNight", "season", "topExpectedSpecies", "narrativeSummary"],
-      "additionalProperties": true,
+      "additionalProperties": false,
       "properties": {
         "lastNight": {
           "description": "BirdCast last-night migration summary. Null if unavailable.",
@@ -51,17 +51,20 @@
             { "type": "null" },
             {
               "type": "object",
-              "additionalProperties": true,
+              "additionalProperties": false,
               "properties": {
                 "cumulativeBirds": { "type": ["number", "null"] },
                 "formattedCount": { "type": ["string", "null"] },
-                "isHigh": { "type": ["boolean", "null"] }
+                "isHigh": { "type": ["boolean", "null"] },
+                "peakDirection": { "type": ["string", "null"] },
+                "peakSpeedMph": { "type": ["number", "null"] },
+                "peakAltitudeFt": { "type": ["number", "null"] }
               }
             }
           ]
         },
         "season": {
-          "description": "BirdCast season comparison summary. Null if unavailable.",
+          "description": "BirdCast season comparison summary. Null if unavailable. additionalProperties: true because the BirdCast API may surface new sub-fields and we should not break on additions.",
           "oneOf": [
             { "type": "null" },
             { "type": "object", "additionalProperties": true }
@@ -88,19 +91,19 @@
         },
         "narrativeSummary": {
           "type": ["string", "null"],
-          "description": "Plain-English BirdCast migration summary for the email"
+          "description": "Plain-English BirdCast migration summary for the email. Null when BirdCast sources errored (see sourceStatus.birdcastLive / birdcastSeason)."
         }
       }
     },
     "weather": {
       "type": "object",
       "required": ["today", "outlook"],
-      "additionalProperties": true,
+      "additionalProperties": false,
       "properties": {
         "today": {
           "type": "object",
           "required": ["weatherUnavailable"],
-          "additionalProperties": true,
+          "additionalProperties": false,
           "properties": {
             "overnight": {
               "description": "NWS overnight weather. Null if unavailable.",
@@ -112,7 +115,8 @@
                   "properties": {
                     "windDirection": { "type": ["string", "null"] },
                     "windSpeedMph": { "type": ["number", "null"] },
-                    "precipProbability": { "type": ["number", "null"] }
+                    "precipProbability": { "type": ["number", "null"] },
+                    "cloudCoverPct": { "type": ["number", "null"] }
                   }
                 }
               ]
@@ -126,7 +130,8 @@
                   "additionalProperties": true,
                   "properties": {
                     "precipProbability": { "type": ["number", "null"] },
-                    "tempF": { "type": ["number", "null"] }
+                    "tempF": { "type": ["number", "null"] },
+                    "cloudCoverPct": { "type": ["number", "null"] }
                   }
                 }
               ]
@@ -142,7 +147,7 @@
           }
         },
         "outlook": {
-          "description": "5-day forward outlook. Array of per-day objects. Live runs have richer shape; fixture runs have simpler shape. Both are valid. Items may be null if a day's fetch failed.",
+          "description": "5-day forward outlook. Array of per-day objects. Live runs have richer shape; fixture runs have simpler shape. Both are valid. Items may be null if a day's fetch failed. additionalProperties: true since the per-day shape varies between live and fixture runs.",
           "type": "array",
           "items": {
             "oneOf": [
@@ -163,7 +168,7 @@
     "birdingWindow": {
       "type": "object",
       "required": ["civilTwilight", "sunrise"],
-      "additionalProperties": true,
+      "additionalProperties": false,
       "properties": {
         "civilTwilight": { "type": ["string", "null"] },
         "sunrise": { "type": ["string", "null"] },
@@ -177,7 +182,7 @@
     "moon": {
       "type": "object",
       "required": ["phaseName", "illuminationPct", "phase"],
-      "additionalProperties": true,
+      "additionalProperties": false,
       "properties": {
         "phaseName": { "type": "string" },
         "illuminationPct": { "type": "number", "minimum": 0, "maximum": 100 },
@@ -187,7 +192,7 @@
     },
     "hotspots": {
       "type": "array",
-      "description": "Top-5 nearby hotspots ranked by 7-day species count",
+      "description": "Top-5 nearby hotspots ranked by 7-day species count. additionalProperties: true on items because the hotspot record may carry richer eBird fields (lat, lng, recent species lists) added over time.",
       "items": {
         "type": "object",
         "required": ["locId", "name"],
@@ -237,7 +242,7 @@
                 "items": {
                   "type": "object",
                   "required": ["location", "date"],
-                  "additionalProperties": true,
+                  "additionalProperties": false,
                   "properties": {
                     "location": { "type": ["string", "null"] },
                     "date": { "type": ["string", "null"] },
@@ -249,7 +254,7 @@
             ]
           },
           "photo": {
-            "description": "Best photo for this species. Macaulay Library primary, Wikipedia fallback. Null if not found.",
+            "description": "Best photo for this species. Macaulay Library primary, Wikipedia fallback. Null if not found. additionalProperties: true since the media client may surface new fields (license, dimensions) without a schema bump.",
             "oneOf": [
               { "type": "null" },
               {
@@ -266,7 +271,7 @@
             ]
           },
           "recording": {
-            "description": "Best audio recording for this species. Macaulay Library only. Null if not found.",
+            "description": "Best audio recording for this species. Macaulay Library only. Null if not found. additionalProperties: true since the media client may surface new fields without a schema bump.",
             "oneOf": [
               { "type": "null" },
               {
@@ -288,11 +293,11 @@
     },
     "listservSightings": {
       "type": "array",
-      "description": "OHIO-BIRDS LISTSERV subject-line sightings. The `body` field is intentionally ABSENT from all items (security: prompt-injection defense — anyone can post to OHIO-BIRDS and the body is unsanitized). We use additionalProperties: true rather than false here so future fields can be added without a schema update, but body is never listed as a valid property.",
+      "description": "OHIO-BIRDS LISTSERV subject-line sightings. The `body` field is intentionally ABSENT from all items (security: prompt-injection defense — anyone can post to OHIO-BIRDS and the body is unsanitized). additionalProperties: false (with body deliberately not listed as a valid property) means a regression that re-introduces body is rejected by the validator, not just by the runtime strip in aggregate.js.",
       "items": {
         "type": "object",
         "required": ["subject", "url", "source"],
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "subject": { "type": "string" },
           "species": {
@@ -307,7 +312,7 @@
     },
     "hotspotNotes": {
       "type": "object",
-      "description": "Per-hotspot micro-habitat notes keyed by eBird locId. Loaded from data/hotspot-notes.json. May be empty object if file is missing.",
+      "description": "Per-hotspot micro-habitat notes keyed by eBird locId. Loaded from data/hotspot-notes.json. May be empty object if file is missing. Per-key sub-object uses additionalProperties: true since hotspot notes are user-curated YAML and the shape evolves.",
       "additionalProperties": {
         "type": "object",
         "additionalProperties": true
@@ -330,6 +335,7 @@
     },
     "flags": {
       "type": "object",
+      "description": "Derived booleans for fast prompt branching. Each field is TRI-STATE: true = condition present, false = condition absent, null = the source the flag derives from is unavailable (see sourceStatus). The prompt MUST treat null as 'unknown', never as the boolean default.",
       "required": [
         "highMigrationNight",
         "hasNotables",
@@ -339,24 +345,24 @@
         "falloutPotential",
         "liferOpportunities"
       ],
-      "additionalProperties": true,
+      "additionalProperties": false,
       "properties": {
-        "highMigrationNight": { "type": "boolean" },
-        "hasNotables": { "type": "boolean" },
-        "morningRainLikely": { "type": "boolean" },
-        "favorableOvernightWind": { "type": "boolean" },
-        "frontalPassage": { "type": "boolean" },
-        "falloutPotential": { "type": "boolean" },
-        "liferOpportunities": { "type": "number" }
+        "highMigrationNight":     { "type": ["boolean", "null"] },
+        "hasNotables":            { "type": ["boolean", "null"] },
+        "morningRainLikely":      { "type": ["boolean", "null"] },
+        "favorableOvernightWind": { "type": ["boolean", "null"] },
+        "frontalPassage":         { "type": ["boolean", "null"] },
+        "falloutPotential":       { "type": ["boolean", "null"] },
+        "liferOpportunities":     { "type": ["integer", "null"], "minimum": 0 }
       }
     },
     "sourceStatus": {
       "type": "object",
-      "description": "Per-source health for every external fetch. Values are 'ok' or 'error: <message>'. Fixture runs use a single 'fixture' key with pattern 'ok: <fixtureName>'.",
+      "description": "Per-source health for every external fetch. Values are 'ok', 'ok: <detail>', 'error: <message>', or 'skipped: <reason>' (e.g. ohioBirds for non-OH regions). Fixture runs use a single 'fixture' key with pattern 'ok: <fixtureName>'.",
       "additionalProperties": {
         "type": "string",
-        "description": "Source status string. Pattern: 'ok' | 'ok: ...' | 'error: ...'",
-        "pattern": "^(ok|error: )"
+        "description": "Source status string. Pattern: 'ok' | 'ok: ...' | 'error: ...' | 'skipped: ...'",
+        "pattern": "^(ok|error: |skipped: )"
       }
     }
   }

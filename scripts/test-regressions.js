@@ -899,10 +899,18 @@ describe('all 6 clients import and use fetchWithRetry (static source check)', ()
 // ---------------------------------------------------------------------------
 
 describe('send.js recipient comes from BRIEFING_EMAIL_TO env, not draft JSON', () => {
-  it('send.js source reads emailTo from process.env.BRIEFING_EMAIL_TO', () => {
+  it('send.js source reads emailTo from env (directly or via loadConfig)', () => {
     const src = readFileSync(join(repoRoot, 'scripts/send.js'), 'utf8');
-    assert.ok(src.includes("process.env.BRIEFING_EMAIL_TO"),
-      'send.js must read emailTo from BRIEFING_EMAIL_TO env var');
+    // After R2-W2C adopts loadConfig(), send.js may stop referencing
+    // process.env.BRIEFING_EMAIL_TO directly. Either pattern is acceptable —
+    // what matters is that the recipient is sourced from the environment,
+    // never from the draft JSON.
+    const readsEnvDirectly = src.includes('process.env.BRIEFING_EMAIL_TO');
+    const usesLoadConfig =
+      (src.includes('loadConfig') || src.includes("from '../src/config.js'") || src.includes('from "../src/config.js"')) &&
+      /\bemailTo\b/.test(src);
+    assert.ok(readsEnvDirectly || usesLoadConfig,
+      'send.js must source emailTo from BRIEFING_EMAIL_TO env (directly or via loadConfig from src/config.js)');
   });
 
   it('send.js draft JSON comment confirms recipient is NOT from draft', () => {
@@ -1138,5 +1146,202 @@ describe('fetchWithCoalesce does not cache null/falsy results', () => {
     await fetchWithCoalesce('real-key', truthyFetcher);
 
     assert.strictEqual(callCount, 1, 'truthy result should be cached after first call');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 31. R2-W2B — Schema regressions: tri-state flags + tightened
+//     additionalProperties + new contract schemas.
+// ---------------------------------------------------------------------------
+
+describe('R2-W2B aggregate schema — tri-state flags and closed objects', () => {
+  const schema = JSON.parse(readFileSync(
+    join(repoRoot, 'schemas/aggregate-output.schema.json'), 'utf8'));
+  const ajv = new Ajv({ allErrors: true, strict: false });
+  const validate = ajv.compile(schema);
+
+  // Same shape as the test-21 validSample, with sourceStatus.fixture form.
+  const baseSample = () => ({
+    date: '2026-05-18',
+    region: 'US-OH-061',
+    location: { lat: 39.1, lng: -84.5 },
+    migration: {
+      lastNight: null, season: null, topExpectedSpecies: null, narrativeSummary: null,
+    },
+    weather: {
+      today: { weatherUnavailable: true, overnight: null, morning: null },
+      outlook: [],
+    },
+    birdingWindow: { civilTwilight: '5:47 AM', sunrise: '6:12 AM' },
+    moon: { phaseName: 'Waxing Gibbous', illuminationPct: 71, phase: 0.38 },
+    hotspots: [],
+    notableObservations: [],
+    listservSightings: [],
+    hotspotNotes: {},
+    lifeList: null,
+    flags: {
+      highMigrationNight: false, hasNotables: false, morningRainLikely: false,
+      favorableOvernightWind: false, frontalPassage: false, falloutPotential: false,
+      liferOpportunities: 0,
+    },
+    sourceStatus: { ebird: 'ok', nws: 'ok' },
+  });
+
+  it('rejects listservSightings[i] with a `body` field (additionalProperties:false)', () => {
+    const s = baseSample();
+    s.listservSightings = [{
+      subject: 'Hot tip',
+      url: 'https://listserv.example.com',
+      source: 'ohio-birds-listserv',
+      body: 'Anyone can post to OHIO-BIRDS and this body would otherwise flow to the LLM.',
+    }];
+    assert.ok(!validate(s), 'schema must reject re-introduction of listservSightings[].body');
+    assert.ok(
+      validate.errors?.some(e => e.params?.additionalProperty === 'body'),
+      'rejection should specifically cite the unknown `body` property'
+    );
+  });
+
+  it('rejects an unknown top-level field', () => {
+    const s = baseSample();
+    s.somethingNew = 'oops';
+    assert.ok(!validate(s), 'top-level additionalProperties:false must reject unknown fields');
+  });
+
+  it('accepts flags.hasNotables === null (tri-state)', () => {
+    const s = baseSample();
+    s.flags.hasNotables = null;
+    s.flags.highMigrationNight = null;
+    s.flags.liferOpportunities = null;
+    assert.ok(validate(s), `null tri-state flags should validate: ${JSON.stringify(validate.errors)}`);
+  });
+
+  it('rejects flags.hasNotables = "yes" (not boolean/null)', () => {
+    const s = baseSample();
+    s.flags.hasNotables = 'yes';
+    assert.ok(!validate(s), 'string is not a valid tri-state flag value');
+  });
+
+  it('rejects migration.narrativeSummary = 42 (not string/null)', () => {
+    const s = baseSample();
+    s.migration.narrativeSummary = 42;
+    assert.ok(!validate(s), 'number is not a valid narrativeSummary value');
+  });
+
+  it('accepts migration.narrativeSummary = null (BirdCast outage)', () => {
+    const s = baseSample();
+    s.migration.narrativeSummary = null;
+    assert.ok(validate(s), 'null narrativeSummary must validate');
+  });
+});
+
+describe('R2-W2B briefing-draft schema', () => {
+  const schema = JSON.parse(readFileSync(
+    join(repoRoot, 'schemas/briefing-draft.schema.json'), 'utf8'));
+  const ajv = new Ajv({ allErrors: true, strict: false });
+  const validate = ajv.compile(schema);
+
+  it('accepts a minimal valid draft', () => {
+    assert.ok(validate({ subject: 'Hello', htmlBody: '<p>x</p>' }));
+  });
+
+  it('rejects a draft missing subject', () => {
+    assert.ok(!validate({ htmlBody: '<p>x</p>' }));
+  });
+
+  it('rejects a draft missing htmlBody', () => {
+    assert.ok(!validate({ subject: 'Hello' }));
+  });
+
+  it('rejects an oversized subject (>200 chars)', () => {
+    assert.ok(!validate({ subject: 'x'.repeat(201), htmlBody: '<p>x</p>' }));
+  });
+
+  it('rejects a draft with extra `to` field (trust boundary)', () => {
+    assert.ok(!validate({ subject: 'x', htmlBody: '<p>x</p>', to: 'attacker@evil.com' }),
+      'recipient must come from env vars, never from the draft');
+  });
+});
+
+describe('R2-W2B triage-output schema', () => {
+  const schema = JSON.parse(readFileSync(
+    join(repoRoot, 'schemas/triage-output.schema.json'), 'utf8'));
+  const ajv = new Ajv({ allErrors: true, strict: false });
+  const validate = ajv.compile(schema);
+
+  it('accepts the full_lifer triage fixture', () => {
+    const fx = JSON.parse(readFileSync(
+      join(repoRoot, 'scripts/fixtures/triage-full_lifer.json'), 'utf8'));
+    assert.ok(validate(fx), `triage fixture should validate: ${JSON.stringify(validate.errors)}`);
+  });
+
+  it('accepts the silent_skip triage fixture', () => {
+    const fx = JSON.parse(readFileSync(
+      join(repoRoot, 'scripts/fixtures/triage-silent_skip.json'), 'utf8'));
+    assert.ok(validate(fx));
+  });
+
+  it('rejects an unknown recommendation enum value', () => {
+    const bad = {
+      date: '2026-05-18', region: 'US-OH-061',
+      migrationScore: 5, recommendation: 'MAYBE_SEND',
+      recommendationReason: 'idk',
+    };
+    assert.ok(!validate(bad), 'unknown recommendation must be rejected');
+  });
+
+  it('accepts an error variant', () => {
+    assert.ok(validate({ error: 'Missing API keys', sendBriefing: false }));
+  });
+});
+
+describe('R2-W2B aggregate fixture mode reflects eBird outage as null hasNotables', () => {
+  // Integration check: when BRIEFING_TEST_FIXTURE_EBIRD_ERROR=true is passed
+  // (or equivalent), aggregate output should set flags.hasNotables = null per
+  // R2-W2A's tri-state work. We can't reliably exec aggregate.js here without
+  // network + R2-W2A's changes, so we instead exercise the schema invariant
+  // by constructing the post-R2-W2A shape directly and asserting both:
+  //   (a) the schema accepts hasNotables === null
+  //   (b) the schema accepts sourceStatus value of "error: …"
+  it('null hasNotables + sourceStatus.ebirdNotables error round-trips through schema', () => {
+    const schema = JSON.parse(readFileSync(
+      join(repoRoot, 'schemas/aggregate-output.schema.json'), 'utf8'));
+    const ajv = new Ajv({ allErrors: true, strict: false });
+    const validate = ajv.compile(schema);
+    const s = {
+      date: '2026-05-18', region: 'US-OH-061',
+      location: { lat: 39.1, lng: -84.5 },
+      migration: { lastNight: null, season: null, topExpectedSpecies: null, narrativeSummary: null },
+      weather: { today: { weatherUnavailable: true, overnight: null, morning: null }, outlook: [] },
+      birdingWindow: { civilTwilight: '5:47 AM', sunrise: '6:12 AM' },
+      moon: { phaseName: 'New', illuminationPct: 0, phase: 0 },
+      hotspots: [], notableObservations: [], listservSightings: [], hotspotNotes: {},
+      lifeList: null,
+      flags: {
+        highMigrationNight: false,
+        hasNotables: null,            // <- eBird errored, tri-state null
+        morningRainLikely: false,
+        favorableOvernightWind: false,
+        frontalPassage: false,
+        falloutPotential: false,
+        liferOpportunities: null,     // <- eBird errored, count unknown
+      },
+      sourceStatus: { ebirdNotables: 'error: HTTP 503', nws: 'ok' },
+    };
+    assert.ok(validate(s), `tri-state error shape must validate: ${JSON.stringify(validate.errors)}`);
+  });
+});
+
+describe('R2-W2B prompt invariant: routine-prompt.md documents tri-state semantics', () => {
+  it('routine-prompt.md mentions "tri-state"', () => {
+    const md = readFileSync(join(repoRoot, 'routine-prompt.md'), 'utf8');
+    assert.ok(/tri-state/i.test(md),
+      'routine-prompt.md must document tri-state flag semantics — guards against the rule being removed');
+  });
+
+  it('routine-prompt.md still has --- START --- and --- END --- markers', () => {
+    const md = readFileSync(join(repoRoot, 'routine-prompt.md'), 'utf8');
+    assert.ok(md.includes('--- START ---'), 'START marker missing');
+    assert.ok(md.includes('--- END ---'), 'END marker missing');
   });
 });
