@@ -205,8 +205,8 @@ Structure your email as inline-CSS HTML (mobile-friendly, max-width 600px, table
    - **Where to look:** Write prose directions first — use `hotspotNotes[locId].trails[].directions` for exact trail names, GPS, landmarks. Then close with a single compact sentence summarising the `recentSightings[]` data as a quoted recent trail: e.g. "Recent reports: **Burnet Woods** today 07:31 (×1) · **Otto Armleder** yesterday 18:19–19:41 (3 reports) — start at the most recent site." Collapse multiple sightings at the same location into one entry with a time range and count. Do NOT dump the raw array as an arrow-separated list — integrate it naturally as supporting evidence at the end of the prose.
    - **Field ID:** 2–3 sentences. Steps in order:
      1. **Visual clincher first** — the one field mark that eliminates confusion with similar species (complete vs broken eye-ring, wing pattern in flight, leg color, etc.).
-     2. **Vocalization from All About Birds** — fetch `allAboutBirdsUrl` using your browser tool and copy the song/call description text from the Sounds page verbatim (or closely paraphrased). Do NOT transcribe from memory — phonetic mnemonics vary across sources and hallucinated mnemonics misdirect birders. If the page is unreachable, write "Song is distinctive — load **Merlin Sound ID** and listen before going" and stop.
-     3. Close with: "Confirm with **Merlin Sound ID** before going."
+     2. **Vocalization from All About Birds** — fetch `allAboutBirdsUrl` using your browser tool and copy the song/call description text from the Sounds page verbatim (or closely paraphrased). Do NOT transcribe from memory — phonetic mnemonics vary across sources and hallucinated mnemonics misdirect birders. If the page is unreachable, skip the vocalization and go straight to step 3.
+     3. Close with: "Confirm song with **Merlin Sound ID** before going."
    - If `migration.lastNight.isHigh`, note that additional individuals of the target species are likely present.
    - Omit entirely if no genuine prize birds exist.
 
