@@ -237,14 +237,51 @@ Structure your email as inline-CSS HTML (mobile-friendly, max-width 600px, table
    - Bar chart: one row per hotspot (top 5), proportional to 7-day species count. Featured/best hotspot bar in `#1a3a2a`, others in `#52796f`.
    - Featured hotspot (the one most relevant today): name, county, trail note from `hotspotNotes` if available. Other hotspots listed compactly below the chart. Do NOT include phonetic song transcriptions anywhere in hotspot notes — refer to Merlin Sound ID instead.
 
-6. **Notable / Rare Sightings** — Only if `hasNotables`. Bullets first, then table.
+6. **Notable / Rare Sightings** — Only if `hasNotables`. Bullets first, then stacked-row list.
    - Bullets (2–3): rarest species seen, any lifers, most recent sighting
-   - Table: Photo | Species | Location | Date | Count. Photo column: 48×48 thumbnail from `notableObservations[].photo.thumbnailUrl` if available (see Bird photo spec). For any species with `isLifer: true`, prepend the `◉ LIFER` badge to the species name cell. No row background colors — alternating thin `#e8e8e8` bottom borders only. Dark green header row.
-   - **Audio pill on every row.** If `notableObservations[i].recording` is non-null, append a compact "▶ Listen" pill button to the species name cell (after the species name, matching the LIFER badge style for visual consistency). Use this exact markup:
+   - **Layout: stacked-row list, NOT a multi-column table.** Mobile-first design — each notable observation is a self-contained row that reads identically at 320px and 1200px wide. No column headers. No column alignment across rows. The pattern is identical to modern app list-items (Apple Mail inbox, eBird mobile, Spotify track rows): photo pinned left + stacked text on the right.
+
+     Render the full list as one outer `<table cellpadding="0" cellspacing="0" border="0" width="100%">` with **one `<tr>` per observation**. Inside each row, use a nested 2-column table:
+
      ```
-     <a href="{recording.listenUrl}" style="display:inline-block;background:#1a3a2a;color:#fff;text-decoration:none;font-size:10px;font-weight:bold;padding:2px 6px;border-radius:10px;font-family:Arial,sans-serif;vertical-align:middle;line-height:1.4;white-space:nowrap;margin-left:6px">▶ Listen</a>
+     <tr><td style="padding:10px 0;border-bottom:1px solid #e8e8e8">
+       <table cellpadding="0" cellspacing="0" border="0" width="100%">
+         <tr>
+           <!-- LEFT: photo column, fixed 56px wide, vertical-align top -->
+           <td width="56" valign="top" style="padding-right:12px;width:56px">
+             {if photo.thumbnailUrl} <img src="{photo.thumbnailUrl}" alt="{species}" width="56" height="56" style="display:block;width:56px;height:56px;object-fit:cover;border-radius:6px">
+             {else} <div style="width:56px;height:56px;background:#f0f0f0;border-radius:6px"></div>
+           </td>
+           <!-- RIGHT: content column, fills the rest -->
+           <td valign="top" style="font-family:Arial,sans-serif">
+             <!-- Line 1: badge (if lifer) + species name, bold dark green -->
+             <div style="font-size:15px;font-weight:bold;color:#1a3a2a;line-height:1.3">
+               {if isLifer} <span style="display:inline-block;background:#c0392b;color:#fff;font-size:10px;font-weight:bold;padding:2px 6px;border-radius:10px;vertical-align:middle;line-height:1.4;white-space:nowrap;margin-right:6px">◉ LIFER</span>
+               <span style="vertical-align:middle">{species}</span>
+             </div>
+             <!-- Line 2: location, secondary gray -->
+             <div style="font-size:13px;color:#666;margin-top:3px;line-height:1.4">{location}</div>
+             <!-- Line 3: date · count on the left, Listen pill right-aligned -->
+             <table cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-top:5px">
+               <tr>
+                 <td style="font-size:12px;color:#999;font-family:Arial,sans-serif">{MM/DD HH:MM} · ×{count}</td>
+                 <td align="right" style="font-family:Arial,sans-serif">
+                   {if recording} <a href="{recording.listenUrl}" style="display:inline-block;background:#1a3a2a;color:#fff;text-decoration:none;font-size:11px;font-weight:bold;padding:6px 12px;border-radius:12px;white-space:nowrap">▶ Listen</a>
+                 </td>
+               </tr>
+             </table>
+           </td>
+         </tr>
+       </table>
+     </td></tr>
      ```
-     No spectrogram thumbnail and no attribution text in the table — the table needs to stay scannable. The spectrogram + recordist attribution belong only in the larger Chase Target cards. If `recording` is null, omit the pill entirely.
+
+     **Rules:**
+     - Every row uses this exact structure even if some fields are missing. Render an empty `#f0f0f0` 56px box for missing photos and omit the Listen pill (not the cell) for null recordings — preserves alignment.
+     - No alternating row backgrounds — only the bottom-border hairline.
+     - No `<thead>` / column-header row. Visual hierarchy is bold-15px → regular-13px → light-12px, top to bottom.
+     - All horizontal lengths are flexible — the photo cell is the only fixed-width element. Long species names wrap inside the content column naturally; the Listen pill stays right-aligned regardless.
+     - **No spectrogram thumbnail and no recordist attribution in the table** — those belong only on Chase Target cards.
 
 7. **Community Buzz** — Only if `listservSightings` non-empty. Bullets first, then report cards.
    - Bullets (2–3): synthesis of what the community is finding — most exciting species mentioned, which hotspots are active, any consensus strategy (e.g. "community consensus: go early, Spring Grove is the pick")
