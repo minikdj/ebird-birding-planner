@@ -16,7 +16,8 @@
     "triage": "node scripts/triage.js",
     "aggregate": "node scripts/aggregate.js",
     "send": "node scripts/send.js",
-    "test:unit": "node scripts/test-unit.js",
+    "test:unit": "node scripts/test-unit.js && node scripts/test-regressions.js",
+    "test:regressions": "node scripts/test-regressions.js",
     "validate:schema": "node scripts/validate-schema.js"
   },
   "keywords": [

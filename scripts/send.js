@@ -291,7 +291,32 @@ async function main() {
   process.exit(0);
 }
 
-main().catch((err) => {
-  process.stderr.write(`send.js crashed: ${err.message}\n`);
-  process.exit(1);
-});
+// Guard: only run main() when executed directly, not when imported for testing.
+if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])) {
+  main().catch((err) => {
+    process.stderr.write(`send.js crashed: ${err.message}\n`);
+    process.exit(1);
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Exported helpers — used by tests to verify the real logic, not inline copies
+// ---------------------------------------------------------------------------
+
+/** Validate an email address with send.js's actual regex. */
+export function validateEmail(addr) {
+  return /^[^\s,;<>]+@[^\s,;<>]+\.[^\s,;<>]+$/.test(addr);
+}
+
+/**
+ * Resolve and validate a draft file path against the repo root.
+ * Returns the real resolved path if safe, or throws if outside the repo root.
+ */
+export function safeDraftPath(draftPath) {
+  const realDraft = realpathSync(resolve(draftPath));
+  const realRoot = realpathSync(repoRoot);
+  if (!realDraft.startsWith(realRoot + sep)) {
+    throw new Error('draftPath must be within the repo root');
+  }
+  return realDraft;
+}

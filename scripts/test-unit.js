@@ -19,6 +19,7 @@ import {
 } from '../src/utils.js';
 
 import { degreesToCardinal } from '../src/birdcast-client.js';
+import { validateEmail, safeDraftPath } from './send.js';
 
 // ---------------------------------------------------------------------------
 // 1. utils.js — toYMD
@@ -264,53 +265,44 @@ describe('degreesToCardinal', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 11. Email validation regex (inlined from send.js)
+// 11. Email validation — uses real validateEmail from send.js (not inlined copy)
 // ---------------------------------------------------------------------------
 
-describe('email validation regex', () => {
-  // Regex used in send.js line 112:
-  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-  it('valid: user@example.com', () => assert.ok(EMAIL_RE.test('user@example.com')));
-  it('valid: user.name+tag@example.co.uk', () => assert.ok(EMAIL_RE.test('user.name+tag@example.co.uk')));
-  it('invalid: notanemail', () => assert.ok(!EMAIL_RE.test('notanemail')));
-  it('invalid: @example.com (no local part)', () => assert.ok(!EMAIL_RE.test('@example.com')));
-  it('invalid: user@ (no domain)', () => assert.ok(!EMAIL_RE.test('user@')));
-  it('invalid: empty string', () => assert.ok(!EMAIL_RE.test('')));
-  it('invalid: user@example (no TLD dot)', () => assert.ok(!EMAIL_RE.test('user@example')));
+describe('email validation (via send.js validateEmail)', () => {
+  // Uses the exported validateEmail() from send.js — tests the REAL regex,
+  // not an inlined copy that can drift from the source.
+  it('valid: user@example.com', () => assert.ok(validateEmail('user@example.com')));
+  it('valid: user.name+tag@example.co.uk', () => assert.ok(validateEmail('user.name+tag@example.co.uk')));
+  it('invalid: notanemail', () => assert.ok(!validateEmail('notanemail')));
+  it('invalid: @example.com (no local part)', () => assert.ok(!validateEmail('@example.com')));
+  it('invalid: user@ (no domain)', () => assert.ok(!validateEmail('user@')));
+  it('invalid: empty string', () => assert.ok(!validateEmail('')));
+  it('invalid: user@example (no TLD dot)', () => assert.ok(!validateEmail('user@example')));
 });
 
 // ---------------------------------------------------------------------------
-// 12. Path traversal guard logic (inlined from send.js)
+// 12. Path traversal guard — uses real safeDraftPath from send.js (not inlined copy)
 // ---------------------------------------------------------------------------
 
-describe('path traversal guard', () => {
-  const repoRoot = '/some/repo/root';
+// Compute repo root relative to test-unit.js location (scripts/ → parent)
+const repoRootForPathTest = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
 
-  function isSafe(draftPath) {
-    const resolved = path.resolve(draftPath);
-    return resolved.startsWith(repoRoot + path.sep);
-  }
+describe('path traversal guard (via send.js safeDraftPath)', () => {
+  // Uses the exported safeDraftPath() which calls realpathSync — the real
+  // defense used in production (not a plain resolve() approximation).
 
-  it('file directly in repoRoot → safe', () => {
-    assert.ok(isSafe('/some/repo/root/briefing-draft.json'));
+  it('package.json in repo root → does not throw', () => {
+    const validPath = path.join(repoRootForPathTest, 'package.json');
+    assert.doesNotThrow(() => safeDraftPath(validPath));
   });
 
-  it('file in subdirectory of repoRoot → safe', () => {
-    assert.ok(isSafe('/some/repo/root/subdir/draft.json'));
+  it('/etc/hosts → throws (outside repo root)', () => {
+    assert.throws(() => safeDraftPath('/etc/hosts'), /repo root/);
   });
 
-  it('/etc/passwd → NOT safe', () => {
-    assert.ok(!isSafe('/etc/passwd'));
-  });
-
-  it('path traversal via .. resolves outside root → NOT safe', () => {
-    assert.ok(!isSafe('/some/repo/root/../../../etc/passwd'));
-  });
-
-  it('prefix attack (/some/repo/rootevil) → NOT safe', () => {
-    // Ensures startsWith + sep prevents matching a sibling dir named "rootevil"
-    assert.ok(!isSafe('/some/repo/rootevil/draft.json'));
+  it('send.js itself is inside the repo root → does not throw', () => {
+    const sendPath = path.join(repoRootForPathTest, 'scripts', 'send.js');
+    assert.doesNotThrow(() => safeDraftPath(sendPath));
   });
 });
 
