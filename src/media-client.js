@@ -26,9 +26,29 @@ const WIKI_API_BASE = 'https://en.wikipedia.org/api/rest_v1/page/summary';
 // Request timeout: 6s (media fetches are non-critical path)
 const TIMEOUT_MS = 6000;
 
+// User-Agent: required by Wikimedia policy; good practice for all APIs
+const USER_AGENT = 'ebird-birding-planner/1.0 (https://github.com/minikdj/ebird-birding-planner)';
+
+// URL allowlists — defense-in-depth against a malicious upstream response
+// injecting javascript: URLs or other non-CDN content into photo fields.
+const MACAULAY_CDN_PREFIX  = 'https://cdn.download.ams.birds.cornell.edu/';
+const MACAULAY_PAGE_PREFIX = 'https://macaulaylibrary.org/';
+const WIKI_UPLOAD_PREFIX   = 'https://upload.wikimedia.org/';
+const WIKI_PAGE_PREFIX     = 'https://en.wikipedia.org/';
+
+function isAllowedMacaulayUrl(url) {
+  return typeof url === 'string' &&
+    (url.startsWith(MACAULAY_CDN_PREFIX) || url.startsWith(MACAULAY_PAGE_PREFIX));
+}
+
+function isAllowedWikipediaUrl(url) {
+  return typeof url === 'string' &&
+    (url.startsWith(WIKI_UPLOAD_PREFIX) || url.startsWith(WIKI_PAGE_PREFIX));
+}
+
 export class MediaClient {
   constructor() {
-    this._cache = new Cache(PHOTO_CACHE_TTL);
+    this._cache = new Cache();
   }
 
   /**
@@ -64,7 +84,10 @@ export class MediaClient {
       photo = await this._getWikipediaPhoto(commonName).catch(() => null);
     }
 
-    this._cache.set(cacheKey, photo);
+    // Use a shorter TTL for null results so a transient upstream outage
+    // (e.g. Macaulay 5xx) doesn't poison the cache for a full week.
+    const ttl = photo === null ? 60 * 60 * 1000 : PHOTO_CACHE_TTL;  // 1h vs 7d
+    this._cache.set(cacheKey, photo, ttl);
     return photo;
   }
 
@@ -130,7 +153,8 @@ export class MediaClient {
       recording = await this._getMacaulayRecording(speciesCode).catch(() => null);
     }
 
-    this._cache.set(cacheKey, recording);
+    const ttl = recording === null ? 60 * 60 * 1000 : PHOTO_CACHE_TTL;  // 1h vs 7d
+    this._cache.set(cacheKey, recording, ttl);
     return recording;
   }
 
@@ -177,7 +201,10 @@ export class MediaClient {
 
     const resp = await fetch(url, {
       signal: AbortSignal.timeout(TIMEOUT_MS),
-      headers: { 'Accept': 'application/json' },
+      headers: {
+        'Accept':     'application/json',
+        'User-Agent': USER_AGENT,
+      },
     });
 
     if (!resp.ok) return null;
@@ -203,6 +230,18 @@ export class MediaClient {
 
     const attribution = `Photo: ${photographer}${location ? ` · ${location}` : ''}${date ? ` · ${date}` : ''} (Macaulay Library #${assetId})`;
 
+    const detailPageUrl = asset.specimenUrl || `https://macaulaylibrary.org/asset/${assetId}`;
+
+    // Validate all URL fields before returning
+    if (!isAllowedMacaulayUrl(photoUrl) || !isAllowedMacaulayUrl(thumbUrl) || !isAllowedMacaulayUrl(detailPageUrl)) {
+      for (const u of [photoUrl, thumbUrl, detailPageUrl]) {
+        if (!isAllowedMacaulayUrl(u)) {
+          process.stderr.write(`[media-client] rejected non-allowlisted URL: ${u.slice(0, 80)}\n`);
+        }
+      }
+      return null;
+    }
+
     return {
       url: photoUrl,
       thumbnailUrl: thumbUrl,
@@ -211,7 +250,7 @@ export class MediaClient {
       source: 'macaulay',
       assetId,
       rating,
-      detailPageUrl: asset.specimenUrl || `https://macaulaylibrary.org/asset/${assetId}`,
+      detailPageUrl,
     };
   }
 
@@ -226,7 +265,10 @@ export class MediaClient {
 
     const resp = await fetch(url, {
       signal: AbortSignal.timeout(TIMEOUT_MS),
-      headers: { 'Accept': 'application/json' },
+      headers: {
+        'Accept':     'application/json',
+        'User-Agent': USER_AGENT,
+      },
     });
 
     if (!resp.ok) return null;
@@ -254,9 +296,21 @@ export class MediaClient {
     const spectrogramUrl = asset.previewUrl || asset.thumbnailUrl
       || `https://cdn.download.ams.birds.cornell.edu/api/v1/asset/${assetId}/poster`;
 
+    const listenUrl = `https://macaulaylibrary.org/asset/${assetId}`;
+
+    // Validate all URL fields before returning
+    if (!isAllowedMacaulayUrl(spectrogramUrl) || !isAllowedMacaulayUrl(listenUrl)) {
+      for (const u of [spectrogramUrl, listenUrl]) {
+        if (!isAllowedMacaulayUrl(u)) {
+          process.stderr.write(`[media-client] rejected non-allowlisted URL: ${u.slice(0, 80)}\n`);
+        }
+      }
+      return null;
+    }
+
     return {
       assetId,
-      listenUrl: `https://macaulaylibrary.org/asset/${assetId}`,
+      listenUrl,
       spectrogramUrl,
       recordist,
       attribution,
@@ -277,7 +331,10 @@ export class MediaClient {
 
     const resp = await fetch(url, {
       signal: AbortSignal.timeout(TIMEOUT_MS),
-      headers: { 'Accept': 'application/json' },
+      headers: {
+        'Accept':     'application/json',
+        'User-Agent': USER_AGENT,
+      },
     });
 
     if (!resp.ok) return null;
@@ -297,6 +354,18 @@ export class MediaClient {
     const mediumUrl = thumbnail.source.replace(/\/(\d+)px-/, '/640px-');
     const thumbUrl  = thumbnail.source.replace(/\/(\d+)px-/, '/320px-');
 
+    const wikiUrl = data.content_urls?.desktop?.page || `https://en.wikipedia.org/wiki/${title}`;
+
+    // Validate all URL fields before returning
+    if (!isAllowedWikipediaUrl(mediumUrl) || !isAllowedWikipediaUrl(thumbUrl) || !isAllowedWikipediaUrl(wikiUrl)) {
+      for (const u of [mediumUrl, thumbUrl, wikiUrl]) {
+        if (!isAllowedWikipediaUrl(u)) {
+          process.stderr.write(`[media-client] rejected non-allowlisted URL: ${u.slice(0, 80)}\n`);
+        }
+      }
+      return null;
+    }
+
     return {
       url: mediumUrl,
       thumbnailUrl: thumbUrl,
@@ -304,7 +373,7 @@ export class MediaClient {
       attribution: `Image from Wikimedia Commons · Wikipedia: ${data.title}`,
       source: 'wikipedia',
       rating: null,
-      wikiUrl: data.content_urls?.desktop?.page || `https://en.wikipedia.org/wiki/${title}`,
+      wikiUrl,
     };
   }
 }

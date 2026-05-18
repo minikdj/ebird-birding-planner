@@ -1,8 +1,10 @@
-import { Cache } from './utils.js';
+import { Cache, haversineKm } from './utils.js';
 
 const BASE_URL = 'https://api.inaturalist.org/v1';
 const RATE_LIMIT_DELAY_MS = 1000;
 const CACHE_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
+
+const USER_AGENT = 'ebird-birding-planner/1.0 (https://github.com/minikdj/ebird-birding-planner)';
 
 export class INaturalistClient {
   constructor() {
@@ -61,7 +63,10 @@ export class INaturalistClient {
 
   async #get(url) {
     try {
-      const response = await fetch(url, { signal: AbortSignal.timeout(10_000) });
+      const response = await fetch(url, {
+        signal: AbortSignal.timeout(10_000),
+        headers: { 'User-Agent': USER_AGENT },
+      });
       if (!response.ok) {
         process.stderr.write(
           `INaturalistClient: HTTP ${response.status} for ${url}\n`
@@ -75,18 +80,6 @@ export class INaturalistClient {
       );
       return null;
     }
-  }
-
-  #haversineKm(lat1, lng1, lat2, lng2) {
-    const R = 6371;
-    const dLat = ((lat2 - lat1) * Math.PI) / 180;
-    const dLng = ((lng2 - lng1) * Math.PI) / 180;
-    const a =
-      Math.sin(dLat / 2) ** 2 +
-      Math.cos((lat1 * Math.PI) / 180) *
-        Math.cos((lat2 * Math.PI) / 180) *
-        Math.sin(dLng / 2) ** 2;
-    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   }
 
   #parseObservationLocation(locationStr) {
@@ -110,7 +103,7 @@ export class INaturalistClient {
       const obsLoc = this.#parseObservationLocation(result.location);
       if (!obsLoc) continue;
 
-      const dist = this.#haversineKm(lat, lng, obsLoc.lat, obsLoc.lng);
+      const dist = haversineKm(lat, lng, obsLoc.lat, obsLoc.lng);
       if (minDist === null || dist < minDist) {
         minDist = dist;
       }
