@@ -240,6 +240,11 @@ Structure your email as inline-CSS HTML (mobile-friendly, max-width 600px, table
 6. **Notable / Rare Sightings** — Only if `hasNotables`. Bullets first, then table.
    - Bullets (2–3): rarest species seen, any lifers, most recent sighting
    - Table: Photo | Species | Location | Date | Count. Photo column: 48×48 thumbnail from `notableObservations[].photo.thumbnailUrl` if available (see Bird photo spec). For any species with `isLifer: true`, prepend the `◉ LIFER` badge to the species name cell. No row background colors — alternating thin `#e8e8e8` bottom borders only. Dark green header row.
+   - **Audio pill on every row.** If `notableObservations[i].recording` is non-null, append a compact "▶ Listen" pill button to the species name cell (after the species name, matching the LIFER badge style for visual consistency). Use this exact markup:
+     ```
+     <a href="{recording.listenUrl}" style="display:inline-block;background:#1a3a2a;color:#fff;text-decoration:none;font-size:10px;font-weight:bold;padding:2px 6px;border-radius:10px;font-family:Arial,sans-serif;vertical-align:middle;line-height:1.4;white-space:nowrap;margin-left:6px">▶ Listen</a>
+     ```
+     No spectrogram thumbnail and no attribution text in the table — the table needs to stay scannable. The spectrogram + recordist attribution belong only in the larger Chase Target cards. If `recording` is null, omit the pill entirely.
 
 7. **Community Buzz** — Only if `listservSightings` non-empty. Bullets first, then report cards.
    - Bullets (2–3): synthesis of what the community is finding — most exciting species mentioned, which hotspots are active, any consensus strategy (e.g. "community consensus: go early, Spring Grove is the pick")
@@ -277,6 +282,24 @@ Write the draft to `./briefing-draft.json` (relative to the project root, where 
   "htmlBody": "<your full HTML email here>"
 }
 ```
+
+**Recommended: build the JSON via a Node helper script** rather than hand-escaping the HTML. A 15KB+ HTML body with embedded CSS, quotes, and newlines is easy to corrupt with manual JSON escaping, and one stray character produces invalid JSON that crashes `send.js`. The robust pattern:
+
+```bash
+cat > /tmp/build-briefing.cjs <<'NODE_EOF'
+const fs = require('fs');
+const html = `<!doctype html>
+... your full HTML email here, as a JS template literal —
+no escaping needed for quotes, newlines, or backslashes ...
+`;
+const draft = { subject: '[Birding] ...', htmlBody: html };
+fs.writeFileSync('./briefing-draft.json', JSON.stringify(draft, null, 2));
+console.log('Draft written:', Object.keys(draft).join(', '), '— htmlBody', html.length, 'chars');
+NODE_EOF
+node /tmp/build-briefing.cjs
+```
+
+The template literal handles every escape for free, and `JSON.stringify` produces valid output guaranteed. After the script runs successfully, delete `/tmp/build-briefing.cjs` — it is scratch work, not source code, and must not be left in the repo. Writing the helper to `/tmp/` (not the project root) keeps the working tree clean automatically.
 
 Subject line guidelines:
 - Full briefing: `[Birding] {intensity} migration · {top notable or best hotspot} · {date}`

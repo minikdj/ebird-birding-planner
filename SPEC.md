@@ -996,15 +996,24 @@ GET https://search.macaulaylibrary.org/api/v1/search?taxonCode={speciesCode}&cou
 
 The asset detail page (`https://macaulaylibrary.org/asset/{assetId}`) renders an HTML5 audio player and spectrogram with no login required.
 
-### Email rendering rules (defined in `routine-prompt.md` Field ID block)
+### Email rendering rules (defined in `routine-prompt.md`)
 
-- **Audio block** appears at the bottom of each Chase Target card's Field ID, immediately below the visual marks prose. It's a stacked two-piece composition wrapped in a single `<a>`:
+Two distinct treatments by section. Both link to the same Macaulay asset page.
+
+**Chase Target card** (Field ID block) — full audio block with spectrogram:
+- Stacked two-piece composition wrapped in a single `<a>`:
   - **Spectrogram image** on top — `recording.spectrogramUrl` rendered at `width:100%; max-width:560px; height:auto; border-radius:4px 4px 0 0`. The dark-green `#0f2318` background fills any letterbox space, matching the Chase Target hero photo treatment.
   - **Listen button** on the bottom — dark green `#1a3a2a` strip with white "▶ Listen at Macaulay Library" text, `border-radius:0 0 4px 4px` so it fuses visually with the spectrogram above.
 - The whole stack is one tap target — tap anywhere on the spectrogram or button to open the Macaulay asset page (audio player + full-resolution spectrogram).
 - **Attribution** below the audio block: small gray text (`font-size:10px; color:#999`) — "Recorded by {recordist} · or open Merlin Sound ID in the field"
-- **Null handling**: if `recording` is null, omit the entire audio block and render only "Listen with **Merlin Sound ID** before going."
-- **No phonetic mnemonics anywhere in the email** — this rule predates audio integration and remains in force. The Macaulay link is the only audio reference allowed in the Field ID prose.
+
+**Notable Sightings table row** — compact pill button only:
+- A small `▶ Listen` pill button appended to the species name cell, after the species name (and after the `◉ LIFER` badge if present). Same pill styling as the LIFER badge but in design-system green `#1a3a2a` so the two pills read as parallel UI elements.
+- No spectrogram thumbnail and no recordist attribution in the table — the table needs to stay scannable. Visual density is the priority.
+
+**Both treatments:**
+- **Null handling**: if `recording` is null, omit the audio control entirely. In the Chase Target this means falling back to "Listen with **Merlin Sound ID** before going."; in the table it means no pill at all.
+- **No phonetic mnemonics anywhere in the email** — this rule predates audio integration and remains in force. Macaulay links and the Merlin fallback are the only audio references allowed.
 
 ---
 
