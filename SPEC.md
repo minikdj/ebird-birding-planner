@@ -5,22 +5,46 @@
 
 ---
 
-## Current State (as of 2026-05-17)
+## Current State (as of 2026-05-18)
 
-The system is fully implemented and confirmed working end-to-end in three live
-Routine runs. The MCP server exposes 11 tools for Claude Desktop interactive use.
-The Routine agent runs daily at 09:00 UTC, clones the GitHub repo, runs
-`triage.js` → `aggregate.js`, writes a dynamic email, and delivers via Resend.
-The FULL_BRIEFING path is confirmed. QUIET_PERIOD rescheduling and all fallback
-delivery paths still need documented E2E verification (see Section 14).
+The system is fully implemented and confirmed working end-to-end across
+multiple live Routine runs. The MCP server exposes 11 tools for Claude Desktop
+interactive use. The Routine agent runs daily at 09:00 UTC, clones the GitHub
+repo, runs `triage.js` → `aggregate.js`, writes a dynamic email, and delivers
+via Resend. The FULL_BRIEFING path is confirmed across many runs. QUIET_PERIOD
+rescheduling and all fallback delivery paths still need documented E2E
+verification (see Section 14).
+
+### Locked-in features (verified across multiple production runs)
+
+| Feature | Where defined | Verified |
+|---|---|---|
+| Day-of-week from `date` shell command (not LLM memory) | routine-prompt.md Step 1 | ✅ |
+| Photo `object-fit:contain` (no cropping) + dark green letterbox | routine-prompt.md Bird photo spec | ✅ |
+| `photo.url` always CDN, never webpage link (renamed `detailPageUrl`) | src/media-client.js | ✅ |
+| Recent sightings trail rendered as compact prose-first sentence | routine-prompt.md Chase Targets | ✅ |
+| Zero phonetic song mnemonics anywhere in the email | routine-prompt.md Field ID block (hard constraint + banned-token list) | ✅ |
+| HTML entities banned for punctuation; unicode characters only (·, —, –, •, °, ×, …) | routine-prompt.md HTML safety | ✅ |
+| `esc()` helper idempotent (no `&amp;amp;` triple-encoding) | routine-prompt.md HTML safety | ✅ |
+| Photo attribution rendered verbatim from `photo.attribution` (no double-prefix) | routine-prompt.md Bird photo spec | ✅ |
+| Card subtitle locked to "Location · reported [today/yesterday], HH:MM" | routine-prompt.md Chase card spec | ✅ |
+| Hotspot featured note never includes song transcriptions | routine-prompt.md Top Hotspots spec | ✅ |
+| JSON helper script pattern documented for building the draft | routine-prompt.md Step 6 | ✅ |
+
+### New capabilities (built and verified in production)
+
+| Capability | Implementation | Section |
+|---|---|---|
+| **Macaulay audio button + spectrogram** on every Chase Target — tappable stack of preview image + green button → opens recording in browser | `src/media-client.js getTopRecording()`, `aggregate.js` parallel fetch with photos | 6C |
+| **Compact "▶ Listen" pill** on every Notable Sightings row with audio | `routine-prompt.md` Notable Sightings spec | 6C |
+| **Mobile-native stacked-row Notable Sightings layout** — replaces the old 5-column table that broke on iPhone. 56px photo + 3-line stacked content + hairline divider. Renders identically from 320px to 1200px wide. | `routine-prompt.md` Notable Sightings spec | 7 |
+| **eBird species page links** on every species name (chase cards + table rows). Subtle styled underline with `color:inherit`; clicking the name opens the canonical eBird species page (range map, abundance, recordings). | `routine-prompt.md` species-link spec | 7 |
+| **Local layout preview renderer** at `scripts/preview-notable-sightings.mjs` — generates HTML at multiple widths so every prompt change can be visually verified before a Routine retest | `scripts/preview-notable-sightings.mjs` | 11 |
+| **Recent sightings array** (`notableObservations[i].recentSightings[]`) — every confirmed location for a species in last 48h, used to render the full chase trail | `aggregate.js`, surfaced in routine-prompt | 4B |
 
 **Three expert reviews completed 2026-05-17** (architecture, code quality,
-security). Key fixes applied during review: workflow concurrency group added,
-`permissions: contents: read` added to workflow, send step gated on
-generate-email success, BRIEFING_FOCUS sanitized against prompt injection,
-workflow input validation added (region/lat/lng format), stale draft age warning
-added in send.js. Review findings documented in Section 12; new technical debt
-items and security action items added to Section 14.
+security). Key fixes applied during review documented in Section 12; technical
+debt items and security action items in Section 14.
 
 **171 unit tests passing.**
 
@@ -1035,29 +1059,77 @@ Fallback chain (tried in order if Resend unavailable):
 
 **Subject**: `[Birding] {intensity} migration · {top notable species} · {date}`
 
-**Structure** (table-based HTML, inline CSS only, mobile-friendly, max-width 600px):
+**Structure** (table-based HTML, inline CSS only, mobile-native, max-width 600px). All sections follow the Design System rules in `routine-prompt.md` — two colors only (`#1a3a2a` green, `#c0392b` red), unicode punctuation only, and three-part section pattern (bullets → visual → narrative).
 
 ```
-┌─────────────────────────────────┐
-│  3-bullet executive summary      │  Plain text, fits email preview pane
-│  • Last night: X birds (HIGH)   │
-│  • Tonight: south winds, clear  │
-│  • Hot spot: Otto Armleder      │
-│    → Connecticut Warbler (photo) │
-├─────────────────────────────────┤
-│  ★ Chase Targets                 │  Only when genuine prize birds present
-│  (dedicated cards per bird)      │  Rarity context + where to look + field ID
-├─────────────────────────────────┤
-│  Migration Traffic card          │  BirdCast data
-│  Weather card                    │  NWS overnight + morning
-│  Top 3–5 Hotspots               │  Ranked by 7-day species count;
-│                                  │  zeros filtered out
-│  Notable / Rare Sightings        │  Supporting cast (prize birds above)
-│  5-Day Outlook                   │  Migration intensity + overnight wind;
-│                                  │  highlights best upcoming day
-│  Birding Window                  │  Civil twilight, sunrise, cutoff
-└─────────────────────────────────┘
+┌──────────────────────────────────────┐
+│  Header: Date + headline             │  Dark green background, white text
+├──────────────────────────────────────┤
+│  Executive Summary (3 bullets)       │  Fits email preview pane
+├──────────────────────────────────────┤
+│  Chase Targets — when prize birds    │  See Chase Card composition below
+│  present                              │
+├──────────────────────────────────────┤
+│  Migration Last Night                 │  Bar chart + narrative
+│  Weather & Conditions                 │  Condition tiles + narrative
+│  Top Hotspots                         │  Bar chart + featured note
+│  Notable / Rare Sightings             │  Stacked-row list (Section 6/7 below)
+│  Community Buzz                       │  Listserv extracts
+│  5-Day Outlook                        │  Forecast strip
+│  Birding Window                       │  4-cell timeline bar
+└──────────────────────────────────────┘
 ```
+
+**Chase Card composition** (the richest unit in the email):
+
+```
+┌──────────────────────────────────────┐
+│  [Hero photo, object-fit:contain]    │  ← Section 6B
+│  Photo attribution (10px gray)       │  ← single line, rendered verbatim
+├──────────────────────────────────────┤
+│  ◉ LIFER  Connecticut Warbler ────   │  ← red badge + linked name underlined
+│           (link → eBird species page)│     (Section 7 below)
+│  Burnet Woods · reported today, 07:31│  ← location · recency subtitle
+├──────────────────────────────────────┤
+│  Where to look: [prose narrative…]   │
+│  Recent reports: Sharon Woods today  │  ← compact one-sentence trail
+│  11:05 · Otto Armleder yesterday …   │     from recentSightings[]
+│  Field ID: [visual marks only…]      │  ← no audio descriptions, ever
+├──────────────────────────────────────┤
+│  [spectrogram preview, 640×220]      │  ← Section 6C, tap target
+│  ▶ Listen at Macaulay Library        │  ← dark green button
+│  Recorded by … · or open Merlin in   │  ← attribution
+│  the field                           │
+├──────────────────────────────────────┤
+│  [Time-sensitive red bar — optional] │  ← e.g. "Arrive by 5:53 AM"
+└──────────────────────────────────────┘
+```
+
+**Notable Sightings row composition** (mobile-native stacked layout — see Section 6C "Notable Sightings table row" for full markup):
+
+```
+┌──────────────────────────────────────┐
+│ ┌────┐                                │
+│ │    │  ◉ LIFER  Species Name ──     │  ← link wraps only the name
+│ │photo│ Location of most recent       │
+│ │56×56│  05/18 11:05 · ×1   ▶ Listen │  ← date+count left, pill right
+│ └────┘                                │
+└──────────────────────────────────────┘
+```
+
+The row is one `<tr>` per observation with a nested 2-column layout (photo + content). No column headers; visual hierarchy carries the meaning. Renders identically from 320px to 1200px wide.
+
+**Species-as-eBird-link** (applied wherever a species name appears as a header — Chase Target cards AND Notable Sightings rows):
+
+The species name is wrapped in an `<a href="https://ebird.org/species/{speciesCode}">` with `color:inherit; text-decoration:underline; text-decoration-thickness:1.5px; text-underline-offset:3px`. The underline is the only added visual — color stays inherited from the parent so the two-color palette stays intact. The link wraps **only the species name** — the LIFER badge stays outside the `<a>`, the Listen pill stays outside, each interactive element has exactly one purpose:
+
+| Element | Purpose | Visual cue |
+|---|---|---|
+| `◉ LIFER` badge | Status indicator | Red pill, not a link |
+| **Species name** | Identity → eBird species page | Inherited color + slim underline |
+| **▶ Listen pill** | Action → Macaulay recording | Solid green button |
+
+Falls back to plain text (no `<a>`) if `speciesCode` is missing — never produces a broken link.
 
 Charts (7-day migration bar chart, warbler frequency trend line) are a
 **future enhancement** — not currently implemented. `chart.js` and
@@ -1532,3 +1604,15 @@ All 4 bugs identified in initial testing (B1–B4) resolved 2026-05-17. See git 
 | 2026-05-17 | Four new aggregate.js features: life list lifer flagging (★ LIFER badges), moon phase + migration notes, frontal passage / fallout detection from NWS hourly, Ohio-birds LISTSERV scraper (active — `wa.exe` URL, index-based, 12 species extracted per report). 163 unit tests passing. |
 | 2026-05-17 | Email redesign: 2-color Design System (#1a3a2a / #c0392b) in `routine-prompt.md`; four HTML/CSS visual types (bar chart, forecast strip, condition tiles, timeline bar); bird photos from Macaulay Library + Wikipedia fallback (`src/media-client.js`); all scenario emails verified on iPhone. |
 | 2026-05-17 | On-demand mobile reports (Section 3B): `scripts/generate-email.js` (Haiku, three-stage JSON parse) + `.github/workflows/report-on-demand.yml` (workflow_dispatch, triage-gated). Mobile trigger via `bird-report.html` web app saved to iPhone home screen. Four MCP bugs (B1–B4) fixed. Configurable triage thresholds, hotspot notes, life list auto-refresh all completed. |
+| 2026-05-17 | Four rendering bugs from Opus 4.7 Routine run fixed: (1) wrong day of week — added `date "+%A, %B %-d, %Y"` to Step 1 so day comes from system, not LLM memory; (2) photo cropping — `object-fit:cover` → `object-fit:contain` with `#0f2318` letterbox background; (3) empty avg bar when BirdCast blocked — instruction to omit chart and show unavailable note instead; (4) lifer badge misalignment in table rows — full pill CSS with `vertical-align:middle` on badge and `<td>`. On-demand pipeline upgraded from Haiku to Sonnet. |
+| 2026-05-17 | `photo.macaulayUrl` renamed to `photo.detailPageUrl` in `src/media-client.js` to prevent Claude from misusing a webpage URL as an `<img src>` — single recurring rendering bug fixed by name change + IMPORTANT prompt note. |
+| 2026-05-18 | Field ID hard ban on phonetic song mnemonics. Negative instructions ("do not transcribe") repeatedly lost to the model's training prior (Connecticut Warbler "beecher-beecher / teacher-teacher" written in the exact forbidden form). Structural fix: removed the audio slot entirely from Field ID. Field ID is now visual marks + Merlin redirect close, with a hard-constraint banned-token list (`beecher`, `teacher`, `witchety`, `pee-oo`, `phee-phew`, `chebek`, `fitz-bew`, `drink-your-tea`). Verified clean across multiple runs. |
+| 2026-05-18 | HTML entity ban for punctuation. Same failure pattern: `&middot;` kept double-encoding to `&amp;middot;`, and ampersands in data triple-encoded to `&amp;amp;`. Structural fix: forbid HTML entities for ordinary punctuation, require unicode characters directly (`·` U+00B7, `—` U+2014, `–` U+2013, `•`, `°`, `×`, `…`). Allowed entities reduced to a closed list. `esc()` helper made idempotent via negative lookahead so `&amp;` never re-escapes to `&amp;amp;`. |
+| 2026-05-18 | Recent sightings array added to `notableObservations[]`. The previous dedup kept only the single most-recent observation per species; the new logic groups every confirmed sighting within 48h (up to 5, sorted newest first) into `recentSightings[]`. Chase Target "Where to look" renders the trail as one compact prose-first sentence (e.g. "Recent reports: Burnet Woods today 07:31 · Otto Armleder yesterday 18:19–19:41"). Multi-location trails also signal that a bird is actively moving. |
+| 2026-05-18 | All About Birds plumbing removed. Three consecutive Routine runs returned 403 from Claude's browser tool — the URL was dead weight giving the model an "I tried" excuse. `allAboutBirdsUrl` field deleted from `aggregate.js` output and from the prompt. |
+| 2026-05-18 | Bird audio integration (Section 6C). Macaulay Library audio recordings now surface as a tappable button on every Chase Target. The audio block is a stacked composition wrapped in a single `<a>` — spectrogram preview image (640×220 `poster` variant from Macaulay CDN, ~5KB) above a dark-green "▶ Listen at Macaulay Library" button. One tap opens the Macaulay asset page in a browser with audio player + full spectrogram. Notable Sightings rows get a compact "▶ Listen" pill (no spectrogram, no attribution — keeps the table scannable). `src/media-client.js getTopRecording()` and `getRecordingsForSpecies()` parallel the existing photo methods; benchmark confirmed audio fetch is functionally free (~0ms) in the production parallel path since photo fetch dominates wall-clock time. |
+| 2026-05-18 | Notable Sightings restructured from 5-column table to mobile-native stacked-row list. The old table broke on iPhone when species names were long or hyphenated (White-rumped, Black-bellied, Red-breasted — the LIFER badge held but the Listen pill bumped to a second line). New layout: 56px photo pinned left + 3-line stacked content on the right (species + badge bold, location secondary, date + Listen pill on the bottom). Same layout from 320px to 1200px wide. Verified at 360/600/800 viewports via `scripts/preview-notable-sightings.mjs` before any Routine retest. |
+| 2026-05-18 | Species names linked to eBird species pages. Subtle styled underline with `color:inherit` (preserves two-color palette), `text-decoration-thickness:1.5px; text-underline-offset:3px` (modern editorial style, falls back to standard underline in older clients). Link wraps only the species name; LIFER badge and Listen pill stay outside. Defensive fallback: if `speciesCode` is missing, renders as plain text — never produces a broken link. Applies in both Chase Target cards and Notable Sightings rows for consistent affordance. |
+| 2026-05-18 | Local layout preview renderer added (`scripts/preview-notable-sightings.mjs`). Generates HTML at 360 / 600 / 800 px against realistic sample data including all worst-case species and edge cases (no photo, no recording, missing speciesCode). Combined with `.claude/launch.json` for the Claude Preview tool, enables visual verification of every prompt change before re-pasting into the Routine. Two preview outputs: standalone responsive page (`/tmp/notable-single.html`) and 3-up width comparison (`/tmp/notable-preview.html`). |
+| 2026-05-18 | JSON helper script pattern documented in routine-prompt.md Step 6. The Routine self-discovered writing the 15KB+ HTML body via a Node script + `JSON.stringify` (avoids hand-escaping HTML for JSON). Now blessed and described — helper written to `/tmp/` so the working tree stays clean automatically. |
+| 2026-05-18 | Photo attribution dedup. Claude was prepending "Photo: {photographer} — " before `photo.attribution`, which already begins with "Photo: {photographer} · ...". Explicit prompt fix: render `photo.attribution` verbatim with no prefix. |

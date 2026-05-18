@@ -4,7 +4,7 @@ MCP server + daily email briefing for Cincinnati-area migration monitoring.
 
 ## MCP Server Tools
 
-All 10 tools for interactive birding planning in Claude Desktop:
+All 11 tools for interactive birding planning in Claude Desktop:
 
 | Tool | What it does |
 |------|-------------|
@@ -69,9 +69,14 @@ The briefing runs as a cloud-hosted Anthropic Routine — no machine needs to be
 ### How it works
 
 1. Agent runs at 4:00 AM ET daily during migration season
-2. `scripts/triage.js` fetches BirdCast + NWS data and outputs a JSON recommendation
-3. Agent decides: full briefing / quiet-period note / silent skip
-4. `scripts/briefing.js` builds HTML email and sends via Resend
+2. `scripts/triage.js` fetches BirdCast + NWS data and outputs a JSON recommendation (FULL_BRIEFING / QUIET_PERIOD / SILENT_SKIP)
+3. `scripts/aggregate.js` runs comprehensive data aggregation (eBird, BirdCast, NWS, iNat, life list, listserv, photos, audio) → single JSON blob
+4. Agent reasons about the data, writes the email body dynamically as HTML, and saves it to `./briefing-draft.json`
+5. `scripts/send.js` delivers via Resend
+
+### On-demand reports
+
+Trigger an ad-hoc report for any location from your iPhone via the home-screen web app (`bird-report.html`). The web app posts a `workflow_dispatch` to GitHub Actions, which runs the same triage → aggregate → generate-email → send pipeline with Sonnet writing the HTML. See `SPEC.md` Section 3B for setup.
 
 ### Test locally
 
@@ -79,11 +84,11 @@ The briefing runs as a cloud-hosted Anthropic Routine — no machine needs to be
 # Run triage check (outputs JSON recommendation)
 node scripts/triage.js
 
-# Generate briefing HTML (saves to ./briefing-output/ if no Resend key)
-node scripts/briefing.js
+# Run comprehensive aggregation (outputs JSON blob the agent reads)
+node scripts/aggregate.js
 
-# Generate quiet-period email
-node scripts/briefing.js --quiet
+# Preview the Notable Sightings layout at multiple widths
+node scripts/preview-notable-sightings.mjs && open /tmp/notable-preview.html
 ```
 
 ### Set up the Routine
@@ -101,14 +106,21 @@ See `routine-prompt.md` for the exact prompt to paste into claude.ai when creati
 
 ```
 src/
-  index.js          — MCP server (10 tools)
-  ebird-client.js   — eBird API v2 wrapper
-  birdcast-client.js — BirdCast radar data
-  nws-client.js     — NWS Weather API
+  index.js              — MCP server (11 tools)
+  ebird-client.js       — eBird API v2 wrapper
+  birdcast-client.js    — BirdCast radar data
+  nws-client.js         — NWS Weather API
   inaturalist-client.js — iNaturalist photo verification
-  utils.js          — Cache, location resolution, date parsing
+  media-client.js       — Macaulay Library photos + audio (with Wikipedia photo fallback)
+  ohio-birds-client.js  — Ohio-birds LISTSERV scraper
+  utils.js              — Cache, location resolution, date parsing
 
 scripts/
-  triage.js         — Fast migration check, outputs JSON
-  briefing.js       — HTML email builder + Resend sender
+  triage.js                       — Fast migration check, outputs JSON
+  aggregate.js                    — Comprehensive data aggregation → JSON
+  send.js                         — Email delivery via Resend (SendGrid + disk fallback)
+  generate-email.js               — On-demand pipeline: Sonnet writes email from JSON
+  preview-notable-sightings.mjs   — Local layout preview at multiple widths
+  build-life-list.js              — Refresh life list from eBird CSV
+  test.js / test-unit.js          — Smoke + unit tests (171 passing)
 ```

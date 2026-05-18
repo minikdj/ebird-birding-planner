@@ -43,13 +43,16 @@
 
 | Script | Purpose | Status |
 |--------|---------|--------|
-| `scripts/triage.js` | Fast triage: FULL_BRIEFING / QUIET_PERIOD / SILENT_SKIP | ✅ Confirmed (smoke test + 3 live runs) |
-| `scripts/aggregate.js` | Comprehensive data aggregation → JSON | ✅ Confirmed (3 live runs) |
-| `scripts/send.js` — Resend path | Email delivery via Resend | ✅ Confirmed (3 live runs) |
+| `scripts/triage.js` | Fast triage: FULL_BRIEFING / QUIET_PERIOD / SILENT_SKIP | ✅ Confirmed (smoke test + many live runs) |
+| `scripts/aggregate.js` | Comprehensive data aggregation → JSON | ✅ Confirmed (many live runs) |
+| `scripts/send.js` — Resend path | Email delivery via Resend | ✅ Confirmed (many live runs) |
 | `scripts/send.js` — SendGrid path | Fallback email delivery | ❌ Not tested |
 | `scripts/send.js` — disk fallback | Save HTML when both APIs fail | ✅ Confirmed (2026-05-17) |
-| `scripts/briefing.js` | Legacy template briefing | ❌ Not tested since architectural refactor |
-| `scripts/test.js` | Smoke test suite | ✅ 6/6 passing |
+| `scripts/generate-email.js` | On-demand pipeline: Sonnet generates email from triage + aggregate JSON | ✅ Confirmed (on-demand workflow runs) |
+| `scripts/build-life-list.js` | Refresh life list from eBird CSV export | ✅ Confirmed |
+| `scripts/preview-notable-sightings.mjs` | Local layout preview at 360/600/800 px | ✅ Used to verify each layout change before Routine retest |
+| `scripts/test.js` | Smoke test suite | ✅ Passing |
+| `scripts/test-unit.js` | Unit test runner | ✅ 171 tests passing |
 
 ### Routine Agent Paths
 
@@ -64,7 +67,7 @@
 
 ## 2. What Has Been Confirmed Working
 
-From three live Routine runs on 2026-05-16 (HIGH migration day, score 9/10):
+Verified across many live Routine runs on 2026-05-16 through 2026-05-18 (HIGH migration days, scores 8–10/10):
 
 ### Routine pipeline
 - `npm ci --silent` installs without modifying `package-lock.json` ✅
@@ -75,23 +78,61 @@ From three live Routine runs on 2026-05-16 (HIGH migration day, score 9/10):
 - `send.js` delivers via Resend with correct subject/body ✅
 - Email received in Gmail inbox ✅
 - No git hang (no git commands run) ✅
+- JSON helper script pattern: 15KB+ HTML body built via `/tmp/build-briefing.cjs` + `JSON.stringify` to avoid hand-escaping. Working tree stays clean. ✅
 
-### Email content quality (confirmed in FINAL email)
+### Email content quality (confirmed across many runs)
+
+Locked-in structural correctness — verified in the 2026-05-18 final runs:
+
+- Subject header shows correct day-of-week ("Monday, May 18, 2026") from system `date` command, not LLM memory ✅
+- Hero photos render uncropped via `object-fit:contain` with `#0f2318` letterbox background ✅
+- All `<img src>` URLs point to the Cornell CDN (`cdn.download.ams.birds.cornell.edu`), never to a webpage URL ✅
+- Recent sightings rendered as compact prose-first trail at the end of "Where to look" ✅
+- Chase card subtitle locked to "Location · reported [today/yesterday], HH:MM" format ✅
+- Zero phonetic song mnemonics anywhere: greps for `beecher / teacher / chuppity / witchety / pee-oo / phee-phew / fitz-bew / drink-your-tea` all return 0 hits ✅
+- Zero HTML entity double-encoding: greps for `&amp;middot;` / `&amp;amp;` return 0 hits ✅
+- Photo attribution rendered verbatim from `photo.attribution` (no "Photo: X — Photo: X" duplication) ✅
+- Hotspot featured note never contains song transcriptions ✅
 - Birding window times display in Eastern time (5:55 AM civil twilight, not 9:55 AM UTC) ✅
-- Season context surfaced: 45% below historical average with declining trend ✅
-- Connecticut Warbler identified as prize bird with Mourning/Nashville comparison ✅
-- Neotropic Cormorant gular pouch field mark correctly described ✅
-- Bell's Vireo with alternating song cadence description ✅
-- Suggested route (Armleder → Gilmore Ponds) generated from data ✅
-- ★★ vs ★ rarity tiers applied in notables table ✅
-- Monday May 18 identified as best upcoming day ✅
-- Tuesday fallout scenario (65% overnight rain + 2% AM) identified ✅
+- Season context surfaced (e.g. "32% below historical average with declining trend") ✅
+
+### Audio integration (verified end-to-end in 2026-05-18 runs)
+- `getTopRecording()` returns rated audio assets from Macaulay search API with `mediaType=a` ✅
+- Three top species (Connecticut Warbler, Mississippi Kite, White-rumped Sandpiper) all returned 4+ star recordings on first call ✅
+- Spectrogram URL (`/poster` variant, 640×220, ~5KB) verified to return valid JPEG ✅
+- Chase Target audio block renders as tappable stack: spectrogram image + green "▶ Listen at Macaulay Library" button + recordist attribution ✅
+- Notable Sightings rows render compact "▶ Listen" pill when recording present, omit cleanly when null ✅
+- Benchmark (3 runs, top-10 species): audio fetch adds ~0ms in the production parallel path because photo fetch dominates ✅
+
+### Mobile-native Notable Sightings layout (verified at 360/600/800px)
+- 56×56 photo pinned left + 3-line stacked content on the right ✅
+- All hyphenated species names (White-rumped, Black-bellied, Red-breasted) fit cleanly with LIFER badge on a single line at 360px ✅
+- Listen pill always right-aligned on the bottom row, never wraps awkwardly ✅
+- Empty photo placeholder (Sandhill Crane case) keeps alignment without breaking row ✅
+- Empty Listen cell (no recording) collapses gracefully ✅
+- Photo + LIFER badge + species link + date + count + pill all coexist without visual crowding ✅
+- Touch target compliant: Listen pill ~28px tall × 70px wide ✅
+
+### eBird species page links (verified in 2026-05-18 runs)
+- 18 species links rendered in a typical email (3 chase targets + 15 notable rows) ✅
+- Link wraps only the species name; LIFER badge and Listen pill stay outside `<a>` ✅
+- Underline rendered at 1.5px thickness, 3px offset — modern editorial style ✅
+- Color inherited from parent (no new "link blue" introduced) ✅
+- Defensive fallback: `speciesCode` null/missing renders plain text — no broken links ✅
+
+### Local layout preview infrastructure
+- `scripts/preview-notable-sightings.mjs` generates HTML at 360/600/800px against realistic sample data ✅
+- Edge cases covered in samples: missing photo, missing recording, missing speciesCode, long hyphenated names, very long locations ✅
+- Claude Preview tool wired up via `.claude/launch.json` for viewport-resize + screenshot workflow ✅
+- Used successfully to verify the mobile restructure and the eBird-link styling before each Routine retest ✅
 
 ### Smoke tests (automated)
 - NWSClient.getBirdingWeather() ✅
 - EBirdClient.getNearbyHotspots() ✅
 - BirdCastClient.getExpectedSpecies() ✅
 - INaturalistClient.getVerifiedSightings() ✅
+- MediaClient.getTopPhoto() (Macaulay + Wikipedia fallback) ✅
+- MediaClient.getTopRecording() (Macaulay audio) ✅
 - loadLifeList() from CSV ✅
 - scripts/triage.js subprocess execution ✅
 
