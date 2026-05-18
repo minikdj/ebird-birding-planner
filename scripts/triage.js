@@ -7,8 +7,9 @@ import { readFileSync } from 'fs';
 import { BirdCastClient, degreesToCardinal } from '../src/birdcast-client.js';
 import { NWSClient } from '../src/nws-client.js';
 import { EBirdClient } from '../src/ebird-client.js';
-import { DEFAULTS, formatNumber, toYMD, FAVORABLE_WINDS, RECOMMENDATION } from '../src/utils.js';
+import { formatNumber, toYMD, FAVORABLE_WINDS, RECOMMENDATION } from '../src/utils.js';
 import { rateNight, loadThresholdsFromEnv } from '../src/migration-scoring.js';
+import { loadConfig } from '../src/config.js';
 
 async function main() {
   // TEST FIXTURE MODE — bypass all API calls with pre-baked scenario data.
@@ -25,44 +26,32 @@ async function main() {
     return;
   }
 
-  const ebirdKey = (process.env.EBIRD_API_KEY || '').trim();
-  const birdcastKey = (process.env.BIRDCAST_API_KEY || '').trim();
+  let config;
+  try {
+    config = loadConfig();
+  } catch (err) {
+    process.stdout.write(JSON.stringify({ error: err.message, sendBriefing: false }, null, 2) + '\n');
+    return;
+  }
 
-  if (!ebirdKey || !birdcastKey) {
+  if (!config.ebirdApiKey || !config.birdcastApiKey) {
     process.stdout.write(JSON.stringify({ error: 'Missing API keys', sendBriefing: false }, null, 2) + '\n');
     return;
   }
 
-  const skipBirdCast = (process.env.BRIEFING_SKIP_BIRDCAST || '').trim().toLowerCase() === 'true';
-
-  const lat = parseFloat((process.env.BRIEFING_LAT || String(DEFAULTS.lat)).trim());
-  const lng = parseFloat((process.env.BRIEFING_LNG || String(DEFAULTS.lng)).trim());
-  if (process.env.BRIEFING_LAT !== undefined) {
-    if (!Number.isFinite(lat) || lat < -90 || lat > 90) {
-      process.stdout.write(JSON.stringify({ error: 'BRIEFING_LAT is invalid — must be a number between -90 and 90', sendBriefing: false }, null, 2) + '\n');
-      return;
-    }
-  }
-  if (process.env.BRIEFING_LNG !== undefined) {
-    if (!Number.isFinite(lng) || lng < -180 || lng > 180) {
-      process.stdout.write(JSON.stringify({ error: 'BRIEFING_LNG is invalid — must be a number between -180 and 180', sendBriefing: false }, null, 2) + '\n');
-      return;
-    }
-  }
-  const region = (process.env.BRIEFING_REGION || DEFAULTS.regionCode).trim();
-  if (!/^[A-Z]{2}-[A-Z]{2,3}(-\d{1,3})?$/i.test(region)) {
-    process.stdout.write(JSON.stringify({ error: `BRIEFING_REGION "${region}" is not a valid eBird region code (expected format: US-OH or US-OH-061)`, sendBriefing: false }, null, 2) + '\n');
-    return;
-  }
+  const skipBirdCast = config.skipBirdcast;
+  const { lat, lng, region } = config;
 
   // Configurable migration thresholds — unified via src/migration-scoring.js.
+  // loadThresholdsFromEnv() reads the same BRIEFING_SCORE_* / BRIEFING_*_THRESHOLD
+  // env vars that loadConfig() exposes on config.scoreThresholds.
   const thresholds = loadThresholdsFromEnv();
   const FULL_THRESHOLD  = thresholds.fullThreshold;
   const QUIET_THRESHOLD = thresholds.quietThreshold;
 
-  const birdcast = new BirdCastClient(birdcastKey);
+  const birdcast = new BirdCastClient(config.birdcastApiKey);
   const nws = new NWSClient();
-  const ebird = new EBirdClient(ebirdKey);
+  const ebird = new EBirdClient(config.ebirdApiKey);
 
   const today = toYMD(new Date());
 

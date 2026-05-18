@@ -150,11 +150,12 @@ export function rateNight(live, weather, opts = {}) {
   } else if (cumBirds > t.mediumBirds && softFavorable) {
     rating = 'Good';
   } else if (cumBirds > (t.lowBirds / 2) && cumBirds > 0 && !softPoor) {
-    // Matches aggregate's `birds > 50_000 && !poor` → 'Moderate'
-    // Note: divide-by-2 reproduces the original literal 50_000 cutoff when
-    // lowBirds is 100_000 elsewhere; with default lowBirds=50k this equals
-    // 25k which is more generous. The original literal was 50_000, so:
-    rating = cumBirds > 50_000 && !softPoor ? 'Moderate' : (softPoor ? 'Poor' : 'Quiet');
+    // Moderate tier: birds > lowBirds/2 with non-poor conditions.
+    // Env override BRIEFING_SCORE_LOW_BIRDS reaches this branch (default
+    // lowBirds=50_000 → 25_000 cutoff). The previous hardcoded 50_000
+    // shadowed the env value and made this branch effectively dead for
+    // any cumBirds in (25k, 50k] — fixed by honoring the threshold.
+    rating = 'Moderate';
   } else if (softPoor) {
     rating = 'Poor';
   } else {

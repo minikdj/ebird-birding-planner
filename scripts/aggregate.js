@@ -19,9 +19,11 @@ import { NWSClient } from '../src/nws-client.js';
 import { EBirdClient } from '../src/ebird-client.js';
 import { OhioBirdsClient } from '../src/ohio-birds-client.js';
 import { MediaClient } from '../src/media-client.js';
-import { DEFAULTS, formatNumber, toYMD, computeActivityCutoff, FAVORABLE_WINDS } from '../src/utils.js';
+import { formatNumber, toYMD, FAVORABLE_WINDS } from '../src/utils.js';
 import { loadLifeListSync, isLifer } from '../src/lifelist.js';
-import { rateNight, loadThresholdsFromEnv } from '../src/migration-scoring.js';
+import { rateNight } from '../src/migration-scoring.js';
+import { loadConfig } from '../src/config.js';
+import { buildBirdingWindow } from '../src/birding-window.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -31,18 +33,19 @@ const __dirname = path.dirname(__filename);
 // ---------------------------------------------------------------------------
 
 
-// Use configured timezone (or default to Eastern) so times display correctly
-// regardless of the server's local timezone (cloud runners are typically UTC).
-const DISPLAY_TZ = process.env.BRIEFING_TIMEZONE || 'America/New_York';
-
-function formatTime(date) {
-  if (!date || isNaN(date.getTime())) return null;
-  return date.toLocaleTimeString('en-US', {
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true,
-    timeZone: DISPLAY_TZ,
-  });
+/**
+ * Strip control chars and shell metacharacters from untrusted LISTSERV prose,
+ * then cap length. Birding subjects only ever need standard punctuation; the
+ * allowlist removes anything with no legitimate use that could feed prompt-
+ * injection or downstream-shell hazards.
+ */
+function sanitizeListservText(s, maxLen) {
+  if (typeof s !== 'string') return '';
+  return s
+    .replace(/[\x00-\x1f\x7f]/g, '')   // strip control chars
+    .replace(/[<>{}|`\\]/g, '')         // strip chars that have no business in birding subjects
+    .slice(0, maxLen)
+    .trim();
 }
 
 /**
@@ -74,23 +77,6 @@ function computeRainImpactNote(weather) {
   }
 
   return null;
-}
-
-/**
- * Derive a daylight / birding window from suncalc for a given date + coordinates.
- * Returns formatted times plus the raw sunrise Date for activity cutoff computation.
- */
-function buildBirdingWindow(dateStr, lat, lng) {
-  const d = new Date(dateStr + 'T12:00:00Z');
-  const times = suncalc.getTimes(d, lat, lng);
-  return {
-    civilTwilight: formatTime(times.dawn),
-    sunrise: formatTime(times.sunrise),
-    goldenHourEnd: formatTime(times.goldenHourEnd), // suncalc: end of morning golden hour
-    solarNoon: formatTime(times.solarNoon),
-    sunset: formatTime(times.sunset),
-    _sunriseDate: times.sunrise, // raw Date for computeActivityCutoff; stripped from output below
-  };
 }
 
 /**
@@ -286,7 +272,9 @@ async function buildOutlook(birdcast, nws, config, today) {
     const morningTemp = weather?.morning?.tempF ?? null;
     const cloudCover = weather?.overnight?.cloudCover ?? null;
     const rainImpactNote = computeRainImpactNote(weather);
-    const birdingWindow = buildBirdingWindow(dateStr, config.lat, config.lng);
+    const birdingWindowRaw = buildBirdingWindow(dateStr, config.lat, config.lng, config.timezone, morningTemp);
+    // Strip the raw sunrise Date — outlook day rows don't need it.
+    const { _sunriseDate: _outlookSunriseDate, ...birdingWindow } = birdingWindowRaw;
 
     // Categorical outlook rating — unified via src/migration-scoring.js
     const { rating: outlookRating } = rateNight(live, weather);
@@ -391,40 +379,24 @@ async function main() {
   // never trigger a child process.
   maybeRefreshLifeList();
 
-  const ebirdKey = (process.env.EBIRD_API_KEY || '').trim();
-  const birdcastKey = (process.env.BIRDCAST_API_KEY || '').trim();
+  let config;
+  try {
+    config = loadConfig();
+  } catch (err) {
+    process.stdout.write(JSON.stringify({ error: err.message }, null, 2) + '\n');
+    return;
+  }
 
-  if (!ebirdKey || !birdcastKey) {
+  if (!config.ebirdApiKey || !config.birdcastApiKey) {
     process.stdout.write(JSON.stringify({
       error: 'Missing API keys: EBIRD_API_KEY and BIRDCAST_API_KEY are required',
     }, null, 2) + '\n');
     return;
   }
 
-  // Parse and validate region + coordinates — fall back to defaults if invalid
-  const region = (process.env.BRIEFING_REGION || DEFAULTS.regionCode).trim();
-  if (!/^[A-Z]{2}-[A-Z]{2,3}(-\d{1,3})?$/i.test(region)) {
-    process.stdout.write(JSON.stringify({ error: `BRIEFING_REGION "${region}" is not a valid eBird region code (expected format: US-OH or US-OH-061)` }, null, 2) + '\n');
-    return;
-  }
-
-  const rawLat = parseFloat(process.env.BRIEFING_LAT || '');
-  const rawLng = parseFloat(process.env.BRIEFING_LNG || '');
-  const config = {
-    lat: Number.isFinite(rawLat) && rawLat >= -90 && rawLat <= 90 ? rawLat : DEFAULTS.lat,
-    lng: Number.isFinite(rawLng) && rawLng >= -180 && rawLng <= 180 ? rawLng : DEFAULTS.lng,
-    region,
-  };
-  if (!Number.isFinite(rawLat)) {
-    process.stderr.write('aggregate.js: BRIEFING_LAT invalid or unset — using default\n');
-  }
-  if (!Number.isFinite(rawLng)) {
-    process.stderr.write('aggregate.js: BRIEFING_LNG invalid or unset — using default\n');
-  }
-
-  const birdcast = new BirdCastClient(birdcastKey);
+  const birdcast = new BirdCastClient(config.birdcastApiKey);
   const nws = new NWSClient();
-  const ebird = new EBirdClient(ebirdKey);
+  const ebird = new EBirdClient(config.ebirdApiKey);
   const ohioBirds = new OhioBirdsClient();
   const media = new MediaClient();
 
@@ -448,6 +420,17 @@ async function main() {
     p.then((v) => { sourceStatus[name] = 'ok'; return v; })
      .catch((e) => { sourceStatus[name] = `error: ${String(e?.message || e).slice(0, 200)}`; return null; });
 
+  // LISTSERV is Ohio-specific — only fetch when the region is in US-OH. Non-OH
+  // runs (Cape May, California, etc.) would otherwise surface irrelevant Ohio
+  // sightings into listservSightings[].
+  const isOhioRegion = config.region.startsWith('US-OH');
+  const ohioBirdsPromise = isOhioRegion
+    ? track('ohioBirds', ohioBirds.getRecentSightings(3))
+    : Promise.resolve(null).then((v) => {
+        sourceStatus.ohioBirds = 'skipped: non-OH region';
+        return v;
+      });
+
   const [live, season, expectedSpecies, weather, notableObs, nearbyHotspots, frontalPassageData, ohioBirdsSightings] = await Promise.all([
     track('birdcastLive',     birdcast.getLiveMigration(config.region, today)),
     track('birdcastSeason',   birdcast.getSeasonHistorical(config.region, today)),
@@ -456,7 +439,7 @@ async function main() {
     track('ebirdNotables',    ebird.getNearbyNotableObservations(config.lat, config.lng, 14, 50)),
     track('ebirdHotspots',    ebird.getNearbyHotspots(config.lat, config.lng, 50)),
     track('frontalPassage',   nws.detectFrontalPassage(config.lat, config.lng, today)),
-    track('ohioBirds',        ohioBirds.getRecentSightings(3)),
+    ohioBirdsPromise,
   ]);
 
   // --- Phase 2: Sequential/slower fetches ---
@@ -466,7 +449,9 @@ async function main() {
   ]);
 
   // --- Derived / computed values ---
-  const birdingWindowRaw = buildBirdingWindow(today, config.lat, config.lng);
+  const birdingWindowRaw = buildBirdingWindow(
+    today, config.lat, config.lng, config.timezone, weather?.morning?.tempF ?? null,
+  );
   const { _sunriseDate, ...birdingWindow } = birdingWindowRaw;
   const rainImpactNote = computeRainImpactNote(weather);
   const lastNight = buildLastNight(live);
@@ -483,21 +468,24 @@ async function main() {
 
   // Notable observations — group all sightings by species, keep full recent trail.
   //
-  // 48h cutoff uses numeric Date comparison (not lexicographic string compare on
-  // a tz-localized timestamp string, which broke for non-DISPLAY_TZ on-demand
-  // reports e.g. Cape May / Pacific). eBird obsDt is "YYYY-MM-DD HH:MM" in the
-  // observation's local time; we approximate by interpreting it as DISPLAY_TZ-local.
-  // KNOWN LIMITATION: for cross-region accuracy we'd need each hotspot's tz.
-  const cutoffMs = Date.now() - 48 * 60 * 60 * 1000;
-  const parseObsDt = (s) => {
+  // 48h cutoff: convert "YYYY-MM-DD HH:MM" to a numeric YYYYMMDDHHMM integer so
+  // both sides of the comparison are in the same units. The cutoff is rendered
+  // in the configured DISPLAY_TZ (sv-SE locale -> ISO-like format), then sliced
+  // to "YYYY-MM-DD HH:MM" to match obsDt's shape.
+  //
+  // ASSUMES obsDt is in DISPLAY_TZ. eBird returns obsDt in the observation's
+  // local time; we have no per-hotspot tz lookup, so cross-region accuracy is
+  // bounded. Documented as Known Limitation in SPEC.
+  const obsDtToInt = (s) => {
     if (!s) return 0;
-    const padded = s.length === 16 ? s + ':00' : s;
-    // Treat the string as DISPLAY_TZ-local; new Date(ISO without offset)
-    // interprets as the host's local tz, which for our runners is UTC — close
-    // enough for the 48h window in practice. Good enough for filtering.
-    const d = new Date(padded.replace(' ', 'T'));
-    return isNaN(d) ? 0 : d.getTime();
+    const m = String(s).match(/^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})/);
+    if (!m) return 0;
+    return parseInt(m[1] + m[2] + m[3] + m[4] + m[5], 10);
   };
+  const cutoffStr = new Date(Date.now() - 48 * 60 * 60 * 1000)
+    .toLocaleString('sv-SE', { timeZone: config.timezone })  // "YYYY-MM-DD HH:MM:SS"
+    .slice(0, 16);                                            // "YYYY-MM-DD HH:MM"
+  const cutoffInt = obsDtToInt(cutoffStr);
 
   const notableGroupMap = new Map();
   for (const obs of (notableObs || [])) {
@@ -520,7 +508,7 @@ async function main() {
       // All confirmed sightings within the last 48 hours (up to 5), newest first.
       // Used by the Routine to show the full recent location trail in Chase Target cards.
       const recentSightings = sorted
-        .filter((o) => parseObsDt(o.obsDt) >= cutoffMs)
+        .filter((o) => obsDtToInt(o.obsDt) >= cutoffInt)
         .slice(0, 5)
         .map((o) => ({
           location: o.locName,
@@ -564,8 +552,13 @@ async function main() {
     recording: speciesRecordings[o.species] ?? null,
   }));
 
-  // BirdCast plain-English migration summary
-  const migrationNarrativeSummary = birdcast.summarizeMigration(live, season);
+  // BirdCast plain-English migration summary — null when either source errored
+  // so the prompt cannot confuse "no birds" (real signal) with "BirdCast down"
+  // (outage). The prompt rule must fall back to sourceStatus disclosure.
+  const migrationNarrativeSummary =
+    (sourceStatus.birdcastLive === 'ok' && sourceStatus.birdcastSeason === 'ok')
+      ? birdcast.summarizeMigration(live, season)
+      : null;
 
   // ---------------------------------------------------------------------------
   // Output
@@ -636,9 +629,6 @@ async function main() {
 
     birdingWindow: {
       ...birdingWindow,
-      activityCutoff: _sunriseDate && !isNaN(_sunriseDate.getTime())
-        ? formatTime(computeActivityCutoff(_sunriseDate, weather?.morning?.tempF ?? null))
-        : null,
       note: `Arrive by ${birdingWindow.civilTwilight ?? 'civil twilight'} for peak dawn chorus.`,
     },
 
@@ -651,10 +641,15 @@ async function main() {
     // SECURITY: strip `body` — OHIO-BIRDS is public-post and the raw body would
     // flow into the LLM context (which has email-send + scheduling tools).
     // species[] + subject + location is enough for "Community Buzz" bullets.
+    // Subject and location are additionally passed through a length+character
+    // allowlist before entering aggregate output (strips control chars and
+    // shell metas; caps lengths).
     listservSightings: (ohioBirdsSightings ?? []).map(s => ({
-      subject: s.subject,
-      species: s.species,
-      location: s.location,
+      subject: sanitizeListservText(s.subject, 200),
+      species: Array.isArray(s.species)
+        ? s.species.map(x => sanitizeListservText(x, 60)).filter(Boolean).slice(0, 30)
+        : [],
+      location: sanitizeListservText(s.location, 100),
       url: s.url,
       source: s.source,
     })),
@@ -669,18 +664,25 @@ async function main() {
       ? { totalSpecies: lifeList.total, source: lifeList.source }
       : null,
 
-    // Convenience flags for the agent
-    flags: {
-      highMigrationNight: lastNight?.isHigh ?? false,
-      hasNotables: notableObservations.length > 0,
-      morningRainLikely: (weather?.morning?.precipProbability ?? 0) >= 40,
-      favorableOvernightWind: FAVORABLE_WINDS.has(
-        weather?.overnight?.windDirection?.toUpperCase() ?? ''
-      ),
-      frontalPassage: frontalPassageData?.frontalPassage ?? false,
-      falloutPotential: frontalPassageData?.falloutPotential ?? false,
-      liferOpportunities,
-    },
+    // Convenience flags for the agent. Tri-state: when the underlying source
+    // is in error, the flag is `null` (unknown) — not `false`. This prevents
+    // the prompt from confusing "no notable birds" (real signal) with "eBird
+    // returned an error" (outage). Schema and prompt are updated by R2-W2B.
+    flags: (() => {
+      const ebirdOk        = sourceStatus.ebirdNotables  === 'ok';
+      const nwsOk          = sourceStatus.nws            === 'ok';
+      const frontalOk      = sourceStatus.frontalPassage === 'ok';
+      const birdcastLiveOk = sourceStatus.birdcastLive   === 'ok';
+      return {
+        highMigrationNight:     birdcastLiveOk ? Boolean(lastNight?.isHigh) : null,
+        hasNotables:            ebirdOk        ? notableObservations.length > 0 : null,
+        liferOpportunities:     ebirdOk        ? liferOpportunities : null,
+        morningRainLikely:      nwsOk          ? (weather?.morning?.precipProbability ?? 0) >= 40 : null,
+        favorableOvernightWind: nwsOk          ? FAVORABLE_WINDS.has(weather?.overnight?.windDirection?.toUpperCase() ?? '') : null,
+        frontalPassage:         frontalOk      ? (frontalPassageData?.frontalPassage ?? false) : null,
+        falloutPotential:       frontalOk      ? (frontalPassageData?.falloutPotential ?? false) : null,
+      };
+    })(),
   };
 
   process.stdout.write(JSON.stringify(output, null, 2) + '\n');
