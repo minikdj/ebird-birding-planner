@@ -14,8 +14,22 @@ export const RECOMMENDATION = Object.freeze({
 // Wind direction sets
 // ---------------------------------------------------------------------------
 
-export const FAVORABLE_WINDS = new Set(['S', 'SW', 'SSW', 'SE', 'W']);
-export const POOR_WINDS = new Set(['N', 'NW', 'NNW', 'NE']);
+/**
+ * Canonical 16-point compass wind direction classification.
+ * Used by both migration scoring (FAVORABLE/POOR) and frontal-passage
+ * detection (SOUTHERLY/NORTHERLY broad categories).
+ */
+export const WIND_DIRECTIONS = Object.freeze({
+  ALL_16: ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'],
+});
+
+// Migration favorability: strict — only the directions that move spring migrants north
+export const FAVORABLE_WINDS = Object.freeze(new Set(['S','SSW','SW','SSE','SE','W']));
+export const POOR_WINDS      = Object.freeze(new Set(['N','NNE','NE','NNW','NW']));
+
+// Frontal-passage detection: broader — any southerly vs any northerly hemisphere
+export const SOUTHERLY_WINDS = Object.freeze(new Set(['S','SSE','SE','ESE','SSW','SW','WSW']));
+export const NORTHERLY_WINDS = Object.freeze(new Set(['N','NNE','NE','ENE','NNW','NW','WNW']));
 
 // ---------------------------------------------------------------------------
 // Activity window constants
@@ -445,4 +459,39 @@ export function getFavoriteHotspots() {
 export function formatNumber(n) {
   if (n == null) return "N/A";
   return Number(n).toLocaleString("en-US");
+}
+
+// ---------------------------------------------------------------------------
+// fetchWithRetry
+// ---------------------------------------------------------------------------
+
+/**
+ * Fetch wrapper with one retry on transient failures (network errors and 5xx).
+ * Never retries 4xx (client errors are not transient).
+ * Logs retry count to stderr for diagnosability.
+ *
+ * @param {string} url
+ * @param {RequestInit} opts
+ * @param {{ retries?: number, baseMs?: number, label?: string }} options
+ */
+export async function fetchWithRetry(url, opts = {}, { retries = 1, baseMs = 500, label = '' } = {}) {
+  let lastErr;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const r = await fetch(url, opts);
+      if (r.ok) return r;
+      if (r.status < 500) return r;  // 4xx is not transient, hand it back
+      lastErr = new Error(`HTTP ${r.status}`);
+    } catch (e) {
+      lastErr = e;
+    }
+    if (attempt < retries) {
+      const delay = baseMs * Math.pow(2, attempt);
+      if (label) {
+        process.stderr.write(`[retry] ${label}: attempt ${attempt + 1} failed (${lastErr.message}), retrying in ${delay}ms\n`);
+      }
+      await new Promise(r => setTimeout(r, delay));
+    }
+  }
+  throw lastErr;
 }

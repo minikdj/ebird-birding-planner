@@ -1,4 +1,25 @@
-import { Cache, FAVORABLE_WINDS, POOR_WINDS } from './utils.js';
+import { Cache, FAVORABLE_WINDS, POOR_WINDS, SOUTHERLY_WINDS, NORTHERLY_WINDS } from './utils.js';
+
+const DISPLAY_TZ = process.env.BRIEFING_TIMEZONE || 'America/New_York';
+
+/**
+ * Extract the local wall-clock hour (0–23) for an ISO timestamp string,
+ * using the configured display timezone instead of UTC.
+ * Returns null if the string is not a valid date.
+ * @param {string} isoString
+ * @param {string} [tz]
+ * @returns {number|null}
+ */
+function localHour(isoString, tz = DISPLAY_TZ) {
+  const d = new Date(isoString);
+  if (isNaN(d)) return null;
+  const fmt = new Intl.DateTimeFormat('en-US', {
+    timeZone: tz, hour: 'numeric', hour12: false,
+  });
+  const parts = fmt.formatToParts(d);
+  const hourPart = parts.find(p => p.type === 'hour');
+  return hourPart ? parseInt(hourPart.value, 10) : null;
+}
 
 export class NWSClient {
   static BASE_URL = 'https://api.weather.gov';
@@ -66,22 +87,27 @@ export class NWSClient {
       const morningPeriods = [];
 
       for (const period of periods) {
+        const hour = localHour(period.startTime);
+        if (hour === null) continue;
+
+        // Determine the local date for this period by formatting the full date
         const startTime = new Date(period.startTime);
-        const periodDate = startTime.toISOString().split('T')[0];
-        const hour = startTime.getUTCHours();
+        const localDateStr = new Intl.DateTimeFormat('en-CA', {
+          timeZone: DISPLAY_TZ, year: 'numeric', month: '2-digit', day: '2-digit',
+        }).format(startTime);
 
         // Overnight: 20–23 on dateStr or 0–5 on dateStr (morning of)
         const isOvernightEveOfDate =
-          periodDate === dateStr && (hour >= 20 && hour <= 23);
+          localDateStr === dateStr && (hour >= 20 && hour <= 23);
         const isOvernightMorningOfDate =
-          periodDate === dateStr && (hour >= 0 && hour <= 5);
+          localDateStr === dateStr && (hour >= 0 && hour <= 5);
 
         if (isOvernightEveOfDate || isOvernightMorningOfDate) {
           overnightPeriods.push(period);
         }
 
         // Morning: 6–9 on dateStr
-        if (periodDate === dateStr && hour >= 6 && hour <= 9) {
+        if (localDateStr === dateStr && hour >= 6 && hour <= 9) {
           morningPeriods.push(period);
         }
       }
@@ -339,9 +365,6 @@ export class NWSClient {
       }
 
       // Step 4: Wind shift detection — evening southerly → dawn northerly
-      const SOUTHERLY = new Set(['S', 'SE', 'SW', 'SSE', 'SSW', 'ESE', 'WSW']);
-      const NORTHERLY = new Set(['N', 'NE', 'NW', 'NNE', 'NNW', 'ENE', 'WNW']);
-
       const eveningWindDirs = eveningPeriods
         .map(p => (p.windDirection ?? '').toUpperCase())
         .filter(Boolean);
@@ -350,9 +373,9 @@ export class NWSClient {
         .filter(Boolean);
 
       const eveningIsSoutherly = eveningWindDirs.length > 0 &&
-        eveningWindDirs.some(d => SOUTHERLY.has(d));
+        eveningWindDirs.some(d => SOUTHERLY_WINDS.has(d));
       const dawnIsNortherly = dawnWindDirs.length > 0 &&
-        dawnWindDirs.some(d => NORTHERLY.has(d));
+        dawnWindDirs.some(d => NORTHERLY_WINDS.has(d));
 
       const windShiftDetected = eveningIsSoutherly && dawnIsNortherly;
 
