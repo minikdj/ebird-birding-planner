@@ -98,6 +98,7 @@ The JSON contains:
 - `notableObservations` — rare/unusual species, last 14 days, 50km; sorted by recency. Each entry has:
   - `isLifer: boolean` — true = not yet on life list
   - `recentSightings: []` — every confirmed sighting of this species in the last 48 hours (up to 5), newest first; each `{ location, date, count, locId }`. Use this to show the full recent location trail in Chase Target cards — birders need to know every spot the bird has shown up, not just the most recent.
+  - `recording: { assetId, listenUrl, recordist, attribution, rating, source } | null` — top-rated Macaulay Library audio recording for this species. `listenUrl` opens the Macaulay asset page (autoplay-ready audio player + spectrogram). May be null for species with no rated recordings — handle both cases.
 - `listservSightings` — recent trip reports from Ohio-birds LISTSERV, each `{ subject, body, species[], location, url, source }`. The `body` is the first ~1200 chars of the actual email text; `species` is a parsed list of birds mentioned. Use this to surface what the Ohio birding community is actively finding and discussing. May be empty if archive is unavailable.
 - `hotspotNotes` — keyed by eBird locId; each entry has `trails[]`, `habitatSummary`, `rareSpeciesPotential`. Cross-reference `notableObservations[].locId` with `hotspotNotes` to write specific "Where to look" field directions in Chase Target cards.
 - `lifeList` — `{ totalSpecies, source }` or null if life list not loaded
@@ -202,9 +203,17 @@ Structure your email as inline-CSS HTML (mobile-friendly, max-width 600px, table
    - Each card (1–3 max) uses the Chase Card format from the Design System.
    - `◉ LIFER` badge is mandatory if `isLifer: true` — in the card header AND in the Notable Sightings table row for the same species.
    - **Where to look:** Write prose directions first — use `hotspotNotes[locId].trails[].directions` for exact trail names, GPS, landmarks. Then close with a single compact sentence summarising the `recentSightings[]` data as a quoted recent trail: e.g. "Recent reports: **Burnet Woods** today 07:31 (×1) · **Otto Armleder** yesterday 18:19–19:41 (3 reports) — start at the most recent site." Collapse multiple sightings at the same location into one entry with a time range and count. Do NOT dump the raw array as an arrow-separated list — integrate it naturally as supporting evidence at the end of the prose.
-   - **Field ID:** **Visual marks ONLY** — 2–3 sentences describing the field marks that eliminate confusion with similar species (eye-ring, hood, wing pattern, leg color, tail shape, flight style, etc.). Then close with exactly one line: "Listen with **Merlin Sound ID** before going."
+   - **Field ID:** **Visual marks ONLY** — 2–3 sentences describing the field marks that eliminate confusion with similar species (eye-ring, hood, wing pattern, leg color, tail shape, flight style, etc.).
 
-     **HARD CONSTRAINT — zero audio descriptions in Field ID.** No phonetic transcriptions, no mnemonics, no syllable patterns, no song character descriptions, no quoted call notes. Banned tokens include but are not limited to: `beecher`, `teacher`, `witchety`, `pee-oo`, `phee-phew`, `chebek`, `fitz-bew`, `drink-your-tea`, and every other syllabic bird mnemonic. The Merlin Sound ID redirect is the ONLY audio reference allowed in the entire email. Phonetic transcriptions from memory are hallucinated more often than not and misdirect birders in the field — Merlin is one tap away on the user's phone and plays real recordings, so there is no value in attempting to describe a song in text.
+     Then close with the audio block:
+     - If `notableObservations[i].recording` is non-null, render a tappable listen link styled as a small button:
+       ```
+       <a href="{recording.listenUrl}" style="display:inline-block;background:#1a3a2a;color:#fff;text-decoration:none;font-size:13px;font-weight:bold;padding:6px 12px;border-radius:4px;margin-top:8px">▶ Listen at Macaulay Library</a>
+       ```
+       Below the button add small gray attribution text: `<div style="font-size:10px;color:#999;margin-top:4px">Recorded by {recording.recordist} · or open Merlin Sound ID in the field</div>`. Email clients don't play `<audio>` tags — this link opens the Macaulay asset page in a browser with the audio player ready to play.
+     - If `recording` is null, fall back to: "Listen with **Merlin Sound ID** before going."
+
+     **HARD CONSTRAINT — zero audio descriptions in the Field ID prose itself.** No phonetic transcriptions, no mnemonics, no syllable patterns, no song character descriptions, no quoted call notes. Banned tokens include but are not limited to: `beecher`, `teacher`, `witchety`, `pee-oo`, `phee-phew`, `chebek`, `fitz-bew`, `drink-your-tea`, and every other syllabic bird mnemonic. The Macaulay listen link (or Merlin fallback) is the ONLY audio reference allowed in the entire email. Phonetic transcriptions from memory are hallucinated more often than not and misdirect birders in the field — the audio link is one tap away and plays real recordings.
    - If `migration.lastNight.isHigh`, note that additional individuals of the target species are likely present.
    - Omit entirely if no genuine prize birds exist.
 

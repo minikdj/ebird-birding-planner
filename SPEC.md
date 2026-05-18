@@ -36,6 +36,7 @@ items and security action items added to Section 14.
 5. [New Tools — Phase 2](#5-new-tools--phase-2)
 6. [Enrichments to Existing Tools](#6-enrichments-to-existing-tools)
 6B. [Bird Photo Integration](#6b-bird-photo-integration)
+6C. [Bird Audio Integration](#6c-bird-audio-integration)
 7. [Email Design](#7-email-design)
 8. [API Reference & Rate Limits](#8-api-reference--rate-limits)
 9. [Configuration & Secrets](#9-configuration--secrets)
@@ -580,6 +581,9 @@ Special case: high overnight precip + clear morning = potential fallout note.
 | `lifeList` | `{ totalSpecies, source }` or null — summary of the loaded life list (from `data/life-list.json`) |
 | `notableObservations[].isLifer` | boolean — true if the species is NOT in the user's life list |
 | `notableObservations[].source` | `"ebird"` or `"ohio-birds-listserv"` |
+| `notableObservations[].recentSightings` | Array of up to 5 confirmed sightings within 48h, newest first; each `{ location, date, count, locId }` — used to render the recent location trail in Chase Target cards |
+| `notableObservations[].photo` | Top-rated Macaulay/Wikipedia photo or null — see Section 6B |
+| `notableObservations[].recording` | Top-rated Macaulay audio recording or null — see Section 6C |
 | `listservSightings` | Array of recent Ohio-birds LISTSERV thread subjects: `{ subject, url, source }`. Index-based (no login required). |
 | `flags.frontalPassage` | true if cold front passage detected (wind shift + clearing overnight) |
 | `flags.falloutPotential` | true if fallout conditions detected (rain overnight → clearing at dawn) |
@@ -934,6 +938,68 @@ Returns `thumbnail.source` (resizeable via pixel-width substitution in URL) and 
 - **Notable Sightings thumbnail**: 48×48 first column in the table, `object-fit:cover; border-radius:4px`
 - **Attribution**: `font-size:10px; color:#999` — displayed below each photo
 - **Null handling**: if `photo` is null, omit `<img>` entirely — never render a broken image or placeholder
+
+---
+
+## 6C. Bird Audio Integration
+
+### Overview
+
+Bird song recordings are surfaced in Chase Target cards as a tappable **▶ Listen at Macaulay Library** button. Tapping opens the Macaulay Library asset page in a browser with an autoplay-ready audio player and spectrogram.
+
+This replaces the previous "Listen with Merlin Sound ID" closer with a direct link to a specific, top-rated recording for the species. Merlin remains the in-field fallback (and the only audio reference shown when no recording is available).
+
+### Why a link instead of embedded audio
+
+Email clients sandbox `<audio>` and `<video>` tags universally — Gmail, Outlook, Yahoo, Proton all block them. Apple Mail is the lone exception. There is no reliable way to embed playable audio in a marketing or transactional email. The tappable link is the practical workaround: one tap from the email opens a browser that has a working `<audio>` element.
+
+Merlin specifically cannot be embedded because it is a phone app, not a web service. Deep-linking (`merlinbirdid://...`) only works if the app is installed, and only on mobile.
+
+### Source
+
+**Macaulay Library only** — same Cornell Lab infrastructure used for photos. No fallback (Wikipedia has no audio data). Species with no rated recordings render the Merlin fallback line instead.
+
+### Implementation
+
+**`src/media-client.js` additions:**
+
+- `MediaClient.getTopRecording(speciesCode, commonName)` — looks up the top-rated Macaulay audio recording for a species. Same endpoint as the photo lookup with `mediaType=a` instead of `mediaType=p`.
+- `MediaClient.getRecordingsForSpecies(speciesArray)` — batch lookup, identical rate-limit pattern to photo batching (3 concurrent, 250ms between batches).
+- Cached in the same in-memory cache as photos (7-day TTL) with `audio:` key prefix to avoid collision.
+
+**Response schema** (`recording` field on each `notableObservations[]` entry):
+
+```js
+{
+  assetId: number,           // Macaulay asset ID (numeric)
+  listenUrl: string,         // https://macaulaylibrary.org/asset/{assetId}
+  recordist: string,         // Recordist's display name
+  attribution: string,       // "Audio: {name} · {location} · {date} (Macaulay Library #{id})"
+  rating: number | null,     // Macaulay rating 0–5
+  source: 'macaulay',
+}
+```
+
+**`aggregate.js` integration:**
+- Photo and audio lookups run **in parallel** via `Promise.all` for the same top-10 notable species — no added latency over the photo-only path
+- `recording` field is `null` if no rated audio asset exists — Routine renders the Merlin fallback line instead of a listen link
+
+### Macaulay Library API details
+
+Same endpoint as photos, different `mediaType`:
+```
+GET https://search.macaulaylibrary.org/api/v1/search?taxonCode={speciesCode}&count=1&sort=rating_rank_desc&mediaType=a
+```
+
+The asset detail page (`https://macaulaylibrary.org/asset/{assetId}`) renders an HTML5 audio player and spectrogram with no login required.
+
+### Email rendering rules (defined in `routine-prompt.md` Field ID block)
+
+- **Listen button** appears at the bottom of each Chase Target card's Field ID block, immediately below the visual marks prose
+- Button style: `background:#1a3a2a; color:#fff; padding:6px 12px; border-radius:4px; font-size:13px; font-weight:bold` — design-system dark green to read as a primary action without competing with the lifer/urgency red
+- Attribution: small gray text (`font-size:10px; color:#999`) below the button — "Recorded by {recordist} · or open Merlin Sound ID in the field"
+- **Null handling**: if `recording` is null, omit the button entirely and render only "Listen with **Merlin Sound ID** before going."
+- **No phonetic mnemonics anywhere in the email** — this rule predates audio integration and remains in force. The Macaulay link is the only audio reference allowed in the Field ID prose.
 
 ---
 

@@ -98,6 +98,69 @@ export class MediaClient {
     return results;
   }
 
+  /**
+   * Get the top-rated audio recording for a bird species (Macaulay Library only —
+   * Wikipedia has no audio fallback). Returns null if none available.
+   *
+   * Email clients sandbox <audio> tags, so we surface a tappable link to the
+   * Macaulay Library asset page (which has an autoplay-ready player). The
+   * Routine prompt embeds this as "▶ Listen at Macaulay" per Chase Target.
+   *
+   * @param {string} speciesCode  - eBird species code (e.g. "conwar")
+   * @param {string} commonName   - Species common name (used only for cache key)
+   * @returns {Promise<{
+   *   assetId: number,
+   *   listenUrl: string,    // Macaulay asset page (audio player + spectrogram)
+   *   recordist: string,
+   *   attribution: string,
+   *   rating: number | null,// Macaulay rating 0–5
+   *   source: 'macaulay',
+   * } | null>}
+   */
+  async getTopRecording(speciesCode, commonName) {
+    if (!speciesCode && !commonName) return null;
+    const cacheKey = `audio:${speciesCode || commonName}`;
+
+    const cached = this._cache.get(cacheKey);
+    if (cached !== undefined) return cached;
+
+    let recording = null;
+    if (speciesCode) {
+      recording = await this._getMacaulayRecording(speciesCode).catch(() => null);
+    }
+
+    this._cache.set(cacheKey, recording);
+    return recording;
+  }
+
+  /**
+   * Batch audio lookup. Same rate-limit pattern as getPhotosForSpecies().
+   *
+   * @param {Array<{speciesCode: string, commonName: string}>} species
+   * @returns {Promise<Record<string, object | null>>}
+   */
+  async getRecordingsForSpecies(species) {
+    const results = {};
+    const BATCH_SIZE = 3;
+
+    for (let i = 0; i < species.length; i += BATCH_SIZE) {
+      const batch = species.slice(i, i + BATCH_SIZE);
+      const batchResults = await Promise.all(
+        batch.map(({ speciesCode, commonName }) =>
+          this.getTopRecording(speciesCode, commonName).then(recording => ({ commonName, recording }))
+        )
+      );
+      for (const { commonName, recording } of batchResults) {
+        results[commonName] = recording;
+      }
+      if (i + BATCH_SIZE < species.length) {
+        await new Promise(r => setTimeout(r, 250));
+      }
+    }
+
+    return results;
+  }
+
   // ---------------------------------------------------------------------------
   // Macaulay Library (Cornell Lab / eBird)
   // ---------------------------------------------------------------------------
@@ -148,6 +211,49 @@ export class MediaClient {
       assetId,
       rating,
       detailPageUrl: asset.specimenUrl || `https://macaulaylibrary.org/asset/${assetId}`,
+    };
+  }
+
+  async _getMacaulayRecording(speciesCode) {
+    const params = new URLSearchParams({
+      taxonCode: speciesCode,
+      count:     '1',
+      sort:      'rating_rank_desc',
+      mediaType: 'a',   // a = audio
+    });
+    const url = `${ML_SEARCH_URL}?${params}`;
+
+    const resp = await fetch(url, {
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+      headers: { 'Accept': 'application/json' },
+    });
+
+    if (!resp.ok) return null;
+
+    const data = await resp.json().catch(() => null);
+    if (!data) return null;
+
+    const assets = data?.results?.content;
+    if (!Array.isArray(assets) || assets.length === 0) return null;
+
+    const asset = assets[0];
+    const assetId = asset.assetId || asset.catalogId;
+    if (!assetId) return null;
+
+    const recordist = asset.userDisplayName || 'Unknown recordist';
+    const location  = asset.location || '';
+    const date      = asset.obsDttm || '';
+    const rating    = parseFloat(asset.rating) || null;
+
+    const attribution = `Audio: ${recordist}${location ? ` · ${location}` : ''}${date ? ` · ${date}` : ''} (Macaulay Library #${assetId})`;
+
+    return {
+      assetId,
+      listenUrl: `https://macaulaylibrary.org/asset/${assetId}`,
+      recordist,
+      attribution,
+      rating,
+      source: 'macaulay',
     };
   }
 

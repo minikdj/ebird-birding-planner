@@ -542,16 +542,21 @@ async function main() {
     })
     .sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''));
 
-  // Fetch top-rated photos for notable species (Macaulay Library primary, Wikipedia fallback).
-  // Cap at 10 photo lookups to bound latency — prioritize lifers and then by order.
-  const photoTargets = notableObservationsRaw
+  // Fetch top-rated photos AND audio recordings for notable species in parallel.
+  // Cap at 10 species (same as photos) — prioritize lifers and then by order.
+  // Photos: Macaulay primary, Wikipedia fallback. Audio: Macaulay only (no fallback).
+  const mediaTargets = notableObservationsRaw
     .slice(0, 10)
     .map(o => ({ speciesCode: o.speciesCode, commonName: o.species }));
-  const speciesPhotos = await media.getPhotosForSpecies(photoTargets).catch(() => ({}));
+  const [speciesPhotos, speciesRecordings] = await Promise.all([
+    media.getPhotosForSpecies(mediaTargets).catch(() => ({})),
+    media.getRecordingsForSpecies(mediaTargets).catch(() => ({})),
+  ]);
 
   const notableObservations = notableObservationsRaw.map(o => ({
     ...o,
     photo: speciesPhotos[o.species] ?? null,
+    recording: speciesRecordings[o.species] ?? null,
   }));
 
   // BirdCast plain-English migration summary
@@ -574,6 +579,10 @@ async function main() {
   // notableObservations[].photo — { url, thumbnailUrl, photographer, attribution, source }
   //   or null if no photo found. Macaulay Library (primary) → Wikipedia (fallback).
   //   url = 640px wide (email-safe); thumbnailUrl = 320px (table row thumbnails).
+  // notableObservations[].recording — { assetId, listenUrl, recordist, attribution, rating, source }
+  //   or null if no recording found. Macaulay Library only (no fallback — Wikipedia has no audio).
+  //   listenUrl points at the Macaulay asset page (autoplay-ready audio player + spectrogram).
+  //   Email clients sandbox <audio> tags, so the Routine embeds this as a tappable link.
   // notableObservations[].recentSightings — all confirmed sightings of this species within
   //   the last 48 hours (up to 5), sorted newest-first. Each: { location, date, count, locId }.
   //   Use in Chase Target "Where to look" to show the full recent location trail.
