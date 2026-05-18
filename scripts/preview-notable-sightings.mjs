@@ -17,96 +17,16 @@ import { writeFileSync } from 'fs';
 // recording, lifer/non-lifer. Mirrors the recent Cincinnati emails so we
 // stress-test the worst-case wrap cases (hyphenated species names).
 const SAMPLES = [
-  {
-    species: 'Connecticut Warbler',
-    location: 'Sharon Woods Park—Gorge Trail',
-    date: '05/18 11:05',
-    count: 1,
-    isLifer: true,
-    photo: { thumbnailUrl: 'https://cdn.download.ams.birds.cornell.edu/api/v1/asset/237570321/320' },
-    recording: { listenUrl: 'https://macaulaylibrary.org/asset/103567031' },
-  },
-  {
-    species: 'White-rumped Sandpiper',
-    location: 'A. J. Jolly Park',
-    date: '05/18 09:38',
-    count: 2,
-    isLifer: true,
-    photo: { thumbnailUrl: 'https://cdn.download.ams.birds.cornell.edu/api/v1/asset/182669171/320' },
-    recording: { listenUrl: 'https://macaulaylibrary.org/asset/116123881' },
-  },
-  {
-    species: 'Mississippi Kite',
-    location: 'Cornelius Lane & Court, Okeana',
-    date: '05/17 19:35',
-    count: 1,
-    isLifer: true,
-    photo: { thumbnailUrl: 'https://cdn.download.ams.birds.cornell.edu/api/v1/asset/202384041/320' },
-    recording: { listenUrl: 'https://macaulaylibrary.org/asset/256194901' },
-  },
-  {
-    species: 'Black-bellied Plover',
-    location: 'A. J. Jolly Park',
-    date: '05/17 16:35',
-    count: 3,
-    isLifer: true,
-    photo: { thumbnailUrl: 'https://cdn.download.ams.birds.cornell.edu/api/v1/asset/610326406/320' },
-    recording: { listenUrl: 'https://macaulaylibrary.org/asset/123456789' },
-  },
-  {
-    species: 'Alder Flycatcher',
-    location: 'Otto Armleder Memorial Park',
-    date: '05/17 08:41',
-    count: 1,
-    isLifer: false,
-    photo: { thumbnailUrl: 'https://cdn.download.ams.birds.cornell.edu/api/v1/asset/358558171/320' },
-    recording: { listenUrl: 'https://macaulaylibrary.org/asset/234567890' },
-  },
-  {
-    species: 'Lark Sparrow',
-    location: 'Oak Glen Nature Preserve',
-    date: '05/16 13:20',
-    count: 2,
-    isLifer: true,
-    photo: { thumbnailUrl: 'https://cdn.download.ams.birds.cornell.edu/api/v1/asset/557055001/320' },
-    recording: { listenUrl: 'https://macaulaylibrary.org/asset/345678901' },
-  },
-  {
-    species: 'Red-breasted Nuthatch',
-    location: 'Gilmore Ponds MetroPark',
-    date: '05/15 07:50',
-    count: 1,
-    isLifer: true,
-    photo: { thumbnailUrl: 'https://cdn.download.ams.birds.cornell.edu/api/v1/asset/267198251/320' },
-    recording: { listenUrl: 'https://macaulaylibrary.org/asset/456789012' },
-  },
-  {
-    species: 'Hooded Merganser',
-    location: 'Camp Ernst Lake Park',
-    date: '05/14 14:20',
-    count: 1,
-    isLifer: false,
-    photo: { thumbnailUrl: 'https://cdn.download.ams.birds.cornell.edu/api/v1/asset/612274023/320' },
-    recording: { listenUrl: 'https://macaulaylibrary.org/asset/567890123' },
-  },
-  {
-    species: 'Sandhill Crane',
-    location: 'Fernald Preserve—Sycamore and Shingle Oak Trails',
-    date: '05/14 09:18',
-    count: 1,
-    isLifer: false,
-    photo: null,
-    recording: null,
-  },
-  {
-    species: "Bell's Vireo",
-    location: 'Voice of America MetroPark',
-    date: '05/13 16:49',
-    count: 1,
-    isLifer: true,
-    photo: null,
-    recording: { listenUrl: 'https://macaulaylibrary.org/asset/678901234' },
-  },
+  { species: 'Connecticut Warbler',  speciesCode: 'conwar', location: 'Sharon Woods Park—Gorge Trail',         date: '05/18 11:05', count: 1, isLifer: true,  photo: { thumbnailUrl: 'https://cdn.download.ams.birds.cornell.edu/api/v1/asset/237570321/320' }, recording: { listenUrl: 'https://macaulaylibrary.org/asset/103567031' } },
+  { species: 'White-rumped Sandpiper', speciesCode: 'whrsan', location: 'A. J. Jolly Park',                     date: '05/18 09:38', count: 2, isLifer: true,  photo: { thumbnailUrl: 'https://cdn.download.ams.birds.cornell.edu/api/v1/asset/182669171/320' }, recording: { listenUrl: 'https://macaulaylibrary.org/asset/116123881' } },
+  { species: 'Mississippi Kite',     speciesCode: 'miskit', location: 'Cornelius Lane & Court, Okeana',         date: '05/17 19:35', count: 1, isLifer: true,  photo: { thumbnailUrl: 'https://cdn.download.ams.birds.cornell.edu/api/v1/asset/202384041/320' }, recording: { listenUrl: 'https://macaulaylibrary.org/asset/256194901' } },
+  { species: 'Black-bellied Plover', speciesCode: 'bkbplo', location: 'A. J. Jolly Park',                       date: '05/17 16:35', count: 3, isLifer: true,  photo: { thumbnailUrl: 'https://cdn.download.ams.birds.cornell.edu/api/v1/asset/610326406/320' }, recording: { listenUrl: 'https://macaulaylibrary.org/asset/123456789' } },
+  { species: 'Alder Flycatcher',     speciesCode: 'aldfly', location: 'Otto Armleder Memorial Park',            date: '05/17 08:41', count: 1, isLifer: false, photo: { thumbnailUrl: 'https://cdn.download.ams.birds.cornell.edu/api/v1/asset/358558171/320' }, recording: { listenUrl: 'https://macaulaylibrary.org/asset/234567890' } },
+  { species: 'Lark Sparrow',         speciesCode: 'larspa', location: 'Oak Glen Nature Preserve',               date: '05/16 13:20', count: 2, isLifer: true,  photo: { thumbnailUrl: 'https://cdn.download.ams.birds.cornell.edu/api/v1/asset/557055001/320' }, recording: { listenUrl: 'https://macaulaylibrary.org/asset/345678901' } },
+  { species: 'Red-breasted Nuthatch',speciesCode: 'rebnut', location: 'Gilmore Ponds MetroPark',                date: '05/15 07:50', count: 1, isLifer: true,  photo: { thumbnailUrl: 'https://cdn.download.ams.birds.cornell.edu/api/v1/asset/267198251/320' }, recording: { listenUrl: 'https://macaulaylibrary.org/asset/456789012' } },
+  { species: 'Hooded Merganser',     speciesCode: 'hoomer', location: 'Camp Ernst Lake Park',                   date: '05/14 14:20', count: 1, isLifer: false, photo: { thumbnailUrl: 'https://cdn.download.ams.birds.cornell.edu/api/v1/asset/612274023/320' }, recording: { listenUrl: 'https://macaulaylibrary.org/asset/567890123' } },
+  { species: 'Sandhill Crane',       speciesCode: 'sancra', location: 'Fernald Preserve—Sycamore and Shingle Oak Trails', date: '05/14 09:18', count: 1, isLifer: false, photo: null, recording: null },
+  { species: "Bell's Vireo",         speciesCode: 'belvir', location: 'Voice of America MetroPark',             date: '05/13 16:49', count: 1, isLifer: true,  photo: null, recording: { listenUrl: 'https://macaulaylibrary.org/asset/678901234' } },
 ];
 
 // Render one observation row following the routine-prompt.md spec exactly.
@@ -119,6 +39,13 @@ function renderRow(obs) {
     ? `<span style="display:inline-block;background:#c0392b;color:#fff;font-size:10px;font-weight:bold;padding:2px 6px;border-radius:10px;vertical-align:middle;line-height:1.4;white-space:nowrap;margin-right:6px">◉ LIFER</span>`
     : '';
 
+  // Species name wrapped in an eBird species-page link. color:inherit keeps the
+  // parent's dark green; the underline is the only visual cue that it's a link.
+  // Falls back to a plain <span> if speciesCode is missing (defensive guard).
+  const speciesLink = obs.speciesCode
+    ? `<a href="https://ebird.org/species/${obs.speciesCode}" style="color:inherit;text-decoration:underline;text-decoration-thickness:1.5px;text-underline-offset:3px;vertical-align:middle">${obs.species}</a>`
+    : `<span style="vertical-align:middle">${obs.species}</span>`;
+
   const listenPill = obs.recording
     ? `<a href="${obs.recording.listenUrl}" style="display:inline-block;background:#1a3a2a;color:#fff;text-decoration:none;font-size:11px;font-weight:bold;padding:6px 12px;border-radius:12px;white-space:nowrap">▶ Listen</a>`
     : '';
@@ -130,7 +57,7 @@ function renderRow(obs) {
           <td width="56" valign="top" style="padding-right:12px;width:56px">${photoCell}</td>
           <td valign="top" style="font-family:Arial,sans-serif">
             <div style="font-size:15px;font-weight:bold;color:#1a3a2a;line-height:1.3">
-              ${liferBadge}<span style="vertical-align:middle">${obs.species}</span>
+              ${liferBadge}${speciesLink}
             </div>
             <div style="font-size:13px;color:#666;margin-top:3px;line-height:1.4">${obs.location}</div>
             <table cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-top:5px">
@@ -145,12 +72,41 @@ function renderRow(obs) {
     </td></tr>`;
 }
 
+// Render an example Chase Target card header — the larger context for the
+// species-as-eBird-link treatment. We only render the header portion since
+// the body prose is generated by Claude at write time; the header is what
+// we need to visually verify (badge + linked species + recency).
+function renderChaseCardHeader(obs) {
+  const liferBadge = obs.isLifer
+    ? `<span style="display:inline-block;background:#c0392b;color:#fff;font-size:10px;font-weight:bold;padding:2px 6px;border-radius:10px;vertical-align:middle;line-height:1.4;white-space:nowrap;margin-right:6px">◉ LIFER</span>`
+    : '';
+  const speciesLink = obs.speciesCode
+    ? `<a href="https://ebird.org/species/${obs.speciesCode}" style="color:inherit;text-decoration:underline;text-decoration-thickness:1.5px;text-underline-offset:3px;vertical-align:middle">${obs.species}</a>`
+    : `<span style="vertical-align:middle">${obs.species}</span>`;
+  return `
+<div style="background:#fff;border-left:4px solid #c0392b;border-radius:4px;overflow:hidden;margin-bottom:14px;box-shadow:0 1px 3px rgba(0,0,0,0.08)">
+  <img src="${obs.photo?.thumbnailUrl?.replace('/320', '/640') || ''}" alt="${obs.species}" style="display:block;width:100%;max-width:560px;max-height:200px;object-fit:contain;background:#0f2318;border-radius:4px 4px 0 0">
+  <div style="padding:14px 16px 8px 16px">
+    <div style="font-size:20px;font-weight:bold;color:#1a3a2a;line-height:1.3">
+      ${liferBadge}${speciesLink}
+    </div>
+    <div style="font-size:13px;color:#666;margin-top:4px">${obs.location} · reported today, ${obs.date.split(' ')[1] || '07:31'}</div>
+  </div>
+  <div style="padding:6px 16px 14px;font-size:14px;color:#666;line-height:1.55;font-style:italic">[Where to look + Field ID prose would appear here in the real email]</div>
+</div>`;
+}
+
 // Wrap rows in the full Notable Sightings section header + container
 function renderSection() {
   const rows = SAMPLES.map(renderRow).join('');
+  // Two sample chase cards above the table — one hyphenated lifer, one shorter non-lifer-style
+  const chaseCards = [SAMPLES[0], SAMPLES[1]].map(renderChaseCardHeader).join('');
   return `
 <div style="padding:20px 16px;background:#fff;font-family:Arial,sans-serif">
-  <h2 style="font-size:13px;font-weight:bold;color:#1a3a2a;letter-spacing:2px;text-transform:uppercase;margin:0 0 12px 0;border-bottom:2px solid #1a3a2a;padding-bottom:8px">Notable / Rare Sightings</h2>
+  <h2 style="font-size:13px;font-weight:bold;color:#c0392b;letter-spacing:2px;text-transform:uppercase;margin:0 0 12px 0">Chase Targets</h2>
+  ${chaseCards}
+
+  <h2 style="font-size:13px;font-weight:bold;color:#1a3a2a;letter-spacing:2px;text-transform:uppercase;margin:24px 0 12px 0;border-bottom:2px solid #1a3a2a;padding-bottom:8px">Notable / Rare Sightings</h2>
   <table cellpadding="0" cellspacing="0" border="0" width="100%">
     ${rows}
   </table>

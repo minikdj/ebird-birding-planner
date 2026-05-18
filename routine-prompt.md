@@ -181,9 +181,23 @@ When `notableObservations[i].photo` is non-null, include the photo. Rules:
 *Chase card* (use for Chase Targets):
 White background, `border-left: 4px solid #c0392b`, no tinted background. Inside:
 - Hero photo (if `photo` non-null): full-width image at top of card, before any text (see Bird photo spec above)
-- Header line: `◉ LIFER` badge (if applicable) + species name in large bold dark text (NOT red) + location and recency in gray — format: "[Most recent location] · reported [today/yesterday], [HH:MM]" (e.g. "Burnet Woods · reported today, 07:31")
+- Header line: `◉ LIFER` badge (if applicable) + species name as an **eBird link** (see below) + location and recency in gray — format: "[Most recent location] · reported [today/yesterday], [HH:MM]" (e.g. "Burnet Woods · reported today, 07:31")
 - Body: prose with **bold inline labels** for `Where to look:` and `Field ID:` — NO nested boxes, NO sub-cards, NO colored inner containers
 - Bottom: a single full-width red bar (`background:#c0392b; color:#fff; padding:8px; border-radius:0 0 2px 2px`) if time-sensitive, with the departure time or urgency note
+
+*Species name as eBird link* (apply everywhere a species name appears as a header — Chase Target cards AND Notable Sightings rows):
+Wrap the species name (and ONLY the species name — not the badge, not the location, not surrounding text) in an `<a>` tag pointing to its eBird species page. Use this exact markup pattern:
+
+```
+<a href="https://ebird.org/species/{speciesCode}" style="color:inherit;text-decoration:underline;text-decoration-thickness:1.5px;text-underline-offset:3px">{species}</a>
+```
+
+Rules:
+- `color:inherit` — the link inherits its parent's color (dark green `#1a3a2a` in both contexts). We do NOT introduce a new "link blue" — the two-color palette stays intact. The underline is the only added pixel.
+- `text-decoration-thickness:1.5px; text-underline-offset:3px` — produces a modern editorial underline rather than the heavy, close browser-default. Email clients that ignore these properties fall back to a standard underline, which is still correct.
+- The link wraps ONLY the species name text. The `◉ LIFER` badge stays outside the `<a>`. The Listen pill stays outside the `<a>`. Each interactive element has exactly one purpose.
+- If `speciesCode` is null or missing for any reason, render the species name as plain text (no `<a>` wrapper) — never produce a broken link.
+- The link opens https://ebird.org/species/{speciesCode} which shows the species' range map, abundance chart, recent sightings, and recordings — the canonical reference page for the species.
 
 ━━━ STEP 5 — WRITE THE EMAIL ━━━
 
@@ -257,7 +271,7 @@ Structure your email as inline-CSS HTML (mobile-friendly, max-width 600px, table
              <!-- Line 1: badge (if lifer) + species name, bold dark green -->
              <div style="font-size:15px;font-weight:bold;color:#1a3a2a;line-height:1.3">
                {if isLifer} <span style="display:inline-block;background:#c0392b;color:#fff;font-size:10px;font-weight:bold;padding:2px 6px;border-radius:10px;vertical-align:middle;line-height:1.4;white-space:nowrap;margin-right:6px">◉ LIFER</span>
-               <span style="vertical-align:middle">{species}</span>
+               <a href="https://ebird.org/species/{speciesCode}" style="color:inherit;text-decoration:underline;text-decoration-thickness:1.5px;text-underline-offset:3px;vertical-align:middle">{species}</a>
              </div>
              <!-- Line 2: location, secondary gray -->
              <div style="font-size:13px;color:#666;margin-top:3px;line-height:1.4">{location}</div>
