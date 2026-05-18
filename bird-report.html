@@ -254,8 +254,11 @@
           <input type="password" id="pat" placeholder="ghp_..." autocorrect="off" autocomplete="off" autocapitalize="none" spellcheck="false">
         </div>
         <p class="pat-note">
-          Needs <strong>workflow</strong> scope only.<br>
-          Get one at <a href="https://github.com/settings/tokens/new" target="_blank">github.com/settings/tokens/new</a>.<br>
+          Use a <strong>fine-grained personal access token</strong> (not a classic token).<br>
+          <strong>Repository access:</strong> select only <em>minikdj/ebird-birding-planner</em>.<br>
+          <strong>Permissions:</strong> <em>Actions: Read and write</em> — nothing else.<br>
+          Classic PATs with <em>workflow</em> scope implicitly include full <em>repo</em> write access — avoid them.<br>
+          Create one at <a href="https://github.com/settings/personal-access-tokens/new" target="_blank">github.com/settings/personal-access-tokens/new</a>.<br>
           Stored only in this browser — never sent anywhere except GitHub.
         </p>
         <p class="hint" id="patSaved" style="display:none; color: var(--green); margin-top:8px;">&#10003; Token saved</p>
@@ -292,14 +295,18 @@
   function setStatus(type, title, body) {
     const el = document.getElementById('status');
     el.className = 'status ' + type;
-    el.innerHTML = `<strong>${title}</strong>${body}`;
+    // title is always a string literal from call sites; body may contain dynamic content.
+    // Use innerHTML only for the static <strong> wrapper; set body via textContent.
+    el.innerHTML = '<strong></strong>';
+    el.querySelector('strong').textContent = title;
+    el.appendChild(document.createTextNode(body));
     el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
 
   function clearStatus() {
     const el = document.getElementById('status');
     el.className = 'status';
-    el.innerHTML = '';
+    el.textContent = '';
   }
 
   async function requestReport() {
@@ -344,11 +351,11 @@
 
       if (res.status === 204) {
         setStatus('success', 'Report requested!',
-          ` Check <strong>${document.getElementById('pat').value ? '' : ''}your email</strong> in about 5 minutes.`
+          ' Check your email in about 5 minutes.'
         );
         document.getElementById('focus').value = '';
       } else if (res.status === 401) {
-        setStatus('error', 'Token rejected (401)', ' — check your PAT and make sure it has the <em>workflow</em> scope.');
+        setStatus('error', 'Token rejected (401)', ' — check your PAT and make sure it has Actions: Read and write permission.');
       } else if (res.status === 422) {
         setStatus('error', 'Validation error (422)', ' — check the region code and coordinates.');
       } else {

@@ -12,14 +12,25 @@
 
 import { readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { fileURLToPath } from 'url';
-import path from 'path';
+import path, { resolve, sep } from 'path';
+import { homedir } from 'os';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const REPO_ROOT = path.resolve(__dirname, '..');
 
 const CSV_PATH = process.env.EBIRD_LIFE_LIST_CSV ||
-  `${process.env.HOME}/Downloads/ebird_world_life_list.csv`;
+  `${homedir()}/Downloads/ebird_world_life_list.csv`;
+
+// Validate: CSV path must be inside the user's home directory.
+// Prevents a compromised EBIRD_LIFE_LIST_CSV env var from reading /etc/passwd etc.
+const realCsvPath = resolve(CSV_PATH);
+const userHome = homedir();
+if (!realCsvPath.startsWith(userHome + sep)) {
+  process.stderr.write(`ERROR: EBIRD_LIFE_LIST_CSV must be inside ${userHome}; got ${realCsvPath}\n`);
+  process.exit(1);
+}
+
 const OUTPUT_PATH = path.join(REPO_ROOT, 'data', 'life-list.json');
 
 /**
@@ -140,8 +151,8 @@ mkdirSync(path.join(REPO_ROOT, 'data'), { recursive: true });
 
 writeFileSync(OUTPUT_PATH, JSON.stringify(output, null, 2) + '\n', 'utf8');
 
-process.stdout.write(
+process.stderr.write(
   `build-life-list.js: Done. ${totalSpecies} unique species written to data/life-list.json\n`
 );
-process.stdout.write(`  First 5: ${speciesArray.slice(0, 5).join(', ')}\n`);
-process.stdout.write(`  Last 5:  ${speciesArray.slice(-5).join(', ')}\n`);
+process.stderr.write(`  First 5: ${speciesArray.slice(0, 5).join(', ')}\n`);
+process.stderr.write(`  Last 5:  ${speciesArray.slice(-5).join(', ')}\n`);

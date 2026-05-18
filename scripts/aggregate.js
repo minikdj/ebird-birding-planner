@@ -143,7 +143,9 @@ function maybeRefreshLifeList() {
       execFileSync(process.execPath, [
         new URL('../scripts/build-life-list.js', import.meta.url).pathname,
       ], {
-        stdio: 'inherit',
+        // Silence child stdout so it can't corrupt the aggregate JSON envelope
+        // on this process's stdout. Keep stderr inherited for diagnostics.
+        stdio: ['ignore', 'ignore', 'inherit'],
         env: { ...process.env, EBIRD_LIFE_LIST_CSV: csvPath },
       });
     }
@@ -151,7 +153,6 @@ function maybeRefreshLifeList() {
     // CSV or JSON missing — silently skip; build-life-list.js will handle errors if called directly
   }
 }
-maybeRefreshLifeList();
 
 /**
  * Load hotspot micro-habitat notes from data/hotspot-notes.json.
@@ -339,18 +340,16 @@ async function buildOutlook(birdcast, nws, config, today) {
     };
   };
 
-  // Sequential with 300ms stagger to avoid NWS rate limiting
-  const outlookResults = [];
-  for (const i of [1, 2, 3, 4, 5]) {
+  // Parallel: per-client throttling already handles NWS rate limiting,
+  // so we don't need an inter-day setTimeout stagger.
+  return Promise.all([1, 2, 3, 4, 5].map(async (i) => {
     try {
-      outlookResults.push(await buildDay(i));
+      return await buildDay(i);
     } catch (err) {
       process.stderr.write(`buildOutlook day ${i} failed: ${err.message}\n`);
-      outlookResults.push(null);
+      return null;
     }
-    await new Promise(r => setTimeout(r, 300));
-  }
-  return outlookResults;
+  }));
 }
 
 /**
@@ -403,12 +402,28 @@ async function main() {
   if (fixture) {
     try {
       const data = readFileSync(new URL(`./fixtures/aggregate-${fixture}.json`, import.meta.url), 'utf8');
-      process.stdout.write(data + '\n');
+      // Apply schema-contract guarantees even to fixture data so downstream
+      // consumers (and tests) see the same shape as a live run:
+      //   - strip listservSightings[].body (security: prompt-injection defense)
+      //   - ensure sourceStatus exists (operability contract)
+      const parsed = JSON.parse(data);
+      if (Array.isArray(parsed.listservSightings)) {
+        parsed.listservSightings = parsed.listservSightings.map(({ body, ...rest }) => rest);
+      }
+      if (parsed.sourceStatus == null) {
+        parsed.sourceStatus = { fixture: `ok: ${fixture}` };
+      }
+      process.stdout.write(JSON.stringify(parsed, null, 2) + '\n');
     } catch {
       process.stdout.write(JSON.stringify({ error: `Unknown test fixture: "${fixture}". Valid: full_lifer, full_rain, full_fallout, quiet_period` }) + '\n');
     }
     return;
   }
+
+  // Auto-refresh life list cache if the source CSV is newer. Kept out of
+  // module-import scope so importers and the fixture short-circuit above
+  // never trigger a child process.
+  maybeRefreshLifeList();
 
   const ebirdKey = (process.env.EBIRD_API_KEY || '').trim();
   const birdcastKey = (process.env.BIRDCAST_API_KEY || '').trim();
@@ -459,15 +474,23 @@ async function main() {
   }
 
   // --- Phase 1: Fast parallel fetches ---
+  // Wrap each source with track() so per-source health lands in `sourceStatus`
+  // rather than being silently swallowed as null/[]. The prompt can then
+  // disclose unavailable sources instead of treating absence as evidence.
+  const sourceStatus = {};
+  const track = (name, p) =>
+    p.then((v) => { sourceStatus[name] = 'ok'; return v; })
+     .catch((e) => { sourceStatus[name] = `error: ${String(e?.message || e).slice(0, 200)}`; return null; });
+
   const [live, season, expectedSpecies, weather, notableObs, nearbyHotspots, frontalPassageData, ohioBirdsSightings] = await Promise.all([
-    birdcast.getLiveMigration(config.region, today).catch(() => null),
-    birdcast.getSeasonHistorical(config.region, today).catch(() => null),
-    birdcast.getExpectedSpecies(config.region, today, { ignoreSeasonCheck: false }).catch(() => null),
-    nws.getBirdingWeather(config.lat, config.lng, today).catch(() => null),
-    ebird.getNearbyNotableObservations(config.lat, config.lng, 14, 50).catch(() => []),
-    ebird.getNearbyHotspots(config.lat, config.lng, 50).catch(() => []),
-    nws.detectFrontalPassage(config.lat, config.lng, today).catch(() => null),
-    ohioBirds.getRecentSightings(3).catch(() => []),
+    track('birdcastLive',     birdcast.getLiveMigration(config.region, today)),
+    track('birdcastSeason',   birdcast.getSeasonHistorical(config.region, today)),
+    track('birdcastExpected', birdcast.getExpectedSpecies(config.region, today, { ignoreSeasonCheck: false })),
+    track('nws',              nws.getBirdingWeather(config.lat, config.lng, today)),
+    track('ebirdNotables',    ebird.getNearbyNotableObservations(config.lat, config.lng, 14, 50)),
+    track('ebirdHotspots',    ebird.getNearbyHotspots(config.lat, config.lng, 50)),
+    track('frontalPassage',   nws.detectFrontalPassage(config.lat, config.lng, today)),
+    track('ohioBirds',        ohioBirds.getRecentSightings(3)),
   ]);
 
   // --- Phase 2: Sequential/slower fetches ---
@@ -493,10 +516,22 @@ async function main() {
     : null;
 
   // Notable observations — group all sightings by species, keep full recent trail.
-  // eBird dates are in local time ("YYYY-MM-DD HH:MM"); compute 48h cutoff in display tz.
-  const _cutoff48h = new Date(Date.now() - 48 * 60 * 60 * 1000)
-    .toLocaleString('sv-SE', { timeZone: DISPLAY_TZ })
-    .slice(0, 16); // "YYYY-MM-DD HH:MM"
+  //
+  // 48h cutoff uses numeric Date comparison (not lexicographic string compare on
+  // a tz-localized timestamp string, which broke for non-DISPLAY_TZ on-demand
+  // reports e.g. Cape May / Pacific). eBird obsDt is "YYYY-MM-DD HH:MM" in the
+  // observation's local time; we approximate by interpreting it as DISPLAY_TZ-local.
+  // KNOWN LIMITATION: for cross-region accuracy we'd need each hotspot's tz.
+  const cutoffMs = Date.now() - 48 * 60 * 60 * 1000;
+  const parseObsDt = (s) => {
+    if (!s) return 0;
+    const padded = s.length === 16 ? s + ':00' : s;
+    // Treat the string as DISPLAY_TZ-local; new Date(ISO without offset)
+    // interprets as the host's local tz, which for our runners is UTC — close
+    // enough for the 48h window in practice. Good enough for filtering.
+    const d = new Date(padded.replace(' ', 'T'));
+    return isNaN(d) ? 0 : d.getTime();
+  };
 
   const notableGroupMap = new Map();
   for (const obs of (notableObs || [])) {
@@ -519,7 +554,7 @@ async function main() {
       // All confirmed sightings within the last 48 hours (up to 5), newest first.
       // Used by the Routine to show the full recent location trail in Chase Target cards.
       const recentSightings = sorted
-        .filter((o) => (o.obsDt ?? '') >= _cutoff48h)
+        .filter((o) => parseObsDt(o.obsDt) >= cutoffMs)
         .slice(0, 5)
         .map((o) => ({
           location: o.locName,
@@ -545,8 +580,12 @@ async function main() {
   // Fetch top-rated photos AND audio recordings for notable species in parallel.
   // Cap at 10 species (same as photos) — prioritize lifers and then by order.
   // Photos: Macaulay primary, Wikipedia fallback. Audio: Macaulay only (no fallback).
-  const mediaTargets = notableObservationsRaw
+  // Sort by isLifer desc BEFORE slicing so long common-notable lists can't
+  // starve lifer species of photos. Also drop entries missing key fields.
+  const mediaTargets = [...notableObservationsRaw]
+    .sort((a, b) => Number(b.isLifer) - Number(a.isLifer))
     .slice(0, 10)
+    .filter(o => o.speciesCode && o.species)
     .map(o => ({ speciesCode: o.speciesCode, commonName: o.species }));
   const [speciesPhotos, speciesRecordings] = await Promise.all([
     media.getPhotosForSpecies(mediaTargets).catch(() => ({})),
@@ -574,7 +613,19 @@ async function main() {
   //   weather.today.rainImpactNote, weather.today.migrationInterpretation,
   //   weather.today.weatherUnavailable, weather.outlook[], birdingWindow,
   //   hotspots[], notableObservations[], flags, moon, lifeList, listservSightings,
-  //   hotspotNotes (keyed by locId)
+  //   hotspotNotes (keyed by locId), sourceStatus
+  //
+  // sourceStatus — Object mapping source name → 'ok' | 'error: ...'. Per-source
+  //   health for every external fetch. The prompt MUST acknowledge unavailable
+  //   sources rather than imply absence as evidence (e.g. don't say "no notable
+  //   birds reported" when ebirdNotables is in error state — say the source is down).
+  // listservSightings[] — { subject, species[], location, url, source }. The `body`
+  //   field is intentionally REMOVED for security (prompt-injection defense): anyone
+  //   can post to OHIO-BIRDS and the body would otherwise flow unsanitized into the
+  //   LLM context. Build "Community Buzz" bullets from species[] + subject + location.
+  // notableObservations[].recentSightings — filtered by a 48h cutoff computed
+  //   against DISPLAY_TZ-interpreted obsDt; cross-region accuracy depends on each
+  //   hotspot's true timezone (approximation; see parseObsDt comment above).
   //
   // notableObservations[].photo — { url, thumbnailUrl, photographer, attribution, source }
   //   or null if no photo found. Macaulay Library (primary) → Wikipedia (fallback).
@@ -631,7 +682,19 @@ async function main() {
 
     notableObservations,
 
-    listservSightings: ohioBirdsSightings ?? [],
+    // SECURITY: strip `body` — OHIO-BIRDS is public-post and the raw body would
+    // flow into the LLM context (which has email-send + scheduling tools).
+    // species[] + subject + location is enough for "Community Buzz" bullets.
+    listservSightings: (ohioBirdsSightings ?? []).map(s => ({
+      subject: s.subject,
+      species: s.species,
+      location: s.location,
+      url: s.url,
+      source: s.source,
+    })),
+
+    // Per-source health: 'ok' or 'error: ...'. See SCHEMA CONTRACT above.
+    sourceStatus,
 
     hotspotNotes,
 
