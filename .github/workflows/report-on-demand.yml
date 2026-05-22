@@ -126,4 +126,10 @@ jobs:
           SENDGRID_API_KEY: ${{ secrets.SENDGRID_API_KEY }}
           BRIEFING_EMAIL_TO: ${{ secrets.BRIEFING_EMAIL_TO }}
           BRIEFING_FROM_EMAIL: ${{ secrets.BRIEFING_FROM_EMAIL }}
+          # Per-dispatch unique key so distinct on-demand requests (even for the
+          # same region on the same day) are each delivered. run_id is stable
+          # across GitHub's "re-run" of a failed run (only run_attempt bumps),
+          # so re-running a failed dispatch reuses the key and dedupes safely
+          # rather than double-sending.
+          BRIEFING_IDEMPOTENCY_KEY: ondemand-${{ github.run_id }}
         run: node scripts/send.js briefing-draft.json

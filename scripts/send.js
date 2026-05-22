@@ -198,6 +198,13 @@ async function main() {
   const finalMarker   = join(briefingOutputDir, `.sent-${ymd}.marker`);
   const pendingMarker = join(briefingOutputDir, `.pending-${ymd}-${process.pid}.marker`);
 
+  // Durable, cross-environment idempotency key passed to Resend. Unlike the
+  // local marker files (which live on the working-tree filesystem and do NOT
+  // survive a fresh Routine clone or a fresh GHA runner), this key dedupes at
+  // Resend's servers for 24h. A manually-reran failed Routine, a platform
+  // auto-retry, or a backup scheduled run will therefore never double-send.
+  const idempotencyKey = deriveIdempotencyKey(config, ymd);
+
   if (!config.forceSend && existsSync(finalMarker)) {
     process.stdout.write(`[idempotency] Already sent for ${ymd} — exiting clean. Override with BRIEFING_FORCE_SEND=true.\n`);
     process.exit(0);
@@ -318,6 +325,10 @@ async function main() {
         subject,
         html: cleanHtml,
         text: textBody,
+      }, {
+        // Server-side dedup: a repeated send with the same key within 24h
+        // returns the original email's id without delivering a second message.
+        idempotencyKey,
       });
 
       if (response?.error) {
@@ -442,6 +453,22 @@ export function safeDraftPath(draftPath) {
     throw new Error('draftPath must be within the repo root');
   }
   return realDraft;
+}
+
+/**
+ * Derive the Resend idempotency key.
+ * - If config.idempotencyKey is set (on-demand workflow passes a per-dispatch
+ *   value), use it verbatim.
+ * - Otherwise default to a content-independent per-region-per-day key so the
+ *   daily Routine dedupes across retries even on fresh environments. Content
+ *   independence is deliberate: a retry regenerates the email with slightly
+ *   different wording, but it must still dedupe against the original send.
+ * @param {{ idempotencyKey?: string|null, region: string }} config
+ * @param {string} ymd - YYYY-MM-DD in the configured timezone
+ * @returns {string}
+ */
+export function deriveIdempotencyKey(config, ymd) {
+  return config.idempotencyKey || `briefing-${config.region}-${ymd}`;
 }
 
 // Export htmlToText for testing

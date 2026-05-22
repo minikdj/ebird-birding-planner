@@ -356,6 +356,68 @@ describe('idempotency marker prevents double-send; BRIEFING_FORCE_SEND bypasses'
 });
 
 // ---------------------------------------------------------------------------
+// 11b. Resend idempotency key derivation (durable cross-environment dedup)
+// The local marker file does NOT survive a fresh Routine clone / GHA runner;
+// the Resend Idempotency-Key is what actually prevents a double-send when a
+// failed run is re-run on a new environment. These tests lock in the key's
+// two critical properties: stable across retries, distinct across dispatches.
+// ---------------------------------------------------------------------------
+
+describe('deriveIdempotencyKey — durable cross-environment send dedup', () => {
+  let deriveIdempotencyKey;
+  before(async () => {
+    ({ deriveIdempotencyKey } = await import('../scripts/send.js'));
+  });
+
+  it('defaults to a content-independent per-region-per-day key', () => {
+    const key = deriveIdempotencyKey({ region: 'US-OH-061', idempotencyKey: null }, '2026-05-19');
+    assert.strictEqual(key, 'briefing-US-OH-061-2026-05-19');
+  });
+
+  it('is STABLE across retries (same region + day → same key regardless of email content)', () => {
+    // A manual rerun regenerates the email with different wording, but the key
+    // must not change or Resend would deliver a second copy.
+    const a = deriveIdempotencyKey({ region: 'US-OH-061', idempotencyKey: null }, '2026-05-19');
+    const b = deriveIdempotencyKey({ region: 'US-OH-061', idempotencyKey: null }, '2026-05-19');
+    assert.strictEqual(a, b);
+  });
+
+  it('is DISTINCT across different days (so tomorrow is not deduped against today)', () => {
+    const today = deriveIdempotencyKey({ region: 'US-OH-061', idempotencyKey: null }, '2026-05-19');
+    const tomorrow = deriveIdempotencyKey({ region: 'US-OH-061', idempotencyKey: null }, '2026-05-20');
+    assert.notStrictEqual(today, tomorrow);
+  });
+
+  it('is DISTINCT across different regions on the same day', () => {
+    const oh = deriveIdempotencyKey({ region: 'US-OH-061', idempotencyKey: null }, '2026-05-19');
+    const nj = deriveIdempotencyKey({ region: 'US-NJ-009', idempotencyKey: null }, '2026-05-19');
+    assert.notStrictEqual(oh, nj);
+  });
+
+  it('honors an explicit config.idempotencyKey verbatim (on-demand per-dispatch override)', () => {
+    const key = deriveIdempotencyKey({ region: 'US-OH-061', idempotencyKey: 'ondemand-12345' }, '2026-05-19');
+    assert.strictEqual(key, 'ondemand-12345');
+  });
+});
+
+describe('config exposes idempotencyKey from BRIEFING_IDEMPOTENCY_KEY', () => {
+  let loadConfig;
+  before(async () => {
+    ({ loadConfig } = await import('../src/config.js'));
+  });
+
+  it('null when env var unset', () => {
+    const c = loadConfig({ BRIEFING_REGION: 'US-OH-061' });
+    assert.strictEqual(c.idempotencyKey, null);
+  });
+
+  it('trimmed value when env var set', () => {
+    const c = loadConfig({ BRIEFING_REGION: 'US-OH-061', BRIEFING_IDEMPOTENCY_KEY: '  ondemand-99  ' });
+    assert.strictEqual(c.idempotencyKey, 'ondemand-99');
+  });
+});
+
+// ---------------------------------------------------------------------------
 // 12. realpathSync draftPath check rejects symlink-to-outside-repo
 // ---------------------------------------------------------------------------
 

@@ -113,6 +113,13 @@ export function loadConfig(env = process.env) {
     emailFrom,  // optional; defaults to @resend.dev test sender in send.js
     forceSend:          env.BRIEFING_FORCE_SEND === 'true',
 
+    // Optional explicit idempotency key for the email send. When unset, send.js
+    // derives a stable per-region-per-day key so the daily Routine dedupes
+    // safely across retries on fresh environments (the local marker does NOT
+    // survive a fresh repo clone). The on-demand workflow sets this to a
+    // per-dispatch unique value so distinct ad-hoc requests are never deduped.
+    idempotencyKey:     (env.BRIEFING_IDEMPOTENCY_KEY || '').trim() || null,
+
     // On-demand pipeline focus (used by scripts/generate-email.js)
     briefingFocus:      env.BRIEFING_FOCUS || '',
 
