@@ -343,16 +343,18 @@ export class MediaClient {
     if (!data) return null;
 
     const thumbnail  = data.thumbnail;
-    const original   = data.originalimage;
 
     if (!thumbnail?.source) return null;
 
-    // Use original if available (higher res), else thumbnail
-    const photoUrl = original?.source || thumbnail.source;
-    // Ensure we have a "medium" size — Wikipedia thumbnails can be large
-    // The thumbnail URL has a pixel-width param we can bump to 640
-    const mediumUrl = thumbnail.source.replace(/\/(\d+)px-/, '/640px-');
-    const thumbUrl  = thumbnail.source.replace(/\/(\d+)px-/, '/320px-');
+    // IMPORTANT: do NOT rewrite the thumbnail width. Wikimedia restricts thumb
+    // widths to a PER-FILE allowlist (the sizes already generated for that image),
+    // so rewriting to a fixed 320/640 returns HTTP 400 — e.g. for many files 330
+    // and 500 work but 320/480/640/800 do not. The summary API's thumbnail.source
+    // is always a valid width (~320-330px), so use it as-is for both the hero and
+    // the row thumbnail. It renders crisply in the 56px slot and is acceptable
+    // (slightly soft) scaled up in the chase-card hero — and it always loads.
+    const mediumUrl = thumbnail.source;
+    const thumbUrl  = thumbnail.source;
 
     const wikiUrl = data.content_urls?.desktop?.page || `https://en.wikipedia.org/wiki/${title}`;
 
