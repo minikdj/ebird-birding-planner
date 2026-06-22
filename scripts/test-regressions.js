@@ -1478,6 +1478,20 @@ describe('trip-location resolver — Hawaii itinerary auto-switching', () => {
     assert.strictEqual(out, base);
   });
 
+  it('BRIEFING_TODAY_OVERRIDE activates a leg for previewing any trip day', () => {
+    const base = loadConfig({ BRIEFING_REGION: 'US-OH-061', BRIEFING_LAT: '39.1', BRIEFING_LNG: '-84.5' });
+    const prev = process.env.BRIEFING_TODAY_OVERRIDE;
+    try {
+      process.env.BRIEFING_TODAY_OVERRIDE = '2026-06-28';
+      const k = applyTripLeg(base); // no opts — must read the env override
+      assert.strictEqual(k.region, 'US-HI-007');
+      assert.strictEqual(k.tripIsland, 'Kauai');
+    } finally {
+      if (prev === undefined) delete process.env.BRIEFING_TODAY_OVERRIDE;
+      else process.env.BRIEFING_TODAY_OVERRIDE = prev;
+    }
+  });
+
   it('schema accepts trip + tripGuide objects and null', async () => {
     const Ajv = (await import('ajv')).default;
     const schema = JSON.parse(readFileSync(join(repoRoot, 'schemas', 'aggregate-output.schema.json'), 'utf8'));

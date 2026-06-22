@@ -69,8 +69,12 @@ export function applyTripLeg(config, opts = {}) {
   // Resolve "today" in the itinerary's own timezone so leg boundaries are
   // correct regardless of whether the BRIEFING_TIMEZONE secret has been flipped.
   const tripTz = itinerary.timezone || config.timezone;
-  const todayYmd = opts.todayYmd
-    || ymdInTimezone(opts.today || new Date(), tripTz);
+  // BRIEFING_TODAY_OVERRIDE (YYYY-MM-DD) lets you preview any trip day with live
+  // data — e.g. run aggregate.js as if it were a Kauai morning. Explicit opts win.
+  const overrideYmd = opts.todayYmd
+    || (process.env.BRIEFING_TODAY_OVERRIDE || '').trim()
+    || null;
+  const todayYmd = overrideYmd || ymdInTimezone(opts.today || new Date(), tripTz);
 
   const leg = resolveTripLeg(itinerary, todayYmd);
   if (!leg) return config;
