@@ -1,0 +1,47 @@
+{
+  "tripName": "Hawaii Honeymoon 2026",
+  "timezone": "Pacific/Honolulu",
+  "_comment": "Legs are keyed by the WAKE-UP location (where you are at the ~5am report time), not by flight day. Travel-day mornings belong to the island you slept on. Source: Notion 'Honeymoon' DB (flights CVG->LIH Jun 24, rental car Lihue Jun 24-Jul 2, Honolulu Airbnb Jul 2-4, Four Seasons Lanai Jul 4-9, Lanai->HNL->CVG Jul 9-10). After the last leg's end date the resolver returns null and the report falls back to the normal home (Ohio) config.",
+  "legs": [
+    {
+      "island": "Kauai",
+      "locationName": "Kauai, HI",
+      "start": "2026-06-24",
+      "end": "2026-07-02",
+      "coverage": "region",
+      "regionCode": "US-HI-007",
+      "lat": 22.0964,
+      "lng": -159.5261,
+      "skipBirdcast": true,
+      "guideKey": "kauai",
+      "note": "Kauai County = the island of Kauai (Niihau has no public access). Region-wide live feed is effectively island-wide."
+    },
+    {
+      "island": "Oahu",
+      "locationName": "Oahu, HI",
+      "start": "2026-07-03",
+      "end": "2026-07-04",
+      "coverage": "region",
+      "regionCode": "US-HI-003",
+      "lat": 21.39,
+      "lng": -157.97,
+      "skipBirdcast": true,
+      "guideKey": "oahu",
+      "note": "Honolulu County = the island of Oahu. Region-wide live feed is effectively island-wide."
+    },
+    {
+      "island": "Lanai",
+      "locationName": "Lanai, HI",
+      "start": "2026-07-05",
+      "end": "2026-07-09",
+      "coverage": "radius",
+      "regionCode": "US-HI-009",
+      "lat": 20.8283,
+      "lng": -156.9197,
+      "radiusKm": 13,
+      "skipBirdcast": true,
+      "guideKey": "lanai",
+      "note": "eBird's smallest region containing Lanai is Maui County (US-HI-009), which bundles Maui. Per traveler instruction (no Lanai->Maui ferry), this leg uses a 13km radius around Lanai City so the live feed stays on Lanai and excludes Maui."
+    }
+  ]
+}

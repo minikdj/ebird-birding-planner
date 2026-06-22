@@ -23,6 +23,7 @@ import { formatNumber, toYMD, FAVORABLE_WINDS } from '../src/utils.js';
 import { loadLifeListSync, isLifer } from '../src/lifelist.js';
 import { rateNight } from '../src/migration-scoring.js';
 import { loadConfig } from '../src/config.js';
+import { applyTripLeg } from '../src/trip-location.js';
 import { buildBirdingWindow } from '../src/birding-window.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -154,6 +155,23 @@ function loadHotspotNotes() {
   return hotspotNotes;
 }
 
+/**
+ * Load the static island birding guide for the active trip leg from
+ * data/hawaii-hotspot-notes.json, keyed by guideKey (e.g. "kauai"). Returns
+ * null when not on a trip or the file/key is missing. This is the stable
+ * "where to go + what to target" reference layer that complements the live
+ * eBird feed for the island.
+ */
+function loadTripGuide(guideKey) {
+  if (!guideKey) return null;
+  try {
+    const all = JSON.parse(readFileSync(new URL('../data/hawaii-hotspot-notes.json', import.meta.url)));
+    return all[guideKey] || null;
+  } catch {
+    return null;
+  }
+}
+
 // Life list loading + lifer check are unified in src/lifelist.js
 // (single source of truth for both the pipeline and the MCP server).
 const LIFE_LIST_JSON_PATH = fileURLToPath(new URL('../data/life-list.json', import.meta.url));
@@ -259,7 +277,10 @@ async function buildOutlook(birdcast, nws, config, today) {
     const dayShort = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' });
 
     const [live, weather] = await Promise.all([
-      birdcast.getLiveMigration(config.region, dateStr).catch(() => null),
+      // Skip BirdCast on non-CONUS legs (no coverage; avoids per-day timeouts).
+      config.skipBirdcast === true
+        ? Promise.resolve(null)
+        : birdcast.getLiveMigration(config.region, dateStr).catch(() => null),
       nws.getBirdingWeather(config.lat, config.lng, dateStr).catch(() => null),
     ]);
 
@@ -381,7 +402,9 @@ async function main() {
 
   let config;
   try {
-    config = loadConfig();
+    // applyTripLeg overrides location (region/coords/timezone/coverage/skipBirdcast)
+    // when today falls within a trip itinerary leg; otherwise returns config as-is.
+    config = applyTripLeg(loadConfig());
   } catch (err) {
     process.stdout.write(JSON.stringify({ error: err.message }, null, 2) + '\n');
     return;
@@ -431,13 +454,37 @@ async function main() {
         return v;
       });
 
+  // BirdCast has no coverage outside the continental US (Hawaii, Alaska). On
+  // skipBirdcast legs, bypass the three BirdCast calls entirely — they would
+  // otherwise each time out (~10s) and add nothing — and mark them skipped.
+  const skipBC = config.skipBirdcast === true;
+  const bcSkip = (name) => Promise.resolve(null).then((v) => {
+    sourceStatus[name] = 'skipped: BirdCast has no coverage for this region';
+    return v;
+  });
+
+  // Coverage mode (set by applyTripLeg): 'region' = island/region-wide eBird
+  // feed via county code; 'radius' = point + radiusKm (Lanai, to stay off Maui).
+  // Undefined coverage = normal home behavior (geo, 50km radius).
+  const coverage = config.coverage === 'radius' ? 'radius'
+    : config.coverage === 'region' ? 'region'
+    : null;
+
+  const notablesPromise = coverage === 'region'
+    ? track('ebirdNotables', ebird.getRegionNotableObservations(config.region, 14))
+    : track('ebirdNotables', ebird.getNearbyNotableObservations(config.lat, config.lng, 14, config.radiusKm || 50));
+
+  const hotspotsPromise = coverage === 'region'
+    ? track('ebirdHotspots', ebird.getRegionHotspots(config.region))
+    : track('ebirdHotspots', ebird.getNearbyHotspots(config.lat, config.lng, config.radiusKm || 50));
+
   const [live, season, expectedSpecies, weather, notableObs, nearbyHotspots, frontalPassageData, ohioBirdsSightings] = await Promise.all([
-    track('birdcastLive',     birdcast.getLiveMigration(config.region, today)),
-    track('birdcastSeason',   birdcast.getSeasonHistorical(config.region, today)),
-    track('birdcastExpected', birdcast.getExpectedSpecies(config.region, today, { ignoreSeasonCheck: false })),
+    skipBC ? bcSkip('birdcastLive')     : track('birdcastLive',     birdcast.getLiveMigration(config.region, today)),
+    skipBC ? bcSkip('birdcastSeason')   : track('birdcastSeason',   birdcast.getSeasonHistorical(config.region, today)),
+    skipBC ? bcSkip('birdcastExpected') : track('birdcastExpected', birdcast.getExpectedSpecies(config.region, today, { ignoreSeasonCheck: false })),
     track('nws',              nws.getBirdingWeather(config.lat, config.lng, today)),
-    track('ebirdNotables',    ebird.getNearbyNotableObservations(config.lat, config.lng, 14, 50)),
-    track('ebirdHotspots',    ebird.getNearbyHotspots(config.lat, config.lng, 50)),
+    notablesPromise,
+    hotspotsPromise,
     track('frontalPassage',   nws.detectFrontalPassage(config.lat, config.lng, today)),
     ohioBirdsPromise,
   ]);
@@ -599,10 +646,27 @@ async function main() {
 
   const liferOpportunities = notableObservations.filter(o => o.isLifer).length;
 
+  // Trip context (null on normal home runs). `trip` tells the prompt it is in
+  // travel mode (island-wide / resident-focus, BirdCast off); `tripGuide` is the
+  // static island birding reference (sites, targets, seasonal + driving notes).
+  const trip = config.tripActive
+    ? {
+        active: true,
+        name: config.tripName,
+        island: config.tripIsland,
+        coverage,
+        radiusKm: config.radiusKm ?? null,
+        locationName: config.locationName,
+      }
+    : null;
+  const tripGuide = config.tripActive ? loadTripGuide(config.tripGuideKey) : null;
+
   const output = {
     date: today,
     region: config.region,
     location: { lat: config.lat, lng: config.lng },
+    trip,
+    tripGuide,
 
     migration: {
       lastNight,

@@ -81,6 +81,14 @@ export class EBirdClient {
     return this.makeRequest('/ref/hotspot/geo', { lat, lng, dist, fmt: 'json' });
   }
 
+  getRegionHotspots(regionCode) {
+    this.#validateRegionCode(regionCode);
+    // /ref/hotspot/{region} returns all hotspots in a region (county/state).
+    // Used for island-wide ("region" coverage) trip legs where the eBird county
+    // code equals the island (e.g. Kauai County, Honolulu County).
+    return this.makeRequest(`/ref/hotspot/${regionCode}`, { fmt: 'json' });
+  }
+
   getHotspotInfo(locId) {
     this.#validateLocId(locId);
     return this.makeRequest(`/ref/hotspot/info/${locId}`);

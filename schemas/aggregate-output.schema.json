@@ -364,6 +364,16 @@
         "description": "Source status string. Pattern: 'ok' | 'ok: ...' | 'error: ...' | 'skipped: ...'",
         "pattern": "^(ok|error: |skipped: )"
       }
+    },
+    "trip": {
+      "type": ["object", "null"],
+      "description": "Non-null only when the run falls within a trip itinerary leg (travel mode). Tells the prompt to use island-wide / resident-focus framing with BirdCast off. additionalProperties:true — shape is intentionally loose for evolvability.",
+      "additionalProperties": true
+    },
+    "tripGuide": {
+      "type": ["object", "null"],
+      "description": "Static island birding reference for the active trip leg (sites, endemic targets, seabird/wetland/seasonal/driving notes, cautions), from data/hawaii-hotspot-notes.json. Null on normal home runs. additionalProperties:true — rich nested reference content, intentionally not over-constrained.",
+      "additionalProperties": true
     }
   }
 }

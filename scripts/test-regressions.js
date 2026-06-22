@@ -1407,3 +1407,87 @@ describe('R2-W2B prompt invariant: routine-prompt.md documents tri-state semanti
     assert.ok(md.includes('--- END ---'), 'END marker missing');
   });
 });
+
+// ---------------------------------------------------------------------------
+// Trip itinerary location resolver (Hawaii honeymoon auto-switching)
+// Locks in: wake-up-location date boundaries, config override on trip legs,
+// clean fallback to home config off-trip, and schema acceptance of the new
+// trip/tripGuide output fields. A broken resolver would silently point the
+// daily report at the wrong island (or back at Ohio mid-trip).
+// ---------------------------------------------------------------------------
+
+describe('trip-location resolver — Hawaii itinerary auto-switching', () => {
+  let loadItinerary, resolveTripLeg, applyTripLeg, loadConfig;
+  before(async () => {
+    ({ loadItinerary, resolveTripLeg, applyTripLeg } = await import('../src/trip-location.js'));
+    ({ loadConfig } = await import('../src/config.js'));
+  });
+
+  it('loads the Hawaii itinerary with three legs in order', () => {
+    const it = loadItinerary();
+    assert.ok(it, 'itinerary must load');
+    assert.deepStrictEqual(it.legs.map((l) => l.island), ['Kauai', 'Oahu', 'Lanai']);
+    assert.strictEqual(it.timezone, 'Pacific/Honolulu');
+  });
+
+  it('maps each date to the correct wake-up island (inclusive boundaries)', () => {
+    const it = loadItinerary();
+    const island = (d) => { const l = resolveTripLeg(it, d); return l ? l.island : 'HOME'; };
+    assert.strictEqual(island('2026-06-23'), 'HOME');   // day before arrival
+    assert.strictEqual(island('2026-06-24'), 'Kauai');  // arrival day
+    assert.strictEqual(island('2026-07-02'), 'Kauai');  // morning on Kauai, fly to Oahu midday
+    assert.strictEqual(island('2026-07-03'), 'Oahu');
+    assert.strictEqual(island('2026-07-04'), 'Oahu');   // morning on Oahu, fly to Lanai
+    assert.strictEqual(island('2026-07-05'), 'Lanai');
+    assert.strictEqual(island('2026-07-09'), 'Lanai');  // checkout/depart day
+    assert.strictEqual(island('2026-07-10'), 'HOME');   // flying home -> reverts
+  });
+
+  it('coverage mode: Kauai/Oahu region-wide, Lanai radius (no Maui spillover)', () => {
+    const it = loadItinerary();
+    assert.strictEqual(resolveTripLeg(it, '2026-07-01').coverage, 'region');
+    assert.strictEqual(resolveTripLeg(it, '2026-07-03').coverage, 'region');
+    const lanai = resolveTripLeg(it, '2026-07-06');
+    assert.strictEqual(lanai.coverage, 'radius');
+    assert.ok(lanai.radiusKm > 0 && lanai.radiusKm <= 15, 'Lanai radius must stay off Maui');
+  });
+
+  it('applyTripLeg overrides location on a trip date', () => {
+    const base = loadConfig({ BRIEFING_REGION: 'US-OH-061', BRIEFING_LAT: '39.1', BRIEFING_LNG: '-84.5' });
+    const k = applyTripLeg(base, { todayYmd: '2026-07-01' });
+    assert.strictEqual(k.region, 'US-HI-007');
+    assert.strictEqual(k.timezone, 'Pacific/Honolulu');
+    assert.strictEqual(k.coverage, 'region');
+    assert.strictEqual(k.skipBirdcast, true);
+    assert.strictEqual(k.tripActive, true);
+    assert.strictEqual(k.tripGuideKey, 'kauai');
+    assert.ok(Math.abs(k.lat - 22.0964) < 0.001 && Math.abs(k.lng + 159.5261) < 0.001);
+  });
+
+  it('applyTripLeg leaves the home config untouched off-trip', () => {
+    const base = loadConfig({ BRIEFING_REGION: 'US-OH-061', BRIEFING_LAT: '39.1', BRIEFING_LNG: '-84.5' });
+    const home = applyTripLeg(base, { todayYmd: '2026-05-19' });
+    assert.strictEqual(home.region, 'US-OH-061');
+    assert.strictEqual(home.coverage, undefined);
+    assert.ok(!home.tripActive);
+  });
+
+  it('applyTripLeg with no itinerary returns config unchanged', () => {
+    const base = loadConfig({ BRIEFING_REGION: 'US-OH-061' });
+    const out = applyTripLeg(base, { itinerary: null });
+    assert.strictEqual(out, base);
+  });
+
+  it('schema accepts trip + tripGuide objects and null', async () => {
+    const Ajv = (await import('ajv')).default;
+    const schema = JSON.parse(readFileSync(join(repoRoot, 'schemas', 'aggregate-output.schema.json'), 'utf8'));
+    const ajv = new Ajv({ allErrors: true, strict: false });
+    const validate = ajv.compile(schema);
+    // trip/tripGuide are optional and may be object or null — just confirm the
+    // schema does not reject their presence (they are additionalProperties:true).
+    const tripProp = schema.properties.trip;
+    const guideProp = schema.properties.tripGuide;
+    assert.ok(tripProp && tripProp.type.includes('object') && tripProp.type.includes('null'));
+    assert.ok(guideProp && guideProp.type.includes('object') && guideProp.type.includes('null'));
+  });
+});

@@ -1,0 +1,198 @@
+{
+  "_comment": "Static island birding reference for the Hawaii honeymoon legs, distilled from an adversarially-verified research pass. Surfaced by aggregate.js as `tripGuide` for the active island leg. The LIVE eBird region/radius feed provides current notable sightings + active hotspots each morning; this guide is the stable 'where to go and what to target' layer. eBird species/location codes were deliberately left null where they could not be verified — the live feed resolves real codes. Conservation-sensitive species that are functionally extinct or un-chaseable are recorded as honest notes, NOT as targets.",
+  "kauai": {
+    "island": "Kauai",
+    "headline": "The birding crown jewel of the trip: forest endemics at Kokee, a world-class seabird colony at Kilauea Point, and easy endemic waterbirds at Hanalei.",
+    "endemicTargets": [
+      { "commonName": "Apapane", "status": "Native honeycreeper (crimson, black wings); the most abundant native forest bird at Kokee. A lifer for mainland birders.", "whereReliable": "Flowering ohia along the Pihea Trail, Kaluapuhi Trail, and the Kokee lookouts." },
+      { "commonName": "Kauai Amakihi", "status": "Endemic honeycreeper, small yellow-green, decurved bill. Fairly common in high native forest.", "whereReliable": "Pihea Trail and the Pihea/Alakai Swamp junction; Kalalau/Puu o Kila lookouts where ohia is blooming." },
+      { "commonName": "Anianiau", "status": "Endemic honeycreeper; smallest Hawaiian honeycreeper, pale lemon-yellow.", "whereReliable": "Kokee high country: Pihea Trail, Puu o Kila and Kalalau lookouts. Look in flowering ohia." },
+      { "commonName": "Kauai Elepaio", "status": "Endemic monarch flycatcher; confiding, among the more findable Kauai endemics but still needs dawn effort.", "whereReliable": "Kokee / upper Waimea Canyon native forest: Pihea, Kaluapuhi, and Awaawapuhi Trails; near the lookouts." },
+      { "commonName": "Hawaiian Goose (Nene)", "status": "Endemic goose, Hawaii state bird; endangered but recovering and now widespread/easy on Kauai.", "whereReliable": "Princeville/Hanalei lawns and golf courses, Hanalei NWR, Kilauea Point grounds, and the Kokee lookouts. Often in flocks." },
+      { "commonName": "Hawaiian Duck (Koloa)", "status": "Endemic dabbling duck; Kauai holds the purest population (watch for Mallard-hybrid features).", "whereReliable": "Hanalei NWR taro fields (Ohiki Rd), Salt Pond, golf-course ponds, wetlands island-wide." },
+      { "commonName": "Hawaiian Coot (Alae keokeo)", "status": "Endemic waterbird; large white/bulbous frontal shield. Endangered but reliable at managed wetlands.", "whereReliable": "Hanalei NWR, Kawaiele Sanctuary, Mana Plains, Salt Pond, golf-course ponds." },
+      { "commonName": "Hawaiian Stilt (Aeo)", "status": "Endemic subspecies of Black-necked Stilt (filed under Black-necked Stilt in eBird). Endangered but reliable.", "whereReliable": "Hanalei NWR, Kawaiele Sanctuary, Salt Pond, Mana Plains." }
+    ],
+    "sites": [
+      {
+        "name": "Kokee State Park high country (Pihea Trail / Puu o Kila & Kalalau Lookouts / Kaluapuhi Trail)",
+        "lat": 22.1478, "lng": -159.631, "ebirdLocId": null,
+        "habitat": "High-elevation (~3,600-4,000 ft) native ohia-koa montane forest on the rim above Kalalau Valley.",
+        "targetSpecies": ["Apapane", "Kauai Amakihi", "Anianiau", "Kauai Elepaio", "Hawaiian Goose", "White-tailed Tropicbird"],
+        "whereToLook": "Drive to the very end of Hwy 550 (~mile 18) to Puu o Kila Lookout and walk the Pihea Trail along the Kalalau rim — best first 0.5-1 mi in flowering ohia. Also bird the Kaluapuhi Trail (~0.7 mi before the museum) and Kalalau Lookout. White-tailed Tropicbirds soar below the lookouts.",
+        "bestTime": "Be on the trail at first light; honeycreeper activity drops by late morning and afternoons fog in.",
+        "accessNotes": "Paved Hwy 550, ~1.5 hr from the east side; any rental car. Bring rain gear. Start before tour-bus crowds."
+      },
+      {
+        "name": "Kilauea Point National Wildlife Refuge",
+        "lat": 22.2316, "lng": -159.402, "ebirdLocId": null,
+        "habitat": "North-shore cliff headland with a historic lighthouse; one of the most accessible large seabird colonies in the main islands.",
+        "targetSpecies": ["Red-footed Booby", "Wedge-tailed Shearwater", "Laysan Albatross", "White-tailed Tropicbird", "Red-tailed Tropicbird", "Great Frigatebird", "Hawaiian Goose"],
+        "whereToLook": "From the overlook and lighthouse point, scan the cliff face and Crater Hill: hundreds of Red-footed Boobies nest in the slope vegetation, Wedge-tailed Shearwaters burrow on the slopes, tropicbirds wheel off the point, and Great Frigatebirds loaf overhead (they do NOT nest here). Nene graze the lawns. If the gate is closed, the always-open overlook just outside gives much of the same view.",
+        "bestTime": "Morning to midday; seabirds all day.",
+        "accessNotes": "Paved access; entrance fee and limited open days/hours, and a parking reservation system has been used — verify before going. Laysan Albatross are present in late June but largely gone by mid-to-late July, so the early Kauai days are the better window."
+      },
+      {
+        "name": "Hanalei National Wildlife Refuge (Ohiki Rd & Highway Overlook)",
+        "lat": 22.2075, "lng": -159.4748, "ebirdLocId": null,
+        "habitat": "Restored lowland taro-field and wetland complex — the premier endemic-waterbird site.",
+        "targetSpecies": ["Hawaiian Duck", "Hawaiian Coot", "Hawaiian Stilt", "Hawaiian Goose", "Hawaiian Gallinule"],
+        "whereToLook": "Scan the taro loi and wet fields from Ohiki Rd (off Kuhio Hwy just west of the Hanalei River bridge). The Hanalei Valley Overlook on Kuhio Hwy gives a sweeping scope view of the whole refuge.",
+        "bestTime": "Early morning for light and activity; birds present all day.",
+        "accessNotes": "Bird from Ohiki Rd and the overlook only — the refuge interior is closed to protect the waterbirds. Narrow shoulder; pull off carefully."
+      },
+      {
+        "name": "Huleia NWR / Menehune (Alekoko) Fishpond Overlook",
+        "lat": 21.9487, "lng": -159.372, "ebirdLocId": null,
+        "habitat": "Lowland river-valley wetland near Lihue/Nawiliwili.",
+        "targetSpecies": ["Hawaiian Stilt", "Hawaiian Coot", "Hawaiian Duck", "Hawaiian Goose", "Hawaiian Gallinule"],
+        "whereToLook": "Refuge is closed to entry; view from the Menehune Fishpond Overlook on Hulemalu Rd. Scope the fishpond margins and valley wetlands.",
+        "bestTime": "Morning light is best looking down into the valley.",
+        "accessNotes": "Roadside overlook only, just southwest of Lihue — a quick east/south-side stop."
+      },
+      {
+        "name": "Kawaiele State Waterbird Sanctuary & Mana Plains (west side)",
+        "lat": 22.01, "lng": -159.768, "ebirdLocId": null,
+        "habitat": "Managed coastal waterbird ponds and remnant Mana Plains wetlands on the dry west side near Kekaha.",
+        "targetSpecies": ["Hawaiian Stilt", "Hawaiian Coot", "Hawaiian Duck", "Hawaiian Goose"],
+        "whereToLook": "Scan the managed ponds off Hwy 50 near Kekaha and the adjacent Mana Plains. Pairs well with a west-side Kokee/Polihale day.",
+        "bestTime": "Late afternoon light is good; waterbirds all day.",
+        "accessNotes": "Roadside paved access. Barking Sands (PMRF) nearby is a restricted military base — do not rely on it. Hot and dry; bring water."
+      },
+      {
+        "name": "Salt Pond Beach Park (Hanapepe)",
+        "lat": 21.8996, "lng": -159.6056, "ebirdLocId": null,
+        "habitat": "Coastal county park with adjacent salt-pan flats and shallow ponds.",
+        "targetSpecies": ["Hawaiian Stilt", "Hawaiian Coot", "Hawaiian Duck", "Hawaiian Goose"],
+        "whereToLook": "Check the salt-pan flats and shallow pools by the entrance road and behind the beach.",
+        "bestTime": "Anytime; morning or late afternoon for light.",
+        "accessNotes": "Paved access and parking; very easy. Good on a south/west driving day."
+      }
+    ],
+    "seabirdNotes": "Kilauea Point is the seabird crown jewel and the easiest large colony to reach by car in the main islands. Summer: hundreds of nesting Red-footed Boobies, burrow-nesting Wedge-tailed Shearwaters, White-tailed and a few Red-tailed Tropicbirds, Great Frigatebirds (present/kleptoparasitic but NOT nesting), and Laysan Albatross fading out by mid-July. Newell's Shearwater and Hawaiian Petrel breed on Kauai but are nocturnal at remote colonies and are NOT realistically seeable for a casual visitor — do not expect them.",
+    "wetlandNotes": "Endemic waterbirds are Kauai's easiest wins, present year-round. Hanalei NWR (from Ohiki Rd / overlook) is best for Koloa (purest population on Kauai), Hawaiian Coot, Hawaiian Stilt, Nene, and Hawaiian Gallinule. West-side wetlands (Kawaiele, Mana Plains), Salt Pond, and Huleia (from the overlook) add the same suite. Refuge interiors at Hanalei and Huleia are closed — bird from roads/overlooks.",
+    "seasonalNotes": "Late June/early July is dry season and resident breeding season — birding is residents + seabird colonies, not migration. Forest honeycreepers are singing in flowering ohia (bird Kokee at dawn; afternoons fog in). Seabirds are at their best at Kilauea Point; Laysan Albatross still present early but dwindling by mid-July, so your early Kauai dates are the better albatross window. Migratory shorebirds are mostly absent in midsummer.",
+    "drivingNotes": "With the rental car the whole island is bird-accessible on paved roads except the deep Alakai interior (Mohihi/Camp 10 dirt road needs 4WD and is often impassable when wet — skip it; reach the Alakai via the Pihea/Alakai Swamp boardwalk instead). Haena State Park at the road's end requires an advance parking/entry reservation. Kilauea Point has a fee + limited hours + possible parking reservation — verify before going.",
+    "cautions": [
+      "Akikiki and Puaiohi are functionally extinct in the wild / confined to inaccessible gulches — NOT targets; mention only as a sober conservation note.",
+      "Akekee is critically endangered and vanishingly rare even at the best sites — do not present it as even a long-shot target.",
+      "Iiwi, once common, is now rare and local on Kauai (avian malaria) — treat any sighting as a bonus, not a plan; far more reliable on Maui/Big Island.",
+      "Hawaiian Stilt files under Black-necked Stilt and Hawaiian Gallinule under Common Gallinule in eBird (no separate species codes)."
+    ]
+  },
+  "oahu": {
+    "island": "Oahu",
+    "headline": "Lighter, urban-friendly leg. The charmer is the White Tern nesting right in downtown Honolulu; forest endemics at Aiea Loop and waterbirds at Kawainui Marsh round it out.",
+    "endemicTargets": [
+      { "commonName": "White Tern (manu-o-Ku)", "status": "Native seabird; Honolulu's official bird, uniquely nesting in the urban core. Breeding peak in spring-summer — an easy, charismatic native lifer from the Waikiki base.", "whereReliable": "Downtown shade trees: Iolani Palace, State Capitol, Hawaii State Library, Honolulu Hale, Kawaiahao Church; also Kapiolani Park, Fort DeRussy/Waikiki, UH Manoa. Look for a single egg or chick balanced directly on a bare limb (no nest)." },
+      { "commonName": "Oahu Amakihi", "status": "Endemic honeycreeper; the more findable of Oahu's two forest endemics.", "whereReliable": "Aiea Loop Trail (upper/back half with native ohia and koa); also upper Manana Trail and Koolau/Waianae ridge forests." },
+      { "commonName": "Oahu Elepaio", "status": "Endemic, ESA-listed endangered monarch flycatcher; the signature Oahu endemic and the harder of the two. Curious, responsive.", "whereReliable": "Aiea Loop Trail is the most reliable accessible site — work the shaded gulches/understory. Avoid heavy playback on this sensitive endemic." },
+      { "commonName": "Apapane", "status": "Native honeycreeper (not Oahu-endemic); mobile nectar feeder tracking ohia bloom.", "whereReliable": "Aiea Loop upper sections in flowering ohia lehua; higher Koolau ridge forest. Patchy with the bloom." }
+    ],
+    "sites": [
+      {
+        "name": "Aiea Loop Trail (Keaiwa Heiau State Recreation Area)",
+        "lat": 21.4, "lng": -157.9, "ebirdLocId": "L253053",
+        "habitat": "Mid-elevation native/mixed ohia-koa ridge forest; ~4.8 mi loop, ~900 ft gain.",
+        "targetSpecies": ["Oahu Elepaio", "Oahu Amakihi", "Apapane", "White-rumped Shama", "Red-billed Leiothrix"],
+        "whereToLook": "Park at the upper lot in Keaiwa Heiau SRA above Aiea; the best native habitat is the upper/back of the loop where flowering ohia and koa dominate. Listen for Apapane and Oahu Amakihi at the canopy bloom; work shaded gulches for Oahu Elepaio.",
+        "bestTime": "Early morning (cooler, more vocal); year-round for endemics. Muddy/slick after rain.",
+        "accessNotes": "Via Aiea Heights Dr; free parking; state-park gate hours apply. ~25-35 min from Waikiki."
+      },
+      {
+        "name": "Kawainui Marsh & adjacent Hamakua Marsh (Kailua)",
+        "lat": 21.39, "lng": -157.74, "ebirdLocId": "L1038716",
+        "habitat": "Largest remaining wetland in Hawaii (~830 ac) plus small adjacent Hamakua Marsh; freshwater marsh, open water, mudflats.",
+        "targetSpecies": ["Hawaiian Stilt", "Hawaiian Coot", "Hawaiian Gallinule", "Black-crowned Night-Heron"],
+        "whereToLook": "Kawainui: Kaha Park levee path at the end of Kaha St, and the overlook at Ulupo Heiau. Hamakua Marsh: the pullout on Hamakua Dr (across from Safeway) gives close looks at stilts and night-herons. Scan open water and mud margins.",
+        "bestTime": "Early morning or late afternoon; year-round (these endangered waterbirds breed locally, so summer is fine).",
+        "accessNotes": "Perimeter trails/levees only — no interior entry. ~30-40 min from Waikiki. The best accessible wetland while the federal refuges are summer-closed."
+      },
+      {
+        "name": "Kaena Point State Park / Natural Area Reserve",
+        "lat": 21.57, "lng": -158.28, "ebirdLocId": "L285807",
+        "habitat": "Coastal dune/shrub seabird sanctuary inside a predator-proof fence at the island's western tip.",
+        "targetSpecies": ["Wedge-tailed Shearwater", "Laysan Albatross", "Pacific Golden-Plover"],
+        "whereToLook": "Drive to the end of the paved road (Mokuleia north side or Keawaula/Yokohama south side), then walk the dirt coastal track ~2.5 mi each way to the fenced point. Inside the fence: ground-nesting Wedge-tailed Shearwaters in burrows and any remaining Laysan Albatross near the dunes.",
+        "bestTime": "Early morning to beat the heat. Wedge-tailed Shearwaters breeding spring-fall (good now); Laysan Albatross still present in numbers late June, thinning through July.",
+        "accessNotes": "Long, hot, fully exposed round-trip walk-in (no shade/water). Stay on trail, out of fenced burrow areas. ~1.25-1.5 hr drive from Waikiki — a half-day commitment. Red-footed/Brown Boobies are offshore/flyby only — do not expect them from land."
+      },
+      {
+        "name": "Downtown / Civic-Center Honolulu (White Tern circuit)",
+        "lat": 21.31, "lng": -157.86, "ebirdLocId": "L804758",
+        "habitat": "Urban shade trees and historic civic grounds.",
+        "targetSpecies": ["White Tern", "Rose-ringed Parakeet", "Java Sparrow", "Common Myna", "Zebra Dove"],
+        "whereToLook": "Walk the mature monkeypod/shower trees around Iolani Palace, the State Capitol, Hawaii State Library, Honolulu Hale, and Kawaiahao Church. Look up for White Terns on bare limbs and single eggs/chicks balanced on branches.",
+        "bestTime": "Any time; late June/early July is peak breeding with eggs and chicks present.",
+        "accessNotes": "Walkable from Ala Moana/Waikiki or a short drive/TheBus. Respect closures; do not disturb nest trees."
+      },
+      {
+        "name": "Kapiolani Park / Waikiki / Ala Moana Regional Park",
+        "lat": 21.27, "lng": -157.82, "ebirdLocId": "L285760",
+        "habitat": "Urban parkland, lawns, banyans/monkeypods, adjacent shoreline.",
+        "targetSpecies": ["White Tern", "Red-crested Cardinal", "Common Waxbill", "Yellow-fronted Canary"],
+        "whereToLook": "Scan large shade trees for White Terns and lawns for exotic finches/cardinals; check the Diamond Head end shoreline for any loafing seabirds. Steps from the hotel base.",
+        "bestTime": "Early morning; year-round.",
+        "accessNotes": "Adjacent to the Waikiki/Ala Moana base; walkable, free parking."
+      }
+    ],
+    "seabirdNotes": "Kaena Point is the marquee accessible seabird site: a fenced, predator-free colony with active Wedge-tailed Shearwaters (great in late June/July) and Laysan Albatross (still present late June, tapering into July). Red-footed/Brown Boobies are offshore/flyby only. Around the SE shore (Makapuu lookout) watch for Great Frigatebird (iwa) and tropicbirds as flybys. True pelagics need a boat.",
+    "wetlandNotes": "Both federal refuges are effectively off-limits this trip: James Campbell NWR is closed in summer (guided tours run only ~Oct-spring) and Pearl Harbor NWR is closed to general entry — confirm with USFWS. Use the Kawainui-Hamakua complex in Kailua for Hawaiian Stilt, Hawaiian Coot, Hawaiian Gallinule, and Black-crowned Night-Heron (resident breeders). Stay on perimeter trails.",
+    "seasonalNotes": "Late June/early July: White Tern at/near breeding peak downtown (easy native lifer from the base); Wedge-tailed Shearwaters reliable at Kaena, Laysan Albatross a strong-but-fading chance; forest endemics resident and findable at Aiea Loop (go early); endangered waterbirds breeding at Kawainui. Migratory shorebirds largely absent. With only 2 nights, a practical plan is a downtown/Kapiolani White Tern walk plus ONE focused outing (Aiea Loop for endemics OR Kawainui for waterbirds); Kaena is a half-day.",
+    "drivingNotes": "Based in Waikiki/Ala Moana with a rental car. Rough one-way drives (traffic-dependent): Aiea Loop ~25-35 min; Kawainui/Hamakua ~30-40 min; Kaena Point ~1.25-1.5 hr then a 2.5-mi walk; downtown White Tern circuit ~10-15 min or walkable; Kapiolani/Ala Moana walkable.",
+    "cautions": [
+      "Pure Hawaiian Duck (Koloa) is effectively gone from Oahu — only feral Mallard x Koloa hybrids persist; do not list it as a target here.",
+      "Oahu Elepaio is ESA-listed endangered — findable with effort at Aiea but not guaranteed; avoid heavy playback.",
+      "Migratory shorebirds are at a summer low; Oahu summer birding is about residents, endemics, and breeding seabirds.",
+      "James Campbell and Pearl Harbor NWRs are not visitable this trip — use Kawainui/Hamakua instead."
+    ]
+  },
+  "lanai": {
+    "island": "Lanai",
+    "headline": "The relaxation leg, and honestly the thinnest birding — no reliable native forest birds (Lanai's endemics are extinct). The genuine highlights are breeding seabirds at dusk and Gambel's Quail, a fun Lanai specialty.",
+    "endemicTargets": [
+      { "commonName": "Wedge-tailed Shearwater (Uau kani)", "status": "Native breeding seabird; coastal burrows near Hulopoe/Manele, colonies active ~March-September. The most accessible breeding seabird on Lanai.", "whereReliable": "Coastal slopes around Hulopoe Bay / Manele and the Puu Pehe (Sweetheart Rock) headland; best at/near dusk by their wailing calls. Respect roped burrow areas." },
+      { "commonName": "Hawaiian Petrel (Uau)", "status": "Endangered native seabird; a breeding colony exists on the upper Lanaihale slopes (NOT the world's largest — that's Maui's Haleakala). Nocturnal at the colony; burrows not viewable.", "whereReliable": "Heard after dark from the upper Munro Trail ridge in breeding season; or seen at sea. Not a casual or guaranteed sighting — heard-at-best on land. Never use playback." },
+      { "commonName": "Gambel's Quail", "status": "Introduced but established — Lanai is one of very few places in Hawaii to see it; a genuine Lanai tick. Small coveys; recent eBird records confirm it persists.", "whereReliable": "Dry open scrub and grassland: brushy edges and roadsides around Lanai City outskirts, the Palawai Basin, and dry coastal scrub near Hulopoe/Manele. Most active early morning — cover ground at dawn." }
+    ],
+    "sites": [
+      {
+        "name": "Lanai City / Koele / Palawai Basin lowlands",
+        "lat": 20.8283, "lng": -156.9197, "ebirdLocId": null,
+        "habitat": "Upcountry town plantings, Cook-pine groves around Koele (the resort area), and surrounding dry scrub/pasture/former pineapple lands.",
+        "targetSpecies": ["Gambel's Quail", "Gray Francolin", "Erckel's Francolin", "Wild Turkey", "Ring-necked Pheasant", "Pacific Golden-Plover", "Warbling White-eye", "Spotted Dove", "Northern Cardinal"],
+        "whereToLook": "Bird brushy roadsides and grassland edges on the outskirts of Lanai City, the Cook-pine groves around the Four Seasons (Koele), and the open Palawai Basin along Manele Rd and Kaumalapau Hwy. Early-morning roadside birding from pullouts is best for quail and francolins.",
+        "bestTime": "First 1-2 hours after sunrise for gamebirds.",
+        "accessNotes": "All paved and reachable by any car; the resort base is right here. Low-effort birding on foot or short drives."
+      },
+      {
+        "name": "Hulopoe Bay / Manele / Puu Pehe (Sweetheart Rock) headland",
+        "lat": 20.7397, "lng": -156.8917, "ebirdLocId": null,
+        "habitat": "South-coast bay, rocky headland and cliffs; Marine Life Conservation District with coastal seabird-nesting slopes.",
+        "targetSpecies": ["Wedge-tailed Shearwater", "Brown Noddy", "Black Noddy", "Pacific Golden-Plover", "Gambel's Quail", "Great Frigatebird"],
+        "whereToLook": "From Hulopoe Beach Park, walk the short coastal trail to the Puu Pehe overlook — scan the channel and islet for shearwaters, noddies, and passing boobies/frigatebirds. Wedge-tailed Shearwaters nest in burrows on the vegetated slopes (stay out of roped areas). Check dry brushy edges for Gambel's Quail.",
+        "bestTime": "Early morning and especially near dusk for shearwater activity.",
+        "accessNotes": "Paved Manele Rd from Lanai City, ~20-30 min; any car. Free parking at Hulopoe Beach Park. Also the ferry terminal. Stay out of fenced/roped burrow areas."
+      },
+      {
+        "name": "Lanaihale / Munro Trail (summit forest)",
+        "lat": 20.8133, "lng": -156.8772, "ebirdLocId": null,
+        "habitat": "Highland mixed forest (introduced Cook pine with remnant ohia) along the summit ridge ~2,000-3,370 ft; the Hawaiian Petrel colony slopes. Native forest is highly degraded — native forest birds are effectively gone.",
+        "targetSpecies": ["Hawaiian Petrel (dusk/heard only)", "Erckel's Francolin", "Gray Francolin", "Wild Turkey", "Warbling White-eye", "Pacific Golden-Plover"],
+        "whereToLook": "From Lanai City, take Keomuku Rd (Hwy 44) ~1 mi north, then the Munro Trail dirt road ~5 mi to the ridge. Introduced landbirds along the climb. For Hawaiian Petrel, position on the upper ridge at dusk and listen — do not expect a visual.",
+        "bestTime": "Early morning for gamebirds; dusk for petrel listening (breeding season). Dry conditions only.",
+        "accessNotes": "HIGH-CLEARANCE 4WD REQUIRED; dangerous/impassable when wet. Standard rentals and many SUVs are not suitable, and Lanai's rental fleet is very limited — ask the Four Seasons concierge about current road status and 4WD/guided options. Allow a half day; bring water. Do NOT expect any native forest bird here."
+      }
+    ],
+    "seabirdNotes": "Seabirds are the genuine highlight. Wedge-tailed Shearwater nests in coastal burrows at Hulopoe/Manele — the most accessible breeding seabird (look/listen near dusk at Puu Pehe). Hawaiian Petrel breeds on Lanaihale but is nocturnal at the colony and effectively un-seeable on land by day — a dusk listen on the upper Munro ridge is the realistic land experience. Offshore islets are State seabird sanctuaries — view from shore only. Never use playback near colonies.",
+    "wetlandNotes": "Lanai has essentially no freshwater wetlands or mudflats — the Hawaiian Stilt/Coot/Gallinule/Koloa suite is absent here. The only open-country shorebird is Pacific Golden-Plover on lawns/pasture (summer minimum). Wetland/native-waterbird targets belong to the Kauai and Oahu legs.",
+    "seasonalNotes": "Late June/early July is seabird breeding season — the main saving grace. Wedge-tailed Shearwaters at coastal burrows (detect by wailing calls near dusk); Hawaiian Petrels at the Lanaihale colony (dusk listening on the upper Munro ridge, near the tail end of the best window). Introduced gamebirds (Gambel's Quail, francolins, turkey, pheasant) active on cool early mornings. Migratory shorebirds at their seasonal low. No reliable native forest bird in any season.",
+    "drivingNotes": "Base is the Four Seasons (upcountry Koele), near the foot of the Munro Trail. Paved roads (Manele Rd to Hulopoe/Manele; Kaumalapau Hwy; Keomuku Rd) reach the town, lowland, and coastal birding fine for any car. The Munro Trail up Lanaihale needs high-clearance 4WD and is hazardous when wet — arrange a 4WD/guided option in advance and check conditions with the concierge. Fuel/services only in Lanai City — top up before heading out.",
+    "cautions": [
+      "Be honest: Lanai is by far the weakest birding leg. Its native forest birds are extinct — there is NO reliable native landbird to target. Do not present any honeycreeper as findable here. Frame it as a relaxed bonus, not a chase.",
+      "The single best life-bird genuinely here (Hawaiian Petrel) is endangered and nocturnal at the colony — set expectations to heard-after-dark or seen-at-sea, never an easy tick.",
+      "This leg uses a 13km radius around Lanai City (not the Maui County region) so the live feed stays on Lanai — you are not ferrying to Maui.",
+      "Munro Trail: high-clearance 4WD only, slippery/hazardous when wet, narrow with drop-offs — do not attempt in rain or with an unsuitable vehicle."
+    ]
+  }
+}

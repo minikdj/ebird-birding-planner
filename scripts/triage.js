@@ -10,6 +10,7 @@ import { EBirdClient } from '../src/ebird-client.js';
 import { formatNumber, toYMD, FAVORABLE_WINDS, RECOMMENDATION } from '../src/utils.js';
 import { rateNight, loadThresholdsFromEnv } from '../src/migration-scoring.js';
 import { loadConfig } from '../src/config.js';
+import { applyTripLeg } from '../src/trip-location.js';
 
 async function main() {
   // TEST FIXTURE MODE — bypass all API calls with pre-baked scenario data.
@@ -28,7 +29,9 @@ async function main() {
 
   let config;
   try {
-    config = loadConfig();
+    // applyTripLeg overrides location/coverage/skipBirdcast when today is within
+    // a trip itinerary leg; otherwise returns config unchanged.
+    config = applyTripLeg(loadConfig());
   } catch (err) {
     process.stdout.write(JSON.stringify({ error: err.message, sendBriefing: false }, null, 2) + '\n');
     return;
@@ -41,6 +44,11 @@ async function main() {
 
   const skipBirdCast = config.skipBirdcast;
   const { lat, lng, region } = config;
+  // Coverage mode (set by applyTripLeg on trip legs): 'region' = island-wide
+  // via county code; 'radius' = point + radiusKm. Undefined = normal geo behavior.
+  const coverage = config.coverage === 'radius' ? 'radius'
+    : config.coverage === 'region' ? 'region'
+    : null;
 
   // Configurable migration thresholds — unified via src/migration-scoring.js.
   // loadThresholdsFromEnv() reads the same BRIEFING_SCORE_* / BRIEFING_*_THRESHOLD
@@ -59,7 +67,9 @@ async function main() {
     skipBirdCast ? Promise.resolve(null) : birdcast.getLiveMigration(region, today).catch(() => null),
     skipBirdCast ? Promise.resolve(null) : birdcast.getSeasonHistorical(region, today).catch(() => null),
     nws.getBirdingWeather(lat, lng, today).catch(() => null),
-    ebird.getNearbyNotableObservations(lat, lng, 2, 50).catch(() => null),
+    coverage === 'region'
+      ? ebird.getRegionNotableObservations(region, 2).catch(() => null)
+      : ebird.getNearbyNotableObservations(lat, lng, 2, config.radiusKm || 50).catch(() => null),
   ]);
 
   const notableSpecies = Array.isArray(notableObs)
